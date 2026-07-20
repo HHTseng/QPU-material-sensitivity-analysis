@@ -20,6 +20,33 @@ The older `SensitivityAnalysis_Morris.py` and its debug variants remain in
 the directory as the previous generation. They are not part of this pipeline
 and are not kept in sync.
 
+## GitHub
+
+The mimir directory is the git working tree for:
+
+```text
+https://github.com/HHTseng/QPU-material-sensitivity-analysis
+```
+
+(private repo, branch `main`, pushed via the `gh` HTTPS token already
+configured on mimir — SSH to github.com is blocked from this host).
+
+`output/` and `results/` are excluded by `.gitignore`, along with
+`__pycache__/`, `.vscode/`, and `backup_pre_mac_sync_*/`. They total ~290 MB
+and every run mints a fresh UUID directory, so they are regenerated rather
+than tracked; a fixed `SENSITIVITY_MORRIS_SEED` reproduces the design exactly.
+
+Push further changes from mimir with:
+
+```bash
+cd /home/htseng/Sensitivity_Analysis_HT
+git add -A && git commit -m "..." && git push
+```
+
+The Mac directory is **not** a git working tree. It also holds
+`old_version/` and `Sensitivity_Analysis_Paul/`, which exist only on the Mac
+and are therefore not in the repo.
+
 ## Server And Python
 
 - host: `mimir.sdcc.bnl.gov` (via `ssh mimir`, or
