@@ -1,0 +1,17 @@
+# Generated run artifacts. Every Morris run mints a fresh UUID directory under
+# both of these; together they reach hundreds of MB and are fully reproducible
+# from the code plus a SENSITIVITY_MORRIS_SEED, so they are not tracked.
+output/
+results/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Local operational backups (e.g. pre-sync copies of macro templates)
+backup_pre_mac_sync_*/
