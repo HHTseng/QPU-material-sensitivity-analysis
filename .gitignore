@@ -3,6 +3,7 @@
 # from the code plus a SENSITIVITY_MORRIS_SEED, so they are not tracked.
 output/
 results/
+logs/
 
 # Python
 __pycache__/

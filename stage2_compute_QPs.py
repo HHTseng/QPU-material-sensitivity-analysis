@@ -15,6 +15,7 @@ Usage:
 """
 
 import argparse
+from pathlib import Path
 import csv
 import json
 import os
@@ -139,7 +140,24 @@ def process_manifest_entry(entry, qps_dir, summary_file):
         print(f"QP: skipping {sample_name}; hits file missing: {hits_file}")
         return
 
-    rec = pd.read_csv(hits_file)
+    if os.path.getsize(hits_file) == 0:
+        print(
+            f"QP: skipping {sample_name}; hits file is empty (0 bytes) -- "
+            f"the simulation likely crashed before writing a header: {hits_file}"
+        )
+        return
+
+    try:
+        rec = pd.read_csv(hits_file)
+    except pd.errors.EmptyDataError:
+        print(
+            f"QP: skipping {sample_name}; hits file has no parseable header/rows "
+            f"(truncated or corrupt write): {hits_file}"
+        )
+        return
+    except pd.errors.ParserError as exc:
+        print(f"QP: skipping {sample_name}; hits file failed to parse ({exc}): {hits_file}")
+        return
     qx = np.array(entry["qx"])
     qy = np.array(entry["qy"])
     gap = entry["gap"]
@@ -210,10 +228,16 @@ def main():
         "completed Morris simulation run's hits files."
     )
     parser.add_argument(
-        "results_dir",
-        help="Path to the results/<run_id> directory written by "
-        "stage1_run_simulations.py (must contain "
-        "qp_manifest.jsonl and hits/).",
+        "--results-dir",
+        type=Path,
+        default=Path(
+            "./results/"
+            "morris_mimir_95494c3c-4c72-4d47-8e92-fbc88f3a0517"),
+        help=(
+            "Path to the results/<run_id> directory written by "
+            "stage1_run_simulations.py. The directory must contain "
+            "qp_manifest.jsonl and hits/. "
+            "Default: %(default)s"),
     )
     parser.add_argument(
         "--progress-every",
