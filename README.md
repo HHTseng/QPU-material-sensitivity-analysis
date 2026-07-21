@@ -19,6 +19,7 @@ slow job out of two independently runnable halves, so they are split:
 |---|---|---|---|
 | 1 — simulation | `stage1_run_simulations.py` | yes | per-sample macros, lattice configs, hits files, and `qp_manifest.jsonl` |
 | 2 — quasiparticles | `stage2_compute_QPs.py` | no (numpy/pandas only) | `qps/*.npz`, `qp_summary.csv` |
+| 2b — sensitivity correlations | `stage2_compute_QPs_sensitivity_analysis.py` | no (numpy/pandas/matplotlib only) | `sensitivity_correlations.{csv,png}`, `sensitivity_chi2_correlations.{csv,png}`, `sensitivity_corr_matrix*.png` |
 
 Stage 1 writes one manifest line per sample *at macro-generation time*,
 before the sample runs, because everything stage 2 needs is determined by the
@@ -34,12 +35,16 @@ re-running never duplicates rows.
 |---|---|
 | `stage1_run_simulations.py` | stage 1 runner; serial-debug and parallel-production modes behind one switch |
 | `stage2_compute_QPs.py` | stage 2; quasiparticle binning and the decoherence-rate ODE |
+| `stage2_compute_QPs_sensitivity_analysis.py` | stage 2b; parameter-vs-outcome correlation analysis (see below) |
+| `SensitivityAnalysis_correlation_math.md` | equations + annotated code walkthrough of stage 2b's two methods |
 | `sensitivity_params.py` | **single source of truth** for every swept parameter (command, default, bounds, unit) |
 | `sensitivity_utils.py` | shared helpers (macro line rewriting, log retention, formatting) |
 | `sensitivity_template_*.mac` | Geant4 macro templates; the suffix is the `/run/beamOn` count |
 | `SensitivityAnalysis_Morris_run_record_Mac_M4Max.md` | macOS setup, defaults, launch commands, operational rules |
 | `SensitivityAnalysis_Morris_run_record_Mimir.md` | BNL mimir setup, Mac↔mimir path correspondence, cross-machine verification |
 | `G4CMP_crash_and_memory_analysis.md` | root-cause analysis of two Geant4/G4CMP failure modes (see below) |
+| `SensitivityAnalysis_Paul.ipynb` | Paul Baity's original Sobol-based notebook; source material for stage 2/2b's QP/ODE/correlation logic (messy, edited in place many times — see caveats below) |
+| `Modeling phonon-mediated quasiparticle poisoning in superconducting qubit arrays.pdf` | reference paper this project's QP-poisoning model is based on |
 
 `SensitivityAnalysis_Morris*.py` at the top level (other than the two stage
 scripts) and `SensitivityAnalysis_{Sobol,Percentage}.py` are the previous
@@ -110,6 +115,58 @@ A third, open finding: `/g4cmp/minEPhonons` is pinned at `0.000382 eV`, which
 is above two of the four Morris levels for `/main/gun/setEnergy`, so roughly
 half the design simulates nothing. That is a sweep-design decision, not a
 bug, and is still unresolved.
+
+## Stage 2b: sensitivity correlation analysis
+
+`stage2_compute_QPs_sensitivity_analysis.py` reproduces the parameter-vs-outcome
+correlation analysis in Paul Baity's `SensitivityAnalysis_Paul.ipynb` cells
+`In[3]`/`In[5]` for this Morris run. It reads `MorrisSequence.csv` (the design)
+and the `qps/*_xQPs.npz` curves stage 2 already wrote (no ODE recompute) and
+answers "which parameters correlate with more decoherence." Full math in
+`SensitivityAnalysis_correlation_math.md`.
+
+```bash
+python stage2_compute_QPs_sensitivity_analysis.py --results-dir results/<run_id>
+```
+
+Two `--method`s (default `both`):
+
+- **`integrated`** (experiment-free): outcome = `log10(total_integrated_DG)`,
+  correlated against every parameter via `np.corrcoef`. Faithful to Paul's
+  experiment-free sibling cell.
+- **`chi2`** (faithful to `In[3]`): outcome = a chi-squared goodness-of-fit of
+  each electrode's simulated ΔΓ(t) against real experimental
+  Delta-Gamma-vs-delay data (`--experimental-dir`, default points at a 150 µs
+  NbGND dataset found on mimir outside this project — see the script docstring
+  for the exact path and why 150 µs was chosen).
+
+### Known concerns / caveats
+
+- **The chi² outcome is magnitude-dominated, not a literal experiment fit.**
+  This run's localized `phonon_Caustic` injection at 1e5 events produces
+  simulated ΔΓ 1–2 orders of magnitude larger than the experimental data, so
+  `chi2 ≈ sum(simulated_DG^2)` (verified ratio 0.999) — read chi² correlations
+  as "which parameters drive the simulated response," not as calibration
+  against experiment.
+- **17 electrodes vs 6 measured qubits.** Only 6 experimental delay curves
+  exist. `--chi2-channels electrodes` (default) scores all 17 electrodes
+  against their nearest qubit's curve — the 6 curves are reused by proximity,
+  so this is 17 simulated channels vs 6 measured references, not 17
+  independent fits. `--chi2-channels qubits` gives Paul's literal 6-channel
+  reproduction.
+- **Signal sparsity.** Only ~1500 of 6912 samples (~22%) produce non-zero
+  integrated decoherence at 1e5 events; the rest are dropped from the
+  correlation (same filtering spirit as Paul's `len(output_x[i])>0` guard).
+- **`qp_summary.csv` must be complete before running this script.** It is
+  regenerated from scratch by every `stage2_compute_QPs.py` run and by nothing
+  else — if a stage-2 run is interrupted (e.g. killed mid-run from an IDE
+  debugger), the summary is left truncated. This script detects and warns on
+  an incomplete summary and falls back to deriving outcomes directly from the
+  hits files, but that path is much slower.
+- **Correlation is linear/Pearson only.** A parameter with a strong
+  non-monotonic effect can show `r≈0` here even though it matters; this is a
+  screening tool, not a full sensitivity index (see the Morris μ*/σ indices
+  computed by stage 1's own design for a complementary, non-linear-aware view).
 
 ## Reproducibility caveat
 
