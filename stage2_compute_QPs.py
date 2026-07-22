@@ -29,8 +29,7 @@ QP_SNAPSHOT_MAX_NS = 300000.0
 
 
 def calculate_QPs(rec, gap, qx, qy, chip_z):
-    """Adapted from Paul Baity's SensitivityAnalysis.ipynb (calculate_QPs).
-    Bins phonon energy deposited on the sensor surface into quasiparticles
+    """From Paul's SensitivityAnalysis.ipynb: Bins phonon energy deposited on the sensor surface into quasiparticles
     generated on the nearest electrode, as a function of time.
 
     Args:

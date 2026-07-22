@@ -1,81 +1,62 @@
 """
-Stage 2b of the Morris pipeline: parameter-vs-outcome correlation analysis.
+Stage 2b: parameter-vs-outcome correlation analysis for a Morris run,
+reproducing Paul Baity's SensitivityAnalysis.ipynb (cells In[3]/In[5]).
+`--method` selects one or both analyses.
 
-This reproduces the correlation analysis in Paul Baity's SensitivityAnalysis.ipynb
-(cells In[3] and In[5]) and adapts it to this Morris run. Two methods are
-provided; `--method` selects one or both:
+  method="integrated" (default; Paul's experiment-free cell In[5]/In[7]):
+    Reduce each sample to one scalar -- log10 of the time-integrated decoherence
+    summed over all electrodes (exactly `total_integrated_DG` from
+    stage2_compute_QPs.py) -- then take the Pearson correlation (np.corrcoef) of
+    that scalar against every model parameter and plot it (the In[5] figure).
+    Needs no experimental data and no per-electrode mapping, so it is the
+    physically clean choice for "which parameters drive QP / decoherence".
 
-  method="chi2" (faithful reproduction of cell In[3]):
-    For every sample, Paul turns the hits file into a per-qubit decoherence
-    curve DG(t), computes a chi^2 goodness-of-fit of that curve to *experimental*
-    Delta-Gamma-vs-delay data (one value per qubit), builds a matrix
-    [model parameters | 6 chi^2], takes np.corrcoef, and plots each qubit's
-    correlation against every model parameter (the In[5] figure).
+  method="chi2" (faithful cell In[3]; REQUIRES per-electrode experimental data):
+    For every sample and every electrode, compute a chi^2 goodness-of-fit
+    *distance* between that electrode's simulated decoherence curve DG_e(t) and
+    a REAL measured Delta-Gamma-vs-delay curve for that same electrode location
+    (see chi2_one_curve), then Pearson-correlate each electrode's chi^2 against
+    every parameter. "chi^2 correlation" == "Pearson correlation of the chi^2
+    values", not a different correlation formula.
 
-  method="integrated" (Paul's experiment-free sibling cell In[5]/In[7]):
-    The per-sample scalar is log10 of the time-integrated DG instead of a chi^2.
-    Everything downstream (np.corrcoef + the In[5] plot) is identical. This is
-    exactly `total_integrated_DG` from stage2_compute_QPs.py.
-
-Correspondence choices made to fit this run's setting (Paul's notebook was
-edited in place many times and carries several stale/contradictory fragments;
-where his intent is ambiguous the most logical reading is used, and the
-departure is called out here and in the code):
-
-  * Experimental data. Paul fits against the real NbGND 150 us Q0-injection
-    delay curves. Those files are not in this project but ARE on mimir at
-    DEFAULT_EXPERIMENTAL_DIR; the 150 us set is chosen because it matches this
-    run's default ODE pulse time (pt = 150 us). Override with --experimental-dir.
-
-  * 6 qubits vs 17 electrodes (--chi2-channels). Paul measured 6 qubits, so only
-    6 experimental curves exist -- a chi^2 needs a measured target, so the number
-    of channels is bounded by the data, not the 17 electrodes. Two modes:
-      - "electrodes" (default, 17 channels): score every electrode against the
-        experimental curve of the nearest qubit. The 6 curves are reused by
-        proximity, so these are 17 simulated electrodes vs 6 measured references,
-        not 17 independent experimental fits. Fits this device's geometry.
-      - "qubits" (6 channels): Paul's literal reproduction -- each experimental
-        qubit vs its nearest electrode; the six map cleanly onto the y = +/-2 rows.
-
-  * Qubit<->curve pairing. Cell In[3] pairs experimental Qubit_(5-j) with
-    simulated curve j (the file loads are reversed relative to the curve index).
-    That is almost certainly a copy/paste slip from repeated editing; here
-    experimental Qubit_k is paired with the curve for qubit-location k, the
-    physically consistent choice.
-
-  * chi^2 weighting. Paul ran an unweighted sum of squared residuals; his
-    `#/y0_data[j]` comment shows an intended-but-disabled division by the
-    experimental value. --chi2-normalize {none,y,dy2} exposes this; default
-    "none" reproduces exactly what he ran. (dy2 = a proper statistical chi^2
-    using the error column he loaded but never applied.)
-
-  * Scale caveat. This run used 1e5 events with a localized phonon_Caustic
-    injection, so simulated DG (~0.5 MHz median, tens of MHz peak) is 1-2 orders
-    of magnitude larger than the experimental Delta-Gamma (~0.01 MHz) and is
-    concentrated on whichever electrode the phonons happen to strike. The raw
-    chi^2 is therefore dominated by simulated magnitude/hit-location rather than
-    curve shape -- faithful to Paul's construction, but read the chi^2
-    correlations as "which parameters drive the simulated response," not as a
-    literal calibration to experiment.
+    NO RECONCILIATION. This method needs one measured reference curve *per
+    electrode* of the device being simulated, index-aligned to the electrodes
+    (curve e is the measurement at electrode e's location). It deliberately does
+    NOT map a small set of measured curves onto more electrodes: a measurement
+    made at one location is not a valid target for a different location, and
+    Paul's 6-qubit NbGND data is a *different device* from this 17-electrode
+    design. If --experimental-dir does not supply exactly one curve per
+    electrode, run_chi2_analysis raises NotImplementedError -- a deliberate
+    placeholder that stays "broken" until real per-electrode data exists, rather
+    than fabricating a misleading fit. (The earlier nearest-qubit reconciliation
+    was removed for exactly this reason; see the git history / README.)
 
 Model-parameter values come from the run's MorrisSequence.csv (the canonical
 record of each Morris_i.mac configuration), the analog of Paul's SobolSequence.
 Per-sample DG(t) curves are read from the qps/*_xQPs.npz files that
 stage2_compute_QPs.py already wrote, so no ODE is recomputed.
 
+Experimental-data contract (chi^2 only): --experimental-dir must contain one
+Paul-format curve per electrode -- a pair <stem>_DuringPulse.txt and <stem>.txt,
+each 3 rows [delay us, Delta-Gamma MHz, error MHz] -- named so that sorted
+filename order matches electrode index order. DEFAULT_EXPERIMENTAL_DIR holds
+only Paul's 6-qubit measurement (a different device, 6 curves), which is why
+chi^2 is a not-yet-runnable placeholder for this 17-electrode run.
+
 Usage:
     python stage2_compute_QPs_sensitivity_analysis.py --results-dir /path/to/results/<run_id>
-    python stage2_compute_QPs_sensitivity_analysis.py --method chi2 --chi2-normalize dy2
+    python stage2_compute_QPs_sensitivity_analysis.py --method chi2 --experimental-dir /path/to/per_electrode_data
 
 Outputs (written into the results directory):
     sensitivity_correlations.csv / .png       integrated-DG method (In[5] style)
     sensitivity_corr_matrix.png               integrated-DG method (In[3] matshow)
-    sensitivity_chi2_correlations.csv / .png  chi^2 method, one line per qubit
+    sensitivity_chi2_correlations.csv / .png  chi^2 method (only once per-electrode data is supplied)
     sensitivity_chi2_corr_matrix.png          chi^2 method (In[3] matshow)
 """
 
 import argparse
 import csv
+import glob
 import json
 import os
 from pathlib import Path
@@ -93,18 +74,16 @@ QP_SNAPSHOT_MAX_NS = 300000.0
 # Planck constant [eV*s], for gap[eV] -> gap frequency [Hz] (Paul's AlGap).
 H_PLANCK_EV_S = 4.135667696e-15
 
-# Paul's 6 hard-coded qubit locations [mm] (calculate_QPs, cells In[2]/In[19]).
-PAUL_QUBIT_X = np.array([-1.64, -2.4405, 0.4, -0.4, 2.42, 1.62])
-PAUL_QUBIT_Y = np.array([2.2795, -2.2735, 2.2735, -2.2795, 2.2795, -2.2735])
-N_QUBITS = 6
-
-# Real experimental Delta-Gamma-vs-delay data that Paul's In[3] fits against.
-# Found on mimir outside this project; the 150 us set matches this run's default
-# ODE pulse time (pt = 150 us). Each file is 3 rows: delay[us], DG[MHz], err[MHz].
+# Default experimental Delta-Gamma-vs-delay directory. This holds only Paul's
+# 6-qubit NbGND measurement (a DIFFERENT device); it does NOT provide one curve
+# per electrode of this 17-electrode design, so the chi^2 method treats it as
+# insufficient and refuses to run (see run_chi2_analysis). Point
+# --experimental-dir at real per-electrode data (one curve per electrode,
+# index-aligned) to enable chi^2. Each curve is a pair of Paul-format files:
+# <stem>_DuringPulse.txt and <stem>.txt, each 3 rows [delay us, DG MHz, err MHz].
 DEFAULT_EXPERIMENTAL_DIR = (
     "/home/htseng/BNL_G4CMP_HT_Feb27/Scripts/python/NbGND_1umCu_B2_Q0Inj_150us_staggered"
 )
-EXP_FILE_STEM = "Qubit_{k}_NbGND_1umCu_VI09_B2_DeltaGamma_v_Delay_Q0inj_150us"
 
 
 # --------------------------------------------------------------------------- #
@@ -161,7 +140,7 @@ def load_manifest(manifest_file):
 
 
 # --------------------------------------------------------------------------- #
-# Method 1: integrated-decoherence correlation (experiment-free, In[5]/In[7]). #
+# Method 1: integrated-decoherence correlation#
 # --------------------------------------------------------------------------- #
 def sample_integrated_DG(entry):
     """Derive the single-aggregate integrated decoherence response for one sample
@@ -326,16 +305,30 @@ def run_integrated_analysis(results_dir, sequence, entries, progress_every):
 # --------------------------------------------------------------------------- #
 # Method 2: per-qubit chi^2 vs experimental delay data (faithful In[3]/In[5]). #
 # --------------------------------------------------------------------------- #
-def load_experimental_delays(exp_dir):
-    """Load Paul's per-qubit experimental curves exactly as cell In[3] does: for
-    each qubit concatenate the during-pulse and post-pulse files, then shift the
-    delay axis so the earliest during-pulse point sits at 0. Each file is 3 rows
-    [delay us, Delta-Gamma MHz, error MHz]. Returns a list of (x, y, dy)."""
+def load_experimental_curves(exp_dir):
+    """Load every experimental Delta-Gamma-vs-delay curve found in `exp_dir`,
+    in sorted filename order. Returns a list of (x, y, dy) arrays.
+
+    Each curve is one real measurement at ONE location. This loader imposes no
+    spatial interpretation and invents no mapping -- the caller
+    (run_chi2_analysis) requires exactly one curve per electrode, index-aligned
+    (curve i belongs to electrode i), and errors out otherwise rather than
+    reconciling a count mismatch.
+
+    File convention (Paul's In[3] format): each curve is a pair
+    <stem>_DuringPulse.txt (during the injection pulse) and <stem>.txt (after);
+    each file is 3 rows [delay us, Delta-Gamma MHz, error MHz]. The two halves
+    are concatenated and the delay axis is shifted so the earliest during-pulse
+    point sits at 0 (t = pulse length then marks the pulse end).
+    """
     curves = []
-    for k in range(N_QUBITS):
-        stem = os.path.join(exp_dir, EXP_FILE_STEM.format(k=k))
-        during = np.loadtxt(stem + "_DuringPulse.txt")
-        after = np.loadtxt(stem + ".txt")
+    during_files = sorted(glob.glob(os.path.join(exp_dir, "*_DuringPulse.txt")))
+    for during_path in during_files:
+        after_path = during_path[: -len("_DuringPulse.txt")] + ".txt"
+        if not os.path.exists(after_path):
+            continue  # unpaired during-pulse file; skip
+        during = np.loadtxt(during_path)
+        after = np.loadtxt(after_path)
         x = np.append(during[0], after[0]) - np.min(during[0])
         y = np.append(during[1], after[1])
         dy = np.append(during[2], after[2])
@@ -343,48 +336,54 @@ def load_experimental_delays(exp_dir):
     return curves
 
 
-def build_chi2_channels(entry, mode):
-    """Define the chi^2 output channels for this device geometry.
-
-    Returns (channels, labels): `channels` is a list of (electrode_index,
-    qubit_index) pairs, one per chi^2 value produced; `labels` are the matching
-    plot/CSV labels.
-
-    mode="qubits" (6 channels): faithful to Paul -- one channel per experimental
-      qubit, compared against the simulated curve of the NEAREST electrode. The
-      other electrodes have no experimental counterpart and are not scored.
-
-    mode="electrodes" (17 channels): one channel per electrode, compared against
-      the experimental curve of the NEAREST qubit. There are only 6 experimental
-      qubit curves (Paul measured 6 qubits), so nearby electrodes reuse the same
-      experimental target -- these 17 channels are 17 simulated electrodes scored
-      against 6 measured references, NOT 17 independent experimental fits.
-    """
-    ex = np.array(entry["qx"])
-    ey = np.array(entry["qy"])
-    if mode == "qubits":
-        channels = [
-            (int(np.argmin(np.hypot(ex - PAUL_QUBIT_X[k], ey - PAUL_QUBIT_Y[k]))), k)
-            for k in range(N_QUBITS)
-        ]
-        labels = [f"Qubit {k} (elec {e})" for (e, k) in channels]
-    elif mode == "electrodes":
-        channels = [
-            (e, int(np.argmin(np.hypot(PAUL_QUBIT_X - ex[e], PAUL_QUBIT_Y - ey[e]))))
-            for e in range(len(ex))
-        ]
-        labels = [f"elec {e} (Q{k})" for (e, k) in channels]
-    else:
-        raise ValueError(f"unknown chi2 channels mode: {mode!r}")
-    return channels, labels
-
-
 def chi2_one_curve(sim_t, sim_dg, x_data, y_data, dy_data, normalize):
-    """Paul's per-qubit chi^2 (cell In[3]): for each experimental delay point,
-    take the simulated Delta-Gamma at the nearest simulated time and sum the
-    squared residual. `normalize` in {none, y, dy2} selects the weighting;
-    "none" reproduces exactly what Paul ran."""
+    """Paul's chi^2 (cell In[3]): a goodness-of-fit distance between two
+    decoherence-rate-vs-time curves -- one simulated at an electrode, one the
+    real measured reference curve for that electrode's location. For each
+    experimental delay point, take the simulated Delta-Gamma at the nearest
+    simulated time and sum the squared residual. `normalize` in {none, y, dy2}
+    selects the weighting; "none" reproduces exactly what Paul ran.
+
+    This chi^2 is a *distance*, not a correlation: it answers "does this
+    sample's simulation match the measured device?" The correlation step
+    (np.corrcoef in run_chi2_analysis, downstream of this function) is a
+    separate question layered on top: "across many samples, does a model
+    parameter's value tend to move together with this chi^2 distance?"
+
+    Args:
+        sim_t: simulated time axis [us] -- time since the QP-injection pulse
+            began (t=0). From this sample's xQPs.npz `t` array: the
+            decoherence ODE's integrated time grid (calculate_xQPs).
+        sim_dg: simulated decoherence rate DG_sim(t) [MHz] for one electrode,
+            aligned with sim_t. From xQPs.npz `DG[e]` -- this sample's
+            Morris_i.mac configuration, ODE-solved for electrode e.
+        x_data: experimental delay axis [us] -- the measurement's time points
+            for THIS electrode's own reference curve (during-pulse + after-pulse
+            files concatenated and shifted so t = pulse length marks the end of
+            the injection pulse; see load_experimental_curves).
+        y_data: measured decoherence rate DG_exp [MHz] -- the measured
+            decoherence contribution at this electrode at each x_data point.
+        dy_data: measurement uncertainty [MHz] on each y_data point (the
+            error bar recorded alongside the lab measurement).
+        normalize: "none" = raw MHz^2 residuals (what Paul ran); "y" =
+            divide by y_data (his disabled `#/y0_data[j]` hint); "dy2" =
+            divide by dy_data**2 (a proper variance-weighted chi^2, using
+            the error column Paul loaded but never applied).
+
+    Returns:
+        A scalar chi^2: the total (optionally weighted) squared mismatch
+        between the simulated and measured curves, summed over every
+        experimental delay point. Small = simulation looks like the real
+        device at this configuration; large = it doesn't.
+    """
+    # Nearest-neighbor time matching: sim_t and x_data are different time
+    # grids (the ODE's uniform snapshot grid vs. the lab's staggered
+    # measurement grid), so for each measured delay point we pick the
+    # closest simulated time bin rather than interpolating -- exactly
+    # Paul's `point = np.argmin(np.abs(x0_data[j]-output_x[i]))`.
     idx = np.array([np.argmin(np.abs(xj - sim_t)) for xj in x_data])
+    # Residual = simulated DG minus measured DG at each matched delay point
+    # [MHz]; squaring keeps it positive and penalizes larger mismatches more.
     resid2 = (sim_dg[idx] - y_data) ** 2
     if normalize == "y":  # Paul's commented-out `#/y0_data[j]`
         good = np.abs(y_data) > 1e-12
@@ -395,20 +394,20 @@ def chi2_one_curve(sim_t, sim_dg, x_data, y_data, dy_data, normalize):
     return float(np.sum(resid2))
 
 
-def sample_chi2(npz_file, channels, exp_curves, normalize):
-    """Compute one chi^2 per channel for a sample from its saved xQPs.npz (t, DG).
-    Each channel is an (electrode_index, qubit_index) pair: the simulated curve of
-    that electrode is scored against that qubit's experimental curve. Returns an
-    array of length len(channels), or None if the npz is missing."""
+def sample_chi2(npz_file, exp_curves, normalize):
+    """Compute one chi^2 (see chi2_one_curve) per electrode for a sample, from
+    its saved xQPs.npz. Electrode e's simulated curve -- npz's (t, DG[e]) -- is
+    scored against electrode e's OWN measured reference curve exp_curves[e] =
+    (x, y, dy) (strict 1:1 index alignment; no reconciliation). Returns an
+    array of length len(exp_curves), or None if the npz is missing."""
     if not os.path.exists(npz_file):
         return None
     d = np.load(npz_file)
     t = d["t"]
     DG = d["DG"]
-    out = np.empty(len(channels))
-    for c, (e, k) in enumerate(channels):
-        x, y, dy = exp_curves[k]
-        out[c] = chi2_one_curve(t, DG[e], x, y, dy, normalize)
+    out = np.empty(len(exp_curves))
+    for e, (x, y, dy) in enumerate(exp_curves):
+        out[e] = chi2_one_curve(t, DG[e], x, y, dy, normalize)
     return out
 
 
@@ -426,13 +425,13 @@ def write_chi2_csv(out_file, param_names, corr, channel_labels):
 
 
 def plot_chi2_correlations(out_file, param_names, corr, channel_labels, n_used, normalize):
-    """The In[5]-style figure: one line per channel's chi^2 correlation vs every
-    model parameter (Paul's six-qubit plot, generalized to N channels)."""
+    """The In[5]-style figure: one line per electrode's chi^2 correlation vs
+    every model parameter (Paul's per-qubit plot, generalized to N electrodes)."""
     n_channels = corr.shape[0]
     fig, ax = plt.subplots(figsize=(15, 5.5))
     x = np.arange(len(param_names))
-    # tab20 gives up to 20 visually distinct colors, so the 17-electrode mode's
-    # lines stay distinguishable (the default C0-C9 cycle repeats after 10).
+    # tab20 gives up to 20 visually distinct colors, so many per-electrode lines
+    # stay distinguishable (the default C0-C9 cycle repeats after 10).
     colors = plt.cm.tab20(np.linspace(0, 1, max(n_channels, 1)))
     for c in range(n_channels):
         ax.plot(x, corr[c], "o-", markersize=3, color=colors[c], label=channel_labels[c])
@@ -451,24 +450,46 @@ def plot_chi2_correlations(out_file, param_names, corr, channel_labels, n_used, 
     plt.close(fig)
 
 
-def run_chi2_analysis(results_dir, sequence, entries, exp_dir, normalize, channels_mode):
+def run_chi2_analysis(results_dir, sequence, entries, exp_dir, normalize):
     param_names = list(sequence.columns)
     n_params = len(param_names)
     qps_dir = os.path.join(results_dir, "qps")
+    n_electrodes = len(entries[0]["qx"])
 
-    if not os.path.isdir(exp_dir):
-        print(
-            f"[chi2] experimental delay directory not found: {exp_dir}\n"
-            "[chi2] skipping chi^2 method (pass --experimental-dir to point at the "
-            "NbGND Delta-Gamma-vs-delay files)."
+    # --- Experimental-data gate (NO RECONCILIATION) -------------------------- #
+    # The chi^2 method needs one measured Delta-Gamma-vs-delay curve per
+    # electrode of THIS device, index-aligned (curve e measured at electrode e).
+    # Anything short of that is a hard, deliberate placeholder: we refuse to
+    # fabricate targets by reusing/mapping a mismatched set of curves. This is
+    # the "let it hang there, broken, until real per-electrode data exists"
+    # contract -- swap --experimental-dir for real data to enable the method.
+    exp_curves = load_experimental_curves(exp_dir) if os.path.isdir(exp_dir) else []
+    if len(exp_curves) != n_electrodes:
+        raise NotImplementedError(
+            "[chi2] PLACEHOLDER -- not enough experimental data to run without "
+            "reconciliation.\n"
+            f"  This device has {n_electrodes} electrodes, so the chi^2 method "
+            f"needs {n_electrodes} measured Delta-Gamma-vs-delay curves (one per "
+            "electrode, index-aligned: curve e measured at electrode e's "
+            "location).\n"
+            f"  --experimental-dir = {exp_dir}\n"
+            f"  found there        = {len(exp_curves)} curve(s).\n"
+            "  The default directory holds only Paul's 6-qubit NbGND measurement, "
+            "which is a DIFFERENT device; mapping those 6 onto "
+            f"{n_electrodes} electrodes would be a physically invalid "
+            "reconciliation (see the module docstring), so it is refused.\n"
+            "  To enable chi^2: provide one Paul-format curve per electrode in "
+            "--experimental-dir (paired files <stem>_DuringPulse.txt / "
+            "<stem>.txt, each 3 rows [delay us, DG MHz, err MHz]), named so "
+            "sorted filename order == electrode index order.\n"
+            "  For an experiment-free sensitivity analysis that needs no such "
+            "data, use --method integrated instead."
         )
-        return
 
-    exp_curves = load_experimental_delays(exp_dir)
-    channels, channel_labels = build_chi2_channels(entries[0], channels_mode)
+    # Strict 1:1 electrode<->curve pairing; no spatial argmin, no reuse.
+    channel_labels = [f"elec {e}" for e in range(n_electrodes)]
     print(f"[chi2] experimental data : {exp_dir}")
-    print(f"[chi2] channels mode     : {channels_mode} ({len(channels)} channels)")
-    print("[chi2] channels (elec<-Q): " + ", ".join(f"e{e}<-Q{k}" for (e, k) in channels))
+    print(f"[chi2] curves/electrodes : {len(exp_curves)} curves for {n_electrodes} electrodes (1:1)")
     print(f"[chi2] weighting         : {normalize}")
 
     # Validity filter: samples that actually produced decoherence signal
@@ -487,7 +508,7 @@ def run_chi2_analysis(results_dir, sequence, entries, exp_dir, normalize, channe
         name = f"Morris_{idx}"
         if signal_names is not None and name not in signal_names:
             continue
-        chi2 = sample_chi2(os.path.join(qps_dir, name + "_xQPs.npz"), channels, exp_curves, normalize)
+        chi2 = sample_chi2(os.path.join(qps_dir, name + "_xQPs.npz"), exp_curves, normalize)
         if chi2 is None:
             missing += 1
             continue
@@ -500,13 +521,19 @@ def run_chi2_analysis(results_dir, sequence, entries, exp_dir, normalize, channe
         return
 
     trials = np.array(rows, dtype=float)
+    # trials columns = [n_params model parameters | n_electrodes chi^2 distances].
+    # np.corrcoef always computes ordinary Pearson correlation -- it has no idea
+    # some columns are chi^2 values. "chi2 correlation" below means "the Pearson
+    # correlation OF each electrode's chi^2 column against each parameter column",
+    # i.e. does a parameter's value move together with how far that electrode's
+    # simulation sits from its measured curve -- not a chi^2-flavored formula.
     A = np.corrcoef(trials, rowvar=False)
-    corr = A[n_params:, :n_params]  # (n_channels, n_params): each channel's chi^2 vs params
+    corr = A[n_params:, :n_params]  # (n_electrodes, n_params): each electrode's chi^2 vs params
 
     n_constant = int(np.sum(~np.isfinite(corr).all(axis=0)))
     if n_constant:
         print(
-            f"[chi2] NOTE: {n_constant} channel(s) never varied (electrode never lit up "
+            f"[chi2] NOTE: {n_constant} electrode(s) never varied (never lit up "
             "across the usable samples), giving NaN correlations (left as NaN)."
         )
 
@@ -515,7 +542,7 @@ def run_chi2_analysis(results_dir, sequence, entries, exp_dir, normalize, channe
     matrix_png = os.path.join(results_dir, "sensitivity_chi2_corr_matrix.png")
     write_chi2_csv(corr_csv, param_names, corr, channel_labels)
     plot_chi2_correlations(corr_png, param_names, corr, channel_labels, n_used, normalize)
-    matrix_labels = param_names + [f"chi2_e{e}" for (e, k) in channels]
+    matrix_labels = param_names + [f"chi2_{lab.replace(' ', '')}" for lab in channel_labels]
     plot_corr_matrix(matrix_png, matrix_labels, A)
     print(f"[chi2] wrote {corr_csv}")
     print(f"[chi2] wrote {corr_png}")
@@ -523,7 +550,7 @@ def run_chi2_analysis(results_dir, sequence, entries, exp_dir, normalize, channe
 
     mean_abs = np.nanmean(np.abs(corr), axis=0)
     order = np.argsort(-np.nan_to_num(mean_abs))
-    print("[chi2] top parameters by mean |chi^2 correlation| across channels:")
+    print("[chi2] top parameters by mean |chi^2 correlation| across electrodes:")
     for i in order[:10]:
         print(f"    mean|r|={mean_abs[i]:.4f}   {param_names[i]}")
 
@@ -543,14 +570,19 @@ def main():
     parser.add_argument(
         "--method",
         choices=["integrated", "chi2", "both"],
-        default="both",
-        help="Which analysis to run (default: both).",
+        default="integrated",
+        help="Which analysis to run. 'integrated' (default) is experiment-free "
+        "and always runs; 'chi2' requires one measured curve per electrode and "
+        "raises a clear placeholder error until such data is supplied.",
     )
     parser.add_argument(
         "--experimental-dir",
         default=DEFAULT_EXPERIMENTAL_DIR,
-        help="Directory of Paul-format Qubit_k Delta-Gamma-vs-delay files for the "
-        "chi^2 method. Default: %(default)s",
+        help="Directory of per-electrode Paul-format Delta-Gamma-vs-delay files "
+        "for the chi^2 method (one curve per electrode, index-aligned). The "
+        "default holds only Paul's 6-qubit data (a different device), so chi^2 "
+        "stays a placeholder until this points at real per-electrode data. "
+        "Default: %(default)s",
     )
     parser.add_argument(
         "--chi2-normalize",
@@ -561,19 +593,10 @@ def main():
         "(proper chi^2). Default: none.",
     )
     parser.add_argument(
-        "--chi2-channels",
-        choices=["qubits", "electrodes"],
-        default="electrodes",
-        help="chi^2 output channels: 'electrodes' scores all 17 electrodes, each "
-        "against the nearest experimental qubit's curve (17 lines, fits this "
-        "device); 'qubits' scores only the 6 experimental qubits against their "
-        "nearest electrode (Paul's literal 6-line reproduction). Default: electrodes.",
-    )
-    parser.add_argument(
         "--progress-every",
         type=int,
-        default=int(os.environ.get("SENSITIVITY_PROGRESS_EVERY", "500")),
-        help="Progress interval when deriving integrated outcomes from hits (default: 500).",
+        default=int(os.environ.get("SENSITIVITY_PROGRESS_EVERY", "50000")),
+        help="Progress interval when deriving integrated outcomes from hits (default: 50000).",
     )
     args = parser.parse_args()
 
@@ -597,8 +620,7 @@ def main():
         run_integrated_analysis(results_dir, sequence, entries, args.progress_every)
     if args.method in ("chi2", "both"):
         run_chi2_analysis(
-            results_dir, sequence, entries, args.experimental_dir,
-            args.chi2_normalize, args.chi2_channels,
+            results_dir, sequence, entries, args.experimental_dir, args.chi2_normalize,
         )
 
 

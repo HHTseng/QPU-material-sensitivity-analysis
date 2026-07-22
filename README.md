@@ -129,31 +129,35 @@ answers "which parameters correlate with more decoherence." Full math in
 python stage2_compute_QPs_sensitivity_analysis.py --results-dir results/<run_id>
 ```
 
-Two `--method`s (default `both`):
+Two `--method`s (default `integrated`; `both` runs both):
 
 - **`integrated`** (experiment-free): outcome = `log10(total_integrated_DG)`,
   correlated against every parameter via `np.corrcoef`. Faithful to Paul's
-  experiment-free sibling cell.
+  experiment-free sibling cell. Needs no experimental data, so this is the
+  method that always runs.
 - **`chi2`** (faithful to `In[3]`): outcome = a chi-squared goodness-of-fit of
-  each electrode's simulated ΔΓ(t) against real experimental
-  Delta-Gamma-vs-delay data (`--experimental-dir`, default points at a 150 µs
-  NbGND dataset found on mimir outside this project — see the script docstring
-  for the exact path and why 150 µs was chosen).
+  each electrode's simulated ΔΓ(t) against a real experimental
+  Delta-Gamma-vs-delay curve **for that same electrode's location**
+  (`--experimental-dir`). There is deliberately **no reconciliation**: this
+  method requires exactly one measured curve per electrode of the device
+  being simulated (17 for this design), index-aligned so curve `e` is the
+  measurement at electrode `e`. An earlier version mapped Paul's 6 measured
+  qubit curves onto the nearest of the 17 simulated electrodes by proximity;
+  that mapping was removed because a measurement made at one location is not
+  a valid fit target for a different location, and Paul's 6-qubit NbGND chip
+  is a different device from this 17-electrode design. `--experimental-dir`
+  defaults to that 6-curve NbGND dataset (found on mimir outside this
+  project — see the script docstring for the exact path and why 150 µs was
+  chosen), so with the default the count check fails and `run_chi2_analysis`
+  raises a clear `NotImplementedError` placeholder rather than fabricating a
+  fit — `chi2` stays unusable until real per-electrode data (17 curves) is
+  supplied via `--experimental-dir`.
 
 ### Known concerns / caveats
 
-- **The chi² outcome is magnitude-dominated, not a literal experiment fit.**
-  This run's localized `phonon_Caustic` injection at 1e5 events produces
-  simulated ΔΓ 1–2 orders of magnitude larger than the experimental data, so
-  `chi2 ≈ sum(simulated_DG^2)` (verified ratio 0.999) — read chi² correlations
-  as "which parameters drive the simulated response," not as calibration
-  against experiment.
-- **17 electrodes vs 6 measured qubits.** Only 6 experimental delay curves
-  exist. `--chi2-channels electrodes` (default) scores all 17 electrodes
-  against their nearest qubit's curve — the 6 curves are reused by proximity,
-  so this is 17 simulated channels vs 6 measured references, not 17
-  independent fits. `--chi2-channels qubits` gives Paul's literal 6-channel
-  reproduction.
+- **`chi2` is a placeholder, not a runnable result, until real per-electrode
+  data exists.** See above — it needs 17 measured curves, one per electrode,
+  and currently only 6 (for a different device) are available.
 - **Signal sparsity.** Only ~1500 of 6912 samples (~22%) produce non-zero
   integrated decoherence at 1e5 events; the rest are dropped from the
   correlation (same filtering spirit as Paul's `len(output_x[i])>0` guard).
