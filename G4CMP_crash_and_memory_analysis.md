@@ -349,7 +349,12 @@ release (V10-01-01, 2026-02-24).
 
 ---
 
-## Finding 3 — Sweep-design flaw: half the energy levels are physics-free
+## Finding 3 — Sweep-design flaw: half the energy levels are physics-free  **[RESOLVED 2026-07-28]**
+
+> Fixed: the gun-energy sweep moved to [0.6, 1.5] meV (its floor is 2*Delta_Al
+> at the TOP of the setTopGap sweep, so no sampled gap is structurally dead) and
+> `/g4cmp/minEPhonons` dropped to 38.2 ueV. Zero-signal design points fell from
+> ~47% to 0.12% (8/6912). See README "Stage-3 screening protocol".
 
 `/g4cmp/minEPhonons 0.000382 eV` is pinned (not swept). The gun-energy
 sweep `2·191 µeV × [0.5, 1.5]` produces Morris levels
@@ -437,3 +442,70 @@ Key source files:
 Session test data (36 single-run probes + 40-sample batch + 185-run stress
 batch) lived in the session scratchpad and `/tmp` and has been cleaned up;
 every number in this report is regenerable from the recipes above.
+
+
+---
+
+## Finding 4 — SIGSEGV in `G4LatticeLogical::LookupKtoVg` when `vtrans > vsound` (2026-07-28)
+
+Found while running the stage-3 screen; **distinct from Finding 2 and not
+harmless**. Finding 2 is an exit-time fault after the hits file is complete;
+this one strikes mid-run and leaves a **zero-byte** hits file, so the sample
+yields no data at all.
+
+Backtrace (`catchsegv`; `gdb` was unavailable on mimir):
+
+```
+G4LatticeLogical::LookupKtoVg(int, CLHEP::Hep3Vector const&)   <- crash site
+G4LatticeLogical::MapKtoVg(...)
+G4LatticePhysical::MapKtoVDir(...)
+```
+
+**Cause.** G4CMP builds its phonon group-velocity map assuming v_L > v_T. The
+Morris design swept `vsound` over [4500, 13500] m/s and `vtrans` over
+[2700, 8100] m/s independently, so on the overlap [4500, 8100] a sampled
+"crystal" could have the transverse speed exceeding the longitudinal one. The
+lookup then indexes off the end of the table.
+
+**Diagnosis is unambiguous.** `vtrans > vsound` separated crashing from
+surviving design points perfectly: **31/31 crashed vs 0/30 survived**, Fisher
+exact **p = 4.3e-18**.
+
+**Why it looked like a random ~39% failure rate.** It is deterministic per
+design point but stochastic per event, p ~ 6e-5. Measured crash fraction for an
+affected point: 2/8 at 5k events, 3/8 at 20k, **8/8 at 80k**. At the production
+125k events per sub-run, P(crash) ~ 99.9%, so *every one* of an affected
+point's 32 sub-runs died while unaffected points never failed. 17.3% of the
+T=128 design (1197/6912 points) was affected, and because elementary effects
+need consecutive trajectory points, only 56 of 128 trajectories would have
+survived.
+
+**Fix.** `vtrans` is now swept as the ratio v_T/v_L in [0.3, 0.9] and the
+absolute value reconstructed as `ratio * vsound` at config-write time, so the
+invalid region is unreachable by construction rather than filtered afterwards —
+no design points are lost and trajectory structure stays intact. Verified:
+**0/6912** configs invalid (was 1197) and **0 crashes in 40 design points at
+80,000 events**, the condition that previously gave 8/8.
+
+Note this is an acoustic-mode / G4CMP requirement, **not** a Born stability
+criterion: the cubic Born conditions are C11 > |C12|, C11 + 2*C12 > 0 and
+C44 > 0, none of which implies C11 > C44. C44 < C11 holds for Si and most
+cubic crystals empirically, and G4CMP relies on it, but it is not a stability
+requirement. A separate, unfixed issue: 7.8% of the design (538/6912) still
+violates the actual Born conditions. Those points run, but they are not real
+crystals — see `RESULTS_stage1_to_stage3.md` §5.
+
+## Finding 5 — an aborted macro still exits 0
+
+A malformed macro command (e.g. a bad unit suffix, such as the
+`/g4cmp/clearance 1e-06e-6 mm` produced by a default expressed in different
+units from its bounds) makes Geant4 emit a G4Exception **warning**, skip
+`/run/beamOn` entirely, and **exit 0**. A batch then records successes that
+simulated nothing; the emptiness only surfaces in stage 2 as uniformly zero
+signal, which is hard to distinguish from a weak physical response.
+
+Observed once at scale: 3,200 "successful" sub-runs that produced no hits file
+at all. Stage 1 now treats "exit 0 but no hits file" as a hard `MacroAborted`
+failure, since the hits file is created at `/run/beamOn` (header written even
+for a run with no hits), making its absence reliable proof the event loop never
+executed.

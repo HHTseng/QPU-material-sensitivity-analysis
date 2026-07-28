@@ -5,9 +5,31 @@ A guided, equation-by-equation reading of
 which reproduces the correlation analysis in Paul Baity's
 `SensitivityAnalysis.ipynb` (cells `In[3]`/`In[5]`) for this Morris run.
 
-Everything below was numerically verified against the on-disk outputs of run
-`morris_mimir_95494c3c-…` (6912 samples, 1e5 phonons each); the specific numbers
-quoted are from that run.
+The correlation calculations and numerical examples in Sections 4--9 were
+verified against the on-disk outputs of run `morris_mimir_95494c3c-…` (6912
+samples, 1e5 phonons each); the specific correlation numbers quoted are from
+that run. Section 3 additionally documents the trajectory/replica/position
+mathematics of the newer Stage-3 screen.
+
+> **That run has been slimmed and superseded (2026-07-27).** Its `hits/`,
+> `qps/` and `logs/` were deleted, and `qp_summary.csv` was lost in the
+> process, so the numbers below can no longer be recomputed from disk — only
+> `MorrisSequence.csv` and `sensitivity_correlations.csv` survive. See
+> `results/morris_mimir_95494c3c-…/SLIMMED.md`.
+>
+> More importantly, that run's rankings should not be trusted on their own
+> terms: `/g4cmp/minEPhonons` was pinned above two of the four Morris levels
+> for `/main/gun/setEnergy`, so ~47% of the design simulated nothing, and at
+> 1e5 events the objective is a Poisson count with lambda ~= 0.93 (~104%
+> relative error per evaluation, smallest resolvable effect ~440%). The
+> surviving `sensitivity_correlations.csv` shows the consequence directly: the
+> top-ranked parameters are `s`, `pt`, `I_ph` and `f_01`, all of which are
+> quasiparticle-ODE parameters with **no code path into the Geant4
+> simulation** and therefore no causal route to the QP count at all.
+>
+> The mathematics documented below is still correct and still describes what
+> the script computes. What is not reliable is the ranking that came out of
+> this particular run.
 
 ---
 
@@ -29,27 +51,345 @@ varies all parameters simultaneously.
 | Symbol | Meaning | Source in this run |
 |---|---|---|
 | $N$ | number of design samples | 6912 (`MorrisSequence.csv` rows) |
-| $P$ | number of model parameters | 53 (`MorrisSequence.csv` columns) |
+| $K$ | number of expanded model parameters | 53 (`MorrisSequence.csv` columns) |
+| $T$ | number of Morris trajectories | 128 |
+| $L=K+1$ | design points per Morris trajectory | 54 |
+| $n_{\rm lev}$ | Morris grid levels | 4 |
+| $R$ | Monte Carlo replicas per design point | 1 in the old correlation run; 2 in the current screen |
+| $S$ | source positions per replica | 1 in the old correlation run; 16 in the current screen |
+| $n_{\rm evt}$ | primary events per source-position process | $10^5$ in the old run; 125,000 in the current screen |
 | $\theta_{i,p}$ | value of parameter $p$ in sample $i$ | `MorrisSequence.csv[i, p]` |
+| $N_{{\rm QP},irq}$ | QPs at design point $i$, replica $r$, source position $q$ | stage-2 hit reduction |
+| $Y_{ir}$ | QP yield per event for replica $r$ at design point $i$ | position-pooled stage-2 response |
+| $\bar Y_i$ | replica-averaged QP yield assigned to design point $i$ | stage-3 response |
+| ${\rm EE}^{(t)}_p$ | elementary effect of parameter $p$ in trajectory $t$ | stage-3 Morris analysis |
+| $\mu_p^\ast$ | mean absolute elementary effect | stage-3 influence measure |
+| $\sigma_p$ | standard deviation of signed elementary effects | stage-3 interaction/nonlinearity measure |
 | $E$ | number of electrodes | 17 (`qp_manifest.jsonl` `qx`/`qy`) |
 | $\mathrm{DG}_{i,e}(t)$ | decoherence-rate curve [MHz] of electrode $e$, sample $i$ | `qps/Morris_i_xQPs.npz` |
 | $Y_i$ | scalar **outcome** for sample $i$ | defined per method below |
 
-The design matrix $\Theta \in \mathbb{R}^{N\times P}$ is the analog of Paul's
+The design matrix $\Theta \in \mathbb{R}^{N\times K}$ is the analog of Paul's
 `SobolSequence.csv`. Row $i$ **is** the parameter configuration of `Morris_i.mac`
 (verified: `MorrisSequence` row $i$ matches manifest entry $i$ exactly for
 `f_01, r, s, I_ph, pt, n_cooper, gap`).
 
 ---
 
-## 3. Where the outcome comes from — the physics pipeline
+## 3. Morris design hierarchy and response construction
+
+This section explains the notation in
+[`figures/stage3_screen_results.png`](figures/stage3_screen_results.png):
+
+```text
+128 Morris trajectories
+└── 54 parameter configurations per trajectory
+    └── 2 Monte Carlo replicas per configuration
+        └── 16 source positions per replica
+            └── 125,000 primary events per Geant4 process
+```
+
+A Morris trajectory is a path through the $K$-dimensional parameter space. It
+is not a Geant4 particle or phonon trajectory.
+
+### 3.1 One-factor-at-a-time Morris trajectories
+
+Trajectory $t$ is an ordered sequence
+
+$$
+\boldsymbol{\theta}^{(t,0)}
+\rightarrow
+\boldsymbol{\theta}^{(t,1)}
+\rightarrow\cdots\rightarrow
+\boldsymbol{\theta}^{(t,K)}.
+$$
+
+Exactly one coordinate changes between consecutive points:
+
+$$
+\boldsymbol{\theta}^{(t,s+1)}
+-
+\boldsymbol{\theta}^{(t,s)}
+=
+\delta_{t,s}\,\mathbf e_{p(t,s)}.
+$$
+
+The other $K-1$ coordinates remain fixed during that step. Every parameter
+changes once in each trajectory, so one trajectory supplies one elementary
+effect for each of the 53 parameters.
+
+For this design,
+
+$$
+K=53,\qquad L=K+1=54,\qquad T=128,
+$$
+
+and therefore
+
+$$
+N=T(K+1)=128(53+1)=6912
+$$
+
+parameter configurations. The total number of elementary effects is
+
+$$
+N_{\rm EE,total}=TK=128\times53=6784,
+$$
+
+or 128 elementary effects for every parameter.
+
+Stage 1 constructs this design with
+
+```python
+morris_samp.sample(setup, 128, num_levels=4, seed=MORRIS_SEED)
+```
+
+and stage 3 reads it as consecutive blocks of $K+1=54$ rows. With four grid
+levels, the normalized grid is based on
+
+$$
+\left\{0,\frac13,\frac23,1\right\},
+$$
+
+and the conventional Morris step magnitude is
+
+$$
+\Delta
+=
+\frac{n_{\rm lev}}{2(n_{\rm lev}-1)}
+=
+\frac{2}{3}.
+$$
+
+The analyzer nevertheless divides by the actual step read from
+`MorrisSequence.csv`, rather than hardcoding $2/3$.
+
+### 3.2 Sixteen source positions
+
+For the current Stage-3 screen, let $N_{{\rm QP},irq}$ be the QPs generated by
+design point $i$, replica $r$, and source position $q$. Stage 2 pools the
+$S=16$ position hits files inside one replica:
+
+$$
+Y_{ir}
+=
+\frac{
+\displaystyle\sum_{q=1}^{S}N_{{\rm QP},irq}
+}{
+S\,n_{\rm evt}
+}.
+$$
+
+One current-screen replica therefore represents
+
+$$
+S\,n_{\rm evt}
+=
+16\times125{,}000
+=
+2{,}000{,}000
+$$
+
+primary events.
+
+The same scrambled-Sobol position set is reused for every parameter
+configuration. It is a fixed spatial scenario or blocking set: it prevents a
+change in injection locations from being mistaken for a parameter effect. The
+16 positions are not extra Morris points and do not create 16 separate
+correlation or Morris coefficients.
+
+### 3.3 Two replicas
+
+The $R=2$ replicas use the same parameter configuration and source-position
+set but different replica seed banks. Stage 3 assigns their mean to design
+point $i$:
+
+$$
+\bar Y_i
+=
+\frac1R\sum_{r=1}^{R}Y_{ir}
+=
+\frac{Y_{i1}+Y_{i2}}{2}.
+$$
+
+Thus the current-screen response represents
+
+$$
+R S n_{\rm evt}
+=
+2\times16\times125{,}000
+=
+4{,}000{,}000
+$$
+
+events per design point. The two replica values also reveal Monte Carlo
+variation, although two observations give a noisy point-specific variance
+estimate.
+
+Each current-screen design point requires
+
+$$
+RS=2\times16=32
+$$
+
+separate Geant4 processes, so the complete screen contains
+
+$$
+6912\times2\times16=221{,}184
+$$
+
+sub-runs. An elementary effect compares two endpoints, each based on 32
+sub-runs, although endpoints are shared by neighboring trajectory steps and
+are not rerun separately for every parameter.
+
+### 3.4 Elementary effects, $\mu^\ast$, and $\sigma$
+
+Suppose parameter $p$ changes between two consecutive points of trajectory
+$t$. Let their replica-averaged responses be $\bar Y_{t,-}$ and
+$\bar Y_{t,+}$. The dimensionless elementary effect used by stage 3 is
+
+$$
+{\rm EE}^{(t)}_p
+=
+\frac{
+(\bar Y_{t,+}-\bar Y_{t,-})/\bar Y
+}{
+(\theta_{p,t,+}-\theta_{p,t,-})/(b_p-a_p)
+},
+$$
+
+where $[a_p,b_p]$ is the sampled range of parameter $p$ and
+
+$$
+\bar Y=\frac1N\sum_{i=1}^{N}\bar Y_i.
+$$
+
+For a normalized step of magnitude $2/3$,
+
+$$
+{\rm EE}^{(t)}_p
+\simeq
+\frac32
+\frac{\bar Y_{t,+}-\bar Y_{t,-}}{\bar Y},
+$$
+
+with the sign also determined by the direction of the Morris step.
+
+The signed mean, mean absolute effect, and spread are
+
+$$
+\mu_p
+=
+\frac1T\sum_{t=1}^{T}{\rm EE}^{(t)}_p,
+$$
+
+$$
+\mu_p^\ast
+=
+\frac1T\sum_{t=1}^{T}\left|{\rm EE}^{(t)}_p\right|,
+$$
+
+and
+
+$$
+\sigma_p
+=
+\sqrt{
+\frac1{T-1}
+\sum_{t=1}^{T}
+\left({\rm EE}^{(t)}_p-\mu_p\right)^2
+}.
+$$
+
+Interpretation:
+
+- large $\mu_p^\ast$: parameter $p$ has a large overall influence on QP yield
+  over its selected range;
+- small $\mu_p^\ast$: its effect is weak or hidden by simulation noise;
+- large $\sigma_p$: the effect is nonlinear, interaction-dependent, or noisy;
+- small $\sigma_p$: the effect is comparatively consistent across the design
+  box.
+
+Because the input step is divided by the full sampled range, $\mu^\ast$ is a
+normalized full-range slope estimate. It is not necessarily a literal
+endpoint-to-endpoint change in a nonlinear model, and it depends on the chosen
+parameter bounds.
+
+In the Stage-3 figure:
+
+- panel A plots $\mu^\ast$, its 5th--95th percentile bootstrap interval, and
+  the dummy-calibrated noise threshold;
+- panel B is a separate noise-floor run of 200 identical configurations, each
+  with $16\times250{,}000=4\times10^6$ events; it is not a histogram of the two
+  full-screen replicas;
+- panel C plots $\mu^\ast$ horizontally and $\sigma$ vertically.
+
+### 3.5 Relation to the correlation calculations in this document
+
+The two sensitivity summaries ask different questions:
+
+1. Pearson correlation uses all usable rows at once:
+
+   $$
+   r_p=\operatorname{corr}(\theta_{\cdot,p},Y).
+   $$
+
+   It detects primarily linear, monotonic association and does not use the
+   trajectory ordering.
+
+2. Morris uses adjacent one-coordinate changes:
+
+   $$
+   \left\{{\rm EE}^{(t)}_p\right\}_{t=1}^{T}
+   \longrightarrow
+   (\mu_p^\ast,\sigma_p).
+   $$
+
+   It detects nonlinear influence more readily and uses $\sigma_p$ to expose
+   interaction/state dependence.
+
+The numerical correlation examples later in this file come from the older
+`morris_mimir_95494c3c-…` run, which used one source position, one realization,
+and $10^5$ events per point. The current Stage-3 screen uses the aggregation
+defined above.
+
+If Pearson correlations are applied to a current multi-replica run, the
+outcome must first be reduced to one row per `design_point`, for example
+
+$$
+Y_i^{\rm corr}
+=
+\frac1R\sum_{r=1}^{R}
+\log_{10}\!\left(
+\mathrm{total\_integrated\_DG}_{ir}
+\right)
+$$
+
+or by averaging the untransformed objective before taking its logarithm,
+depending on the scientific estimand. These two operations are not identical.
+The present `stage2_compute_QPs_sensitivity_analysis.py` still looks up
+`Morris_i` directly and is not replica-aware; it should not be run unchanged
+on `Morris_i_r0`/`Morris_i_r1` summaries.
+
+The run underlying the current Stage-3 figure predates the explicit-seed fix.
+Current stage-1 code keys seeds by
+`(trajectory, replica, source position)`: endpoints within a trajectory share
+the same streams for variance-reducing common random numbers, while replicas
+and trajectories receive distinct streams.
+
+For a standalone version of this derivation, see
+[`Morris_trajectory_replica_position_math.tex`](Morris_trajectory_replica_position_math.tex).
+
+---
+
+## 4. Where the outcome comes from — the physics pipeline
 
 Both methods reduce a sample to a scalar built from the per-electrode
 decoherence curves $\mathrm{DG}_{i,e}(t)$. Those curves are produced by two
 functions (identical to `stage2_compute_QPs.py`) and cached in the
 `qps/*_xQPs.npz` files, so this script never re-runs the ODE.
 
-### 3.1 `calculate_QPs` — hits → quasiparticles per electrode per time bin
+### 4.1 `calculate_QPs` — hits → quasiparticles per electrode per time bin
 
 Each surface hit $h$ (with $E^{\text{dep}}_h>0$ landing on the top surface) is
 assigned to its **nearest electrode** and to a time bin $m$ on the grid
@@ -75,7 +415,7 @@ t_idx = np.argmin(np.abs(rec["Final Time [ns]"][h] - snapshot_t))
 QPNos[q, t_idx] += int(np.round(rec["Energy Deposited [eV]"][h] / gap))
 ```
 
-### 3.2 `calculate_xQPs` — quasiparticle ODE → decoherence rate
+### 4.2 `calculate_xQPs` — quasiparticle ODE → decoherence rate
 
 For each electrode $e$, the injected QP population is spread over the pulse
 duration $p_t$ (a boxcar convolution) and normalised by the electrode volume and
@@ -115,12 +455,12 @@ $g\propto 1/(n_{\text{cooper}}Hd)$, longer $p_t$ pumps more $g$, and $s$ is the
 
 ---
 
-## 4. Method 1 — integrated decoherence (experiment-free)
+## 5. Method 1 — integrated decoherence (experiment-free)
 
 This is Paul's sibling cell `In[5]`/`In[7]`: reduce each sample to the
 **log of its total integrated decoherence**.
 
-### 4.1 Outcome
+### 5.1 Outcome
 
 $$
 Y_i \;=\; \log_{10}\!\Bigl(\underbrace{\textstyle\sum_{e=1}^{E}\int \mathrm{DG}_{i,e}(t)\,dt}_{\texttt{total\_integrated\_DG}_i}\Bigr).
@@ -140,15 +480,15 @@ if not np.isfinite(val) or val <= 0:      # drop no-signal samples
 rows.append(np.append(param_values[idx, :], np.log10(val)))
 ```
 
-### 4.2 The trials matrix and the correlation
+### 5.2 The trials matrix and the correlation
 
-Stack the usable rows into $M\in\mathbb{R}^{n\times(P+1)}$ ($n=1501$), the
+Stack the usable rows into $M\in\mathbb{R}^{n\times(K+1)}$ ($n=1501$), the
 parameters followed by the outcome:
 
 $$
 M = \bigl[\,\Theta^{\text{usable}}\;\big|\;\mathbf{Y}\,\bigr],
 \qquad
-M_{i,\cdot} = (\theta_{i,1},\dots,\theta_{i,P},\,Y_i).
+M_{i,\cdot} = (\theta_{i,1},\dots,\theta_{i,K},\,Y_i).
 $$
 
 The Pearson correlation of parameter $p$ with the outcome is
@@ -161,23 +501,23 @@ r_p \;=\;
 \;\in[-1,1].\;}
 $$
 
-`np.corrcoef` computes the **full** $(P+1)\times(P+1)$ matrix
+`np.corrcoef` computes the **full** $(K+1)\times(K+1)$ matrix
 $A_{ab}=\operatorname{corr}(M_{\cdot,a},M_{\cdot,b})$ at once; the outcome is the
 last column, so the row of interest is its last row minus its own entry:
 
 $$
-r_p = A_{P,\,p} \quad\Longleftrightarrow\quad \texttt{corr = A[-1, :-1]}.
+r_p = A_{K,\,p} \quad\Longleftrightarrow\quad \texttt{corr = A[-1, :-1]}.
 $$
 
 ```python
-A = np.corrcoef(trials, rowvar=False)   # (P+1) x (P+1)
+A = np.corrcoef(trials, rowvar=False)   # (K+1) x (K+1)
 corr = A[-1, :-1]                        # outcome-row vs each parameter column
 ```
 
 *(Verified: `A[-1,:-1]` equals `scipy.stats.pearsonr` per column to $4\times10^{-16}$,
 and equals the on-disk `sensitivity_correlations.csv` to $10^{-16}$.)*
 
-### 4.3 What it says for your run
+### 5.3 What it says for your run
 
 Ranked by $|r_p|$ (from `sensitivity_correlations.csv`):
 
@@ -200,12 +540,12 @@ more weakly.
 
 ---
 
-## 5. Method 2 — per-channel $\chi^2$ vs experimental delay data (faithful `In[3]`)
+## 6. Method 2 — per-channel $\chi^2$ vs experimental delay data (faithful `In[3]`)
 
 Here the outcome is a **goodness-of-fit** of each simulated curve to Paul's real
 measured decoherence-vs-delay data.
 
-### 5.1 Experimental curves
+### 6.1 Experimental curves
 
 For each measured qubit $k\in\{0,\dots,5\}$, two files (during-pulse + after) are
 concatenated and the delay axis is shifted so the earliest point sits at 0
@@ -223,7 +563,7 @@ Each file is 3 rows: $x_k$ = delay [µs], $y_k$ = measured $\Delta\Gamma$ [MHz],
 $\delta y_k$ = error. The **150 µs** dataset is used because it matches this
 run's default ODE pulse time $p_t=150\,\mu s$.
 
-### 5.2 The $\chi^2$ per channel
+### 6.2 The $\chi^2$ per channel
 
 A "channel" $c$ pairs an electrode $e_c$ with a target qubit $k_c$. For each
 experimental delay point $x_{k_c}[j]$ we read the simulated curve at the
@@ -247,7 +587,7 @@ return float(np.sum(resid2))              # normalize="none"
 *(Verified identical to a literal transcription of Paul's `In[3]` inner loop to
 machine precision, all channels.)*
 
-### 5.3 Channel definitions (`--chi2-channels`)
+### 6.3 Channel definitions (`--chi2-channels`)
 
 Only **6** experimental curves exist, so the number of independent $\chi^2$
 targets is bounded by the data, not by the 17 electrodes.
@@ -260,22 +600,22 @@ targets is bounded by the data, not by the 17 electrodes.
 - **`qubits` (6 channels):** Paul's literal reproduction — each measured qubit
   vs its single nearest electrode $\{6,0,7,1,8,2\}$ (the $y=\pm2$ rows).
 
-### 5.4 Correlation, same machinery
+### 6.4 Correlation, same machinery
 
 Stack $[\Theta^{\text{usable}} \mid X]$ with $X$ the $n\times C$ block of
 per-channel $\chi^2$ ($C=17$ or $6$), take `np.corrcoef`, and read the
 channel-rows against the parameter-columns:
 
 $$
-\rho_{c,p} = A_{P+c,\;p}
+\rho_{c,p} = A_{K+c,\;p}
 \quad\Longleftrightarrow\quad
-\texttt{corr = A[n\_params:, :n\_params]}\ \in\mathbb{R}^{C\times P}.
+\texttt{corr = A[n\_params:, :n\_params]}\ \in\mathbb{R}^{C\times K}.
 $$
 
 Each channel $c$ becomes one line in the `In[5]`-style plot; parameter $p$ is one
 x-tick.
 
-### 5.5 Read this one with care — the scale caveat
+### 6.5 Read this one with care — the scale caveat
 
 This run used $10^5$ events with a **localized** `phonon_Caustic` injection, so
 simulated $\mathrm{DG}$ (median peak $\sim0.5$ MHz, up to tens of MHz,
@@ -307,7 +647,7 @@ calibration to experiment. Consequences:
 
 ---
 
-## 6. How to read each output file
+## 7. How to read each output file
 
 | File | Method | What each axis/line is |
 |---|---|---|
@@ -317,6 +657,9 @@ calibration to experiment. Consequences:
 | `sensitivity_chi2_correlations.png` | 2 | one line per channel; x = 53 parameters, y = $\rho_{c,p}$; legend `elec e (Qk)` = electrode ← target qubit |
 | `sensitivity_chi2_correlations.csv` | 2 | rows = parameters, columns = `corr_elec_e_Qk`, plus `mean_abs_correlation`, ranked |
 | `sensitivity_chi2_corr_matrix.png` | 2 | the $(53+C)\times(53+C)$ matrix; bottom-left block = $\rho$ |
+| `stage3_morris_screen.csv` | Morris | one row per parameter containing $\mu^\ast$, its bootstrap interval, $\sigma$, dummy status, and screening result |
+| `figures/stage3_screen_results.png` | Morris + noise floor | panel A = ranked $\mu^\ast$; panel B = separate identical-configuration noise run; panel C = $\mu^\ast$--$\sigma$ plane |
+| `Morris_trajectory_replica_position_math.tex` | reference | standalone LaTeX derivation of the Stage-3 hierarchy and Morris definitions |
 
 In the matshow, the near-white off-diagonal among the first 53×53 entries is a
 good sign: the Morris design samples parameters **independently**, so parameters
@@ -324,7 +667,7 @@ are mutually uncorrelated and each $r_p$ is a clean one-parameter readout.
 
 ---
 
-## 7. Correspondence to Paul's messy notebook
+## 8. Correspondence to Paul's messy notebook
 
 | Paul (`SensitivityAnalysis.ipynb`) | Here | Note |
 |---|---|---|
@@ -337,15 +680,16 @@ are mutually uncorrelated and each $r_p$ is a clean one-parameter readout.
 
 ---
 
-## 8. Limitations (so you know the boundaries)
+## 9. Limitations (so you know the boundaries)
 
 1. **Linear, monotonic readout.** Pearson $r$ only sees linear association; a
    parameter with a strong non-monotonic (e.g. U-shaped) effect can show
    $r\approx0$. For the formal Morris elementary-effects indices ($\mu^\*,\sigma$)
-   computed from this same design, ask — that is a different, complementary tool.
+   computed from this same design, see Section 3; that is a different,
+   complementary tool.
 2. **Signal-only subset.** Correlations use the 1501 samples with non-zero
    decoherence; they describe sensitivity *among samples that decohere at all*.
-3. **$\chi^2$ is magnitude-dominated** (Section 5.5): not a literal experimental
+3. **$\chi^2$ is magnitude-dominated** (Section 6.5): not a literal experimental
    calibration in this run's injection/statistics regime.
 4. **Reused experimental targets** in `electrodes` mode: 17 channels share 6
    measured curves by proximity.

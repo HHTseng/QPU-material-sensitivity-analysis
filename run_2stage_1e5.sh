@@ -19,5 +19,5 @@ fi
 
 echo "=== Stage 1 complete. Results dir: $RESULTS_DIR ==="
 echo "=== Starting stage 2 ==="
-"$PY" -u stage2_compute_QPs.py "$RESULTS_DIR"
+"$PY" -u stage2_compute_QPs.py --results-dir "$RESULTS_DIR"
 echo "=== Stage 2 complete ==="

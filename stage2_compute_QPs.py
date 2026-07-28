@@ -11,7 +11,7 @@ the simulations and computing QPs together made a single slow run out of two
 independently-runnable stages.
 
 Usage:
-    python stage2_compute_QPs.py /path/to/results/<run_id>
+    python stage2_compute_QPs.py --results-dir /path/to/results/<run_id>
 """
 
 import argparse
@@ -118,50 +118,78 @@ def load_manifest(manifest_file):
         return [json.loads(line) for line in f if line.strip()]
 
 
-def write_qp_summary_row(summary_file, sample_name, gap, num_hits, qp_totals, peak_DG, total_integrated_DG):
+def write_qp_summary_row(summary_file, sample_name, gap, num_hits, qp_totals, peak_DG, total_integrated_DG,
+                         n_sim=float("nan"), design_point="", replica=-1):
     write_header = not os.path.exists(summary_file)
     with open(summary_file, "a", newline="") as csvfile:
         writer = csv.writer(csvfile)
         if write_header:
-            header = ["sample_name", "top_gap_eV", "num_surface_hits"]
+            header = ["sample_name", "design_point", "replica", "n_sim", "top_gap_eV", "num_surface_hits"]
             header += ["electrode_" + str(i) + "_QPs" for i in range(len(qp_totals))]
-            header += ["total_QPs", "peak_DG_MHz", "total_integrated_DG"]
+            header += ["total_QPs", "max_electrode_QPs", "QP_yield_per_event",
+                       "peak_DG_MHz", "total_integrated_DG"]
             writer.writerow(header)
-        row = [sample_name, gap, num_hits]
+        row = [sample_name, design_point, replica, n_sim, gap, num_hits]
         row += list(qp_totals)
-        row += [float(np.sum(qp_totals)), peak_DG, total_integrated_DG]
+        total_qps = float(np.sum(qp_totals))
+        # QP_yield_per_event is the screening objective: a rate, so it is
+        # comparable across different event counts and its Poisson variance
+        # is known analytically (lambda/n) rather than having to be learned.
+        row += [total_qps, float(np.max(qp_totals)) if len(qp_totals) else 0.0,
+                total_qps / n_sim if n_sim else float("nan"),
+                peak_DG, total_integrated_DG]
         writer.writerow(row)
+
+
+def load_pooled_hits(entry):
+    """Concatenated hits for one manifest entry.
+
+    An entry may span several source positions (`hits_files`), which are pooled
+    because the design point's response is the device average over injection
+    sites. Older single-position manifests carry `hits_file` instead; both are
+    accepted so this stage still reads runs made before the screening protocol.
+
+    Returns (DataFrame, n_present, n_expected). Missing or unreadable files are
+    skipped individually rather than discarding the whole design point: losing
+    1 of 16 positions to a SIGSEGV should cost 1/16 of the statistics, not the
+    entire sample. n_present/n_expected let the caller rescale n_sim so the
+    yield-per-event stays correct when a position is lost.
+    """
+    hits_files = entry.get("hits_files") or [entry["hits_file"]]
+    frames = []
+    for hits_file in hits_files:
+        if not os.path.exists(hits_file) or os.path.getsize(hits_file) == 0:
+            continue
+        try:
+            frames.append(pd.read_csv(hits_file))
+        except (pd.errors.EmptyDataError, pd.errors.ParserError):
+            continue
+    if not frames:
+        return None, 0, len(hits_files)
+    return pd.concat(frames, ignore_index=True), len(frames), len(hits_files)
 
 
 def process_manifest_entry(entry, qps_dir, summary_file):
     sample_name = entry["sample_name"]
-    hits_file = entry["hits_file"]
-    if not os.path.exists(hits_file):
-        print(f"QP: skipping {sample_name}; hits file missing: {hits_file}")
-        return
-
-    if os.path.getsize(hits_file) == 0:
+    rec, n_present, n_expected = load_pooled_hits(entry)
+    if rec is None:
         print(
-            f"QP: skipping {sample_name}; hits file is empty (0 bytes) -- "
-            f"the simulation likely crashed before writing a header: {hits_file}"
+            f"QP: skipping {sample_name}; none of its {n_expected} hits file(s) "
+            f"were readable (missing, empty, or corrupt)"
         )
         return
-
-    try:
-        rec = pd.read_csv(hits_file)
-    except pd.errors.EmptyDataError:
+    if n_present < n_expected:
         print(
-            f"QP: skipping {sample_name}; hits file has no parseable header/rows "
-            f"(truncated or corrupt write): {hits_file}"
+            f"QP: {sample_name}: only {n_present}/{n_expected} position files "
+            f"readable; n_sim scaled down accordingly"
         )
-        return
-    except pd.errors.ParserError as exc:
-        print(f"QP: skipping {sample_name}; hits file failed to parse ({exc}): {hits_file}")
-        return
     qx = np.array(entry["qx"])
     qy = np.array(entry["qy"])
     gap = entry["gap"]
     chip_z = entry["chip_z"]
+    # Rescale for any position files that were lost, so QPs-per-event (the
+    # quantity the screen actually compares) stays unbiased.
+    n_sim = entry["n_sim"] * (n_present / n_expected)
 
     times, QPNos = calculate_QPs(rec, gap, qx, qy, chip_z)
     qp_totals = QPNos.sum(axis=1)
@@ -190,7 +218,7 @@ def process_manifest_entry(entry, qps_dir, summary_file):
         entry["height"],
         entry["width"],
         entry["thickness"],
-        entry["n_sim"],
+        n_sim,
     )
     peak_DG = float(DG.max()) if DG.size else 0.0
     total_integrated_DG = float(np.sum(np.trapezoid(DG, t, axis=1))) if DG.size else 0.0
@@ -203,7 +231,7 @@ def process_manifest_entry(entry, qps_dir, summary_file):
         height=entry["height"],
         width=entry["width"],
         thickness=entry["thickness"],
-        n_sim=entry["n_sim"],
+        n_sim=n_sim,
         f_01=entry["f_01"],
         r=entry["r"],
         s=entry["s"],
@@ -212,13 +240,15 @@ def process_manifest_entry(entry, qps_dir, summary_file):
         n_cooper=entry["n_cooper"],
     )
 
-    write_qp_summary_row(summary_file, sample_name, gap, len(rec), qp_totals, peak_DG, total_integrated_DG)
+    write_qp_summary_row(summary_file, sample_name, gap, len(rec), qp_totals, peak_DG, total_integrated_DG,
+                         n_sim=n_sim, design_point=entry.get("design_point", ""),
+                         replica=entry.get("replica", -1))
 
     total_qps = float(qp_totals.sum())
     print(
         f"QP: {sample_name} gap={gap} eV, surface hits={len(rec)}, "
         f"total QPs={total_qps:.0f}, per-electrode max={qp_totals.max():.0f}, "
-        f"peak DG={peak_DG:.4g} MHz, n_sim={entry['n_sim']:.0f}"
+        f"peak DG={peak_DG:.4g} MHz, n_sim={n_sim:.0f}"
     )
 
 
@@ -230,14 +260,16 @@ def main():
     parser.add_argument(
         "--results-dir",
         type=Path,
-        default=Path(
-            "./results/"
-            "morris_mimir_95494c3c-4c72-4d47-8e92-fbc88f3a0517"),
+        required=True,
         help=(
             "Path to the results/<run_id> directory written by "
             "stage1_run_simulations.py. The directory must contain "
-            "qp_manifest.jsonl and hits/. "
-            "Default: %(default)s"),
+            "qp_manifest.jsonl and hits/. REQUIRED: this stage deletes and "
+            "rewrites the target run's qps/ and qp_summary.csv, so it must "
+            "never be able to act on a directory the caller did not name. "
+            "(It previously defaulted to a hardcoded run id, which destroyed "
+            "that run's qp_summary.csv when the run was invoked with no args "
+            "after its hits/ had been archived away.)"),
     )
     parser.add_argument(
         "--progress-every",
@@ -258,6 +290,40 @@ def main():
     qps_dir = os.path.join(results_dir, "qps")
     summary_file = os.path.join(results_dir, "qp_summary.csv")
 
+    entries = load_manifest(manifest_file)
+
+    # Validate the INPUTS before destroying the OUTPUTS.
+    #
+    # The wipe below is destructive and unconditional, so if it runs against a
+    # directory whose hits/ is missing, every sample is skipped, nothing is
+    # rewritten, and the previous qp_summary.csv is simply gone. That is not
+    # hypothetical: it destroyed a completed run's summary when this stage was
+    # invoked with no arguments and its hardcoded default pointed at a run
+    # whose hits/ had been archived. Losing derived data because its source is
+    # absent is exactly backwards -- the summary is the only surviving record
+    # once hits/ is gone.
+    #
+    # So: refuse to touch anything unless at least one hits file is actually
+    # readable. A run with no readable hits has nothing to recompute FROM, and
+    # the correct action is to leave its existing results alone.
+    readable = 0
+    for entry in entries:
+        for hits_file in (entry.get("hits_files") or [entry.get("hits_file")]):
+            if hits_file and os.path.exists(hits_file) and os.path.getsize(hits_file) > 0:
+                readable += 1
+                break
+        if readable:
+            break
+    if readable == 0:
+        raise SystemExit(
+            f"Refusing to run: no readable hits file for any of the {len(entries)} "
+            f"manifest entries under {results_dir}.\n"
+            f"Nothing would be recomputed, but qps/ and qp_summary.csv would be "
+            f"deleted first, destroying the only surviving results for this run.\n"
+            f"If hits/ was archived or removed deliberately, this run's stage 2 "
+            f"output is already final and must not be regenerated."
+        )
+
     # Every re-run recomputes from scratch: wipe prior qps/*.npz and
     # qp_summary.csv first, rather than appending to them. Without this, a
     # second run would duplicate qp_summary.csv rows, and stale npz/rows
@@ -267,7 +333,6 @@ def main():
     if os.path.exists(summary_file):
         os.remove(summary_file)
 
-    entries = load_manifest(manifest_file)
     print(f"Loaded {len(entries)} sample manifest entries from {manifest_file}")
     print(f"Writing per-sample QP results to: {qps_dir}")
     print(f"QP summary CSV: {summary_file}")

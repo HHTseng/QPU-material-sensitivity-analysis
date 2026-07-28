@@ -601,7 +601,7 @@ run, e.g.:
 ```text
 Simulation stage complete. To compute quasiparticles/decoherence
 rate from the hits files just generated, run:
-    python stage2_compute_QPs.py results/morris_debug_serial_<run-id>
+    python stage2_compute_QPs.py --results-dir results/morris_debug_serial_<run-id>
 ```
 
 or, from parallel production mode:
@@ -609,7 +609,7 @@ or, from parallel production mode:
 ```text
 Simulation stage complete. To compute quasiparticles/decoherence
 rate from the hits files just generated, run:
-    python stage2_compute_QPs.py results/morris_mac_<run-id>
+    python stage2_compute_QPs.py --results-dir results/morris_mac_<run-id>
 ```
 
 ### Stage 2 usage
@@ -619,13 +619,13 @@ sourcing required, though using the same conda env is harmless:
 
 ```zsh
 cd /Users/huan-hsintseng/Downloads/Sensitivity_Analysis_HT_Mac
-python3 stage2_compute_QPs.py results/morris_debug_serial_<run-id>
+python3 stage2_compute_QPs.py --results-dir results/morris_debug_serial_<run-id>
 ```
 
 Optional flag:
 
 ```zsh
-python3 stage2_compute_QPs.py results/morris_debug_serial_<run-id> --progress-every 10
+python3 stage2_compute_QPs.py --results-dir results/morris_debug_serial_<run-id> --progress-every 10
 ```
 
 `--progress-every N` controls how often a progress line is printed (default

@@ -76,6 +76,7 @@ Outputs (written into the results directory):
 
 import argparse
 import csv
+import re
 import json
 import os
 from pathlib import Path
@@ -168,13 +169,22 @@ def sample_integrated_DG(entry):
     directly from its hits file (sum over electrodes of the time integral of
     DG(t)); reproduces stage2_compute_QPs.py's `total_integrated_DG`. Returns
     np.nan when the hits file is missing/empty/unreadable."""
-    hits_file = entry["hits_file"]
-    if not os.path.exists(hits_file) or os.path.getsize(hits_file) == 0:
+    # Pool this entry's source positions, mirroring stage 2. n_sim is rescaled
+    # for any unreadable position so the integrated DG stays on the same
+    # per-event footing as its neighbours.
+    frames = []
+    files = entry_hits_files(entry)
+    for hits_file in files:
+        if not os.path.exists(hits_file) or os.path.getsize(hits_file) == 0:
+            continue
+        try:
+            frames.append(pd.read_csv(hits_file))
+        except (pd.errors.EmptyDataError, pd.errors.ParserError):
+            continue
+    if not frames:
         return np.nan
-    try:
-        rec = pd.read_csv(hits_file)
-    except (pd.errors.EmptyDataError, pd.errors.ParserError):
-        return np.nan
+    rec = pd.concat(frames, ignore_index=True)
+    n_sim = entry["n_sim"] * (len(frames) / len(files))
 
     qx = np.array(entry["qx"])
     qy = np.array(entry["qy"])
@@ -187,11 +197,25 @@ def sample_integrated_DG(entry):
         times, QPNos, AlGap,
         entry["f_01"], entry["r"], entry["s"], entry["I_ph"],
         entry["pt"], entry["n_cooper"],
-        entry["height"], entry["width"], entry["thickness"], entry["n_sim"],
+        entry["height"], entry["width"], entry["thickness"], n_sim,
     )
     if DG.size == 0:
         return np.nan
     return float(np.sum(np.trapezoid(DG, t, axis=1)))
+
+
+def entry_hits_files(entry):
+    """Hits files for a manifest entry, under either schema.
+
+    Stage 1 now writes `hits_files` (a list, one per source position); older
+    manifests carry a single `hits_file`. Reading only the old key raises
+    KeyError on every current run.
+    """
+    files = entry.get("hits_files")
+    if files:
+        return list(files)
+    single = entry.get("hits_file")
+    return [single] if single else []
 
 
 def load_outcomes(results_dir, entries, progress_every):
@@ -203,7 +227,10 @@ def load_outcomes(results_dir, entries, progress_every):
     # interrupted stage-2 run falls short of that count.
     n_skippable = sum(
         1 for e in entries
-        if not os.path.exists(e["hits_file"]) or os.path.getsize(e["hits_file"]) == 0
+        if not any(
+            f and os.path.exists(f) and os.path.getsize(f) > 0
+            for f in entry_hits_files(e)
+        )
     )
     expected_rows = len(entries) - n_skippable
 
@@ -232,19 +259,99 @@ def load_outcomes(results_dir, entries, progress_every):
     return outcomes
 
 
-def build_trials(sequence, outcomes_by_name):
+# --- replica-aware naming -----------------------------------------------------
+# Stage 1 now evaluates each design point as N_REPLICAS x N_POSITIONS separate
+# processes, so stage 2 emits one summary row (and one *_xQPs.npz) per
+# (design point, REPLICA): `Morris_7_r0`, `Morris_7_r1`. This module previously
+# assumed one row per design point named `Morris_7`, so under the current layout
+# every lookup missed and the analysis silently dropped every sample or reported
+# every npz as missing. Both helpers below accept either layout.
+
+def build_replica_index(entries):
+    """design-point index -> the sample names that point is EXPECTED to have.
+
+    Built from the MANIFEST, which stage 1 writes at macro-generation time
+    before anything runs. That matters: the manifest is the only artifact that
+    records what *should* exist. An earlier version derived the expected
+    replica set from `qp_summary.csv` instead, i.e. from the very file that may
+    be missing or truncated, which produced two silent failures:
+
+      * summary missing -> the helper fell back to the pre-replica name
+        `Morris_7`, which does not exist in the manifest-derived outcomes, so
+        EVERY design point was dropped and the analysis reported no usable
+        samples;
+      * summary truncated mid-write -> a point whose `_r1` row was absent
+        returned just `['Morris_7_r0']`, and the mean was taken over one
+        replica with no warning. That row then carries sqrt(2)x the noise of
+        its neighbours while looking identical -- heteroscedastic
+        contamination of a correlation that assumes equal-weight rows.
+
+    Both paths are exactly the ones that matter for an incomplete or
+    failure-prone run. Reading the manifest also replaces ~6,900 repeated CSV
+    reads (measured 30.6 ms each, ~211 s) with one pass.
+
+    Falls back to the pre-replica layout when a manifest has no `design_point`.
+    """
+    index = {}
+    for entry in entries:
+        name = str(entry.get("sample_name", ""))
+        label = entry.get("design_point")
+        if label is None:
+            label = name  # pre-replica manifest: one entry per design point
+        match = re.match(r"Morris_(\d+)", str(label))
+        if not match:
+            continue
+        index.setdefault(int(match.group(1)), []).append(name)
+    return {k: sorted(v) for k, v in index.items()}
+
+
+def replica_mean(outcomes_by_name, labels):
+    """Mean outcome over a design point's expected replicas.
+
+    Replicas are independent realisations of the SAME configuration, so their
+    mean is the design point's response. `labels` must be the EXPECTED set (see
+    build_replica_index); a point missing any expected replica returns NaN and
+    is dropped, rather than being averaged over a smaller, noisier subset.
+    """
+    if not labels:
+        return np.nan
+    vals = [outcomes_by_name.get(name, np.nan) for name in labels]
+    if not all(np.isfinite(v) for v in vals):
+        return np.nan
+    return float(np.mean(vals))
+
+
+def build_trials(sequence, outcomes_by_name, replica_index):
     """Assemble [model parameters | log10(integrated DG)], one row per usable
-    sample (finite, positive outcome). Returns (trials, n_used, n_dropped)."""
+    design point (all expected replicas present, finite, positive outcome).
+
+    Returns (trials, n_used, n_dropped). Drops are itemised by cause so an
+    incomplete run reports what was lost instead of quietly shrinking.
+    """
     param_values = sequence.values
     rows = []
-    dropped = 0
+    n_absent = n_incomplete = n_nonpositive = 0
     for idx in range(param_values.shape[0]):
-        val = outcomes_by_name.get(f"Morris_{idx}", np.nan)
+        labels = replica_index.get(idx)
+        if not labels:
+            n_absent += 1
+            continue
+        present = [n for n in labels if np.isfinite(outcomes_by_name.get(n, np.nan))]
+        if len(present) < len(labels):
+            n_incomplete += 1
+            continue
+        val = replica_mean(outcomes_by_name, labels)
         if not np.isfinite(val) or val <= 0:
-            dropped += 1
+            n_nonpositive += 1
             continue
         rows.append(np.append(param_values[idx, :], np.log10(val)))
+    dropped = n_absent + n_incomplete + n_nonpositive
+    if dropped:
+        print(f"  dropped {dropped} design point(s): {n_absent} absent from the manifest, "
+              f"{n_incomplete} missing an expected replica, {n_nonpositive} with "
+              f"non-positive outcome")
     return np.array(rows, dtype=float), len(rows), dropped
+
 
 
 def write_correlations_csv(out_file, param_names, corr):
@@ -289,9 +396,13 @@ def plot_corr_matrix(out_file, labels, A):
 
 def run_integrated_analysis(results_dir, sequence, entries, progress_every):
     param_names = list(sequence.columns)
+    replica_index = build_replica_index(entries)
     outcomes_by_name = load_outcomes(results_dir, entries, progress_every)
 
-    trials, n_used, n_dropped = build_trials(sequence, outcomes_by_name)
+    per_point = sorted({len(v) for v in replica_index.values()})
+    print(f"[integrated] manifest declares {len(replica_index)} design points, "
+          f"{per_point} replica(s) each")
+    trials, n_used, n_dropped = build_trials(sequence, outcomes_by_name, replica_index)
     print(
         f"[integrated] correlation input: {n_used} usable samples "
         f"(dropped {n_dropped} with no/zero integrated decoherence)."
@@ -452,6 +563,7 @@ def plot_chi2_correlations(out_file, param_names, corr, channel_labels, n_used, 
 
 
 def run_chi2_analysis(results_dir, sequence, entries, exp_dir, normalize, channels_mode):
+    replica_index = build_replica_index(entries)
     param_names = list(sequence.columns)
     n_params = len(param_names)
     qps_dir = os.path.join(results_dir, "qps")
@@ -484,13 +596,20 @@ def run_chi2_analysis(results_dir, sequence, entries, exp_dir, normalize, channe
     rows = []
     missing = 0
     for idx in range(len(sequence)):
-        name = f"Morris_{idx}"
-        if signal_names is not None and name not in signal_names:
-            continue
-        chi2 = sample_chi2(os.path.join(qps_dir, name + "_xQPs.npz"), channels, exp_curves, normalize)
-        if chi2 is None:
+        labels = replica_index.get(idx)
+        if not labels:
             missing += 1
             continue
+        if signal_names is not None and not any(n in signal_names for n in labels):
+            continue
+        per_replica = [
+            sample_chi2(os.path.join(qps_dir, n + "_xQPs.npz"), channels, exp_curves, normalize)
+            for n in labels
+        ]
+        if any(c is None for c in per_replica):
+            missing += 1
+            continue
+        chi2 = np.mean(np.vstack(per_replica), axis=0)
         rows.append(np.concatenate([sequence.values[idx, :], chi2]))
 
     n_used = len(rows)
@@ -536,9 +655,11 @@ def main():
     parser.add_argument(
         "--results-dir",
         type=Path,
-        default=Path("./results/morris_mimir_95494c3c-4c72-4d47-8e92-fbc88f3a0517"),
+        required=True,
         help="results/<run_id> directory (must contain qp_manifest.jsonl, "
-        "MorrisSequence.csv, and qps/*_xQPs.npz). Default: %(default)s",
+        "MorrisSequence.csv, and qps/*_xQPs.npz). REQUIRED: this previously "
+        "defaulted to a hardcoded run id, which silently analysed a stale run "
+        "whenever the caller forgot the flag.",
     )
     parser.add_argument(
         "--method",

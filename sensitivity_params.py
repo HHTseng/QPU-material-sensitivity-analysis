@@ -40,11 +40,45 @@ ubf = 1.5  # upper bound factor
 # Detector electrode parameters. Format is (macro command, default value, range, unit (optional)).
 electrode_params = [
 # The sensitivity template uses phonon_Caustic; GeV energies produce invalid phonon tracks.
-("/main/gun/setEnergy ", 2 * 191.0e-6, [(2 * 191.0e-6) * lbf, (2 * 191.0e-6) * ubf], " eV"),
+#
+# Gun energy is swept over [0.6, 1.5] meV, NOT +/-50% of 2*Delta_Al as before.
+# Rationale (see Stage3 screening protocol):
+#   * Lower bound 0.6 meV = 2*Delta_Al at the TOP of the setTopGap sweep
+#     (2 * 191 ueV * 1.5 = 573 ueV). Below this, samples that draw a high
+#     setTopGap are structurally dead: a phonon with hbar*w < 2*Delta cannot
+#     break a Cooper pair, deposits nothing, and yields no hit at all. The old
+#     range [191, 573] ueV put 2 of 4 Morris levels under that gate, which is
+#     why ~47% of the previous design simulated nothing.
+#   * Upper bound 1.5 meV is set by phonon transport, not by the gap. Both
+#     scattering rates are steep power laws in this lattice
+#     (Gamma_anh ~ w^5 via `decay`, Gamma_iso ~ w^4 via `scat`), so the
+#     isotope mean free path collapses fast: 695 um at 1.0 meV, 137 um at
+#     1.5 meV, 43 um at 2.0 meV, 8.6 um at 3.0 meV. Against a 525 um
+#     substrate, anything above ~1.5-2 meV thermalizes before it can cross the
+#     chip, so the run stops measuring transport-to-the-qubit (and the
+#     phonon_Caustic gun, a ballistic construct, stops meaning anything).
+# The gate on QP production is 2*Delta, NOT /g4cmp/minEPhonons -- lowering
+# minEPhonons alone does not revive a below-gap sample.
+("/main/gun/setEnergy ", 1.0e-3, [0.6e-3, 1.5e-3], " eV"),
 ("/main/electrode_param/setHeight ", 10, [10 * lbf, 10 * ubf]),
 ("/main/electrode_param/setWidth ", 10, [10 * lbf, 10 * ubf]),
 #("/main/electrode_param/setXLocations ", 0, [-3.98,3.98]),
 #("/main/electrode_param/setYLocations ", 0, [-3.98,3.98]),
+# CAUTION -- these two are NOT qubit-electrode dimensions, despite living under
+# /main/electrode_param/ alongside setWidth/setHeight. They are consumed only by
+# WaffleKaplanElectrode, which PhononDetectorConstruction attaches to
+# botSurfProp / botSCSurfProp -- the BOTTOM surface. They define the backside
+# normal-metal (Cu) "waffle" absorber pattern: a phonon is absorbed only when it
+# lands on an island, with
+#     l_cell = l_island + l_spacing,  coverage ~ (l_island / l_cell)^2.
+# setWidth/setHeight, by contrast, are used only by JunctionKaplanElectrode on
+# the TOP surface and ARE the qubit junction dimensions (WaffleKaplanElectrode
+# references neither).
+# Consequence for interpretation: these are backside-mitigation fabrication
+# knobs (coverage and pitch), not a degenerate "make the qubit smaller" lever.
+# The measured signs agree -- larger islands lower QPs (mean EE -0.57), wider
+# spacing raises them (+0.60). Prefer reparameterising as coverage fraction and
+# pattern pitch for optimisation.
 ("/main/electrode_param/setIsland ", 200, [200 * lbf, 200 * ubf], " um"),
 ("/main/electrode_param/setIslandSpacing ", 50, [50 * lbf, 50 * ubf], " um")
 #("/main/electrode_param/setGapThres ", 0.0, [0.0,0.0003595/2]),
@@ -159,7 +193,21 @@ G4CMP_params = [
 # values themselves have one canonical source too.
 PINNED_G4CMP_COMMANDS = (
     ("/g4cmp/phononBounces ", "/g4cmp/phononBounces 1000"),
-    ("/g4cmp/minEPhonons ", "/g4cmp/minEPhonons 0.000382 eV"),
+    # Lowered 0.000382 -> 0.0000382 eV (2026-07-27). minEPhonons is a numerical
+    # track-culling cut, and at 382 ueV it sat exactly at 2*Delta_Al and ABOVE
+    # the lowest physical threshold anywhere in the sweep (2*Delta_Al = 191 ueV
+    # at the bottom of the setTopGap range; setBotGapThres reaches 90 ueV). A
+    # numerical cut must never preempt a physical one, or the down-conversion
+    # cascade is truncated before the physics decides the phonon's fate.
+    # 38.2 ueV sits below every physical threshold in the design, but NOT by an
+    # order of magnitude: it is 5.0x below the minimum Al pair-breaking
+    # threshold (2*Delta_Al = 191 ueV) and 2.4x below the minimum
+    # setBotGapThres (90 ueV). The ordering is what matters -- a numerical cut
+    # must never preempt a physical one -- but the margin has NOT been
+    # established by a cutoff-convergence test, so it remains an assumption.
+    # It costs CPU (more harmless low-energy tracks are followed) and
+    # buys correctness insurance; measured cost is acceptable at ~25 s / 1e6.
+    ("/g4cmp/minEPhonons ", "/g4cmp/minEPhonons 0.0000382 eV"),
 )
 
 # G4CMP config.txt parameters. Format is (macro command, default value, range, unit (optional)).
@@ -184,7 +232,33 @@ config_params = [
 # ("pairEnergy ", 3.81, [3.81*lbf,3.81*ubf], " eV"),
 # ("fanoFactor ", 0.15, [0.15*lbf,0.15*ubf]),
 ("vsound ", 9000, [9000*lbf,9000*ubf], " m/s"),
-("vtrans ", 5400, [5400*lbf,5400*ubf], " m/s"),
+# vtrans is swept as the RATIO v_T/v_L, not as an absolute velocity, and the
+# absolute value is reconstructed as ratio * vsound when the config is written.
+#
+# Sweeping the two velocities independently over +/-50% lets vtrans exceed
+# vsound (their ranges overlap on [4500, 8100] m/s), which is not a slow
+# crystal -- it is not a crystal at all. For any mechanically stable cubic
+# solid v_T/v_L = sqrt(C44/C11) < 1 along [100]. NOTE: this is an acoustic-mode
+# / G4CMP requirement, NOT a Born stability criterion -- the cubic Born
+# conditions are C11 > |C12|, C11 + 2*C12 > 0 and C44 > 0, and none of them
+# implies C11 > C44. C44 < C11 holds for Si and for most cubic crystals
+# empirically, and G4CMP's group-velocity map assumes it, but it is not a
+# stability requirement.
+# 17.3% of the previous T=128 design violated this.
+#
+# G4CMP does not tolerate it: G4LatticeLogical::LookupKtoVg builds the
+# group-velocity map assuming v_L > v_T, and an inverted crystal indexes off
+# the end of that table and SIGSEGVs. Measured on the aborted 2026-07-27
+# screen: vtrans > vsound predicted the crash with perfect separation (31/31
+# crashed vs 0/30, Fisher exact p = 4.3e-18). The crash is stochastic per
+# event (p ~ 6e-5 for an affected point), so at 125k events per sub-run every
+# sub-run of an affected design point dies and the point yields no data at all.
+#
+# The ratio parameterisation makes the invalid region unreachable by
+# construction rather than filtering it after the fact, so no design point is
+# lost and the Morris trajectory structure stays intact. Range [0.3, 0.9]
+# brackets the Si default (5400/9000 = 0.6) and stays strictly below 1.
+("vtrans ", 0.6, [0.3, 0.9], "ratio:vsound "),
 # ("l0_e ", 16.9e-6, [16.9e-6*lbf,16.9e-6*ubf], " m"),
 # ("l0_h ", 7.5e-5, [7.5e-5*lbf,7.5e-5*ubf], " m"),
 # #hole and electron masses taken from Robert's thesis

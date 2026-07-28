@@ -1,5 +1,28 @@
 # Material Parameter Optimization — Approach Notes
 
+> **SUPERSEDED — read `RESULTS_stage1_to_stage3.md` first (2026-07-28).**
+>
+> This document predates the stage-3 corrections and is kept for its framing
+> and rationale only. It is **not** the current protocol. Specifically, it was
+> written before:
+>
+> * the source range moved to [0.6, 1.5] meV and `minEPhonons` to 38.2 µeV;
+> * `vtrans` became the ratio v_T/v_L (independent sweeps crashed G4CMP);
+> * 16 source positions x 2 replicas per design point;
+> * explicit recorded CLHEP seeds (`clock()` seeding was reusing streams);
+> * the dummy-calibrated screen, which found **18 of 47** parameters above the
+>   noise floor.
+>
+> Two of its conclusions are now known to be wrong:
+>
+> * `setIsland` / `setIslandSpacing` are **backside Cu absorber** coverage and
+>   pitch, not qubit-electrode geometry — they belong in the actionable design
+>   space, not discarded with the degenerate geometry.
+> * a flat list of independent continuous material constants is **not** a
+>   usable optimisation space; use coherent material presets plus backside
+>   stack geometry (see `RESULTS_stage1_to_stage3.md` §6).
+
+
 This project has two goals:
 
 1. **Understand** how material-parameter changes (the swept quantities behind
