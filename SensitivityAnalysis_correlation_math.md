@@ -57,7 +57,8 @@ varies all parameters simultaneously.
 | $n_{\rm lev}$ | Morris grid levels | 4 |
 | $R$ | Monte Carlo replicas per design point | 1 in the old correlation run; 2 in the current screen |
 | $S$ | source positions per replica | 1 in the old correlation run; 16 in the current screen |
-| $n_{\rm evt}$ | primary events per source-position process | $10^5$ in the old run; 125,000 in the current screen |
+| $n_{\rm evt}$ | primary events per source-position process (**derived**: total / $RS$) | $10^5$ in the old run; 125,000 in the current screen |
+| $N_{\rm tot}$ | **TOTAL** primary phonons per design point (**the configured knob**) | $10^5$ in the old run; 4,000,000 in the current screen |
 | $\theta_{i,p}$ | value of parameter $p$ in sample $i$ | `MorrisSequence.csv[i, p]` |
 | $N_{{\rm QP},irq}$ | QPs at design point $i$, replica $r$, source position $q$ | stage-2 hit reduction |
 | $Y_{ir}$ | QP yield per event for replica $r$ at design point $i$ | position-pooled stage-2 response |
@@ -87,6 +88,7 @@ This section explains the notation in
     └── 2 Monte Carlo replicas per configuration
         └── 16 source positions per replica
             └── 125,000 primary events per Geant4 process
+                (derived: 4,000,000 total per design point / (2 x 16))
 ```
 
 A Morris trajectory is a path through the $K$-dimensional parameter space. It

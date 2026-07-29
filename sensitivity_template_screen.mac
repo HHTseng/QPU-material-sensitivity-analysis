@@ -132,15 +132,14 @@
 #it is crucial that the geometry is updated before running the simulation
 /main/detector_param/update
 
-# Events PER POSITION. Stage 1 ALWAYS rewrites this line -- it never inherits it
-# silently -- and with SENSITIVITY_N_POSITIONS > 1 it REFUSES to run unless
-# SENSITIVITY_EVENTS_PER_POSITION is set explicitly, because with several
-# positions this number is per-position and the events per design point become
-# N_POSITIONS x N_REPLICAS x this.
-# The value below is therefore only a fallback for a single-position manual run.
-# It is set to what the 2026-07-28 screen actually used, so the file cannot
-# disagree with the campaign it documents.
-/run/beamOn 125000
+# TOTAL primary phonons per DESIGN POINT.
+# Stage 1 always rewrites this line: it divides the total by
+# N_POSITIONS x N_REPLICAS to get each sub-run's /run/beamOn, and refuses to run
+# if the split is not exact. Override with SENSITIVITY_TOTAL_EVENTS.
+# The 2026-07-28 screen used this value: 4,000,000 / (16 x 2) = 125,000 per
+# sub-run. Run this template directly (1 position, 1 replica) and it executes
+# the full 4,000,000 -- the number below always means the same thing.
+/run/beamOn 4000000
 
 #/vis/ogl/set/printFilename muon.pdf
 #/vis/ogl/set/printMode pixmap

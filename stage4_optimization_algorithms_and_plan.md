@@ -672,7 +672,7 @@ seed = 20260728
 batch_size = 8
 
 [fidelity.pilot]
-events_per_position = 125000
+total_events_per_design_point = 4_000_000   # stage 1 derives /run/beamOn = total / (positions x replicas)
 n_positions = 16
 n_replicas = 2
 position_set_id = "sobol-20260727-p16"

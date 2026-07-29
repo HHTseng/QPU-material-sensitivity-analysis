@@ -171,9 +171,30 @@ SAMPLE_TIMEOUT = float(os.environ.get("SENSITIVITY_SAMPLE_TIMEOUT", "0"))
 #     process per position/replica.)
 N_POSITIONS = int(os.environ.get("SENSITIVITY_N_POSITIONS", "1"))
 N_REPLICAS = int(os.environ.get("SENSITIVITY_N_REPLICAS", "1"))
-# Events per (position, replica) sub-run. Total events per design point is
-# EVENTS_PER_POSITION * N_POSITIONS. 0 keeps whatever the template says.
-EVENTS_PER_POSITION = int(os.environ.get("SENSITIVITY_EVENTS_PER_POSITION", "0"))
+# TOTAL primary phonons per design point -- the ONE event-count knob.
+#
+# This used to be a per-sub-run count (SENSITIVITY_EVENTS_PER_POSITION), which
+# meant the same number silently stood for N_POSITIONS x N_REPLICAS times more
+# events depending on unrelated settings. Every human-facing number is now the
+# total; stage 1 derives the per-sub-run /run/beamOn as
+#
+#     events_per_sub_run = TOTAL_EVENTS / (N_POSITIONS * N_REPLICAS)
+#
+# and refuses to run if that is not an exact positive integer. With one position
+# and one replica the two coincide, so a legacy single-position template's
+# /run/beamOn *is* the total and nothing changes for it.
+#
+# 0 means "take the total from the macro template's /run/beamOn".
+TOTAL_EVENTS = int(os.environ.get("SENSITIVITY_TOTAL_EVENTS", "0"))
+if os.environ.get("SENSITIVITY_EVENTS_PER_POSITION"):
+    raise ValueError(
+        "SENSITIVITY_EVENTS_PER_POSITION has been removed because its meaning "
+        "depended on SENSITIVITY_N_POSITIONS and SENSITIVITY_N_REPLICAS.\n"
+        "Use SENSITIVITY_TOTAL_EVENTS -- the TOTAL primary phonons per design "
+        "point -- and stage 1 will derive the per-sub-run /run/beamOn.\n"
+        "The 2026-07-28 screen used SENSITIVITY_TOTAL_EVENTS=4000000 "
+        "(= the old 125000 x 16 positions x 2 replicas)."
+    )
 # Injection sites are drawn once from a fixed scrambled-Sobol set and reused
 # for EVERY design point. Identical sites across samples is the whole point:
 # it makes source position a common random number, so position variance
@@ -415,6 +436,9 @@ def build_qp_manifest_entries(sample_name, sub_runs, qpde_params):
         entry["seeds"] = [run.get("seed") for run in replica_runs]
         entry.pop("hits_file", None)
         entry["n_sim"] = entry["n_sim_per_position"] * len(replica_runs)
+        # Total across every replica of this design point -- the number the
+        # screen is actually configured with, recorded so provenance survives.
+        entry["n_sim_total_design_point"] = entry["n_sim_per_position"] * N_POSITIONS * N_REPLICAS
         entries.append(entry)
     return entries
 
@@ -484,31 +508,8 @@ if N_POSITIONS < 1:
     raise ValueError("SENSITIVITY_N_POSITIONS must be at least 1")
 if N_REPLICAS < 1:
     raise ValueError("SENSITIVITY_N_REPLICAS must be at least 1")
-if EVENTS_PER_POSITION < 0:
-    raise ValueError("SENSITIVITY_EVENTS_PER_POSITION must be at least 0 (0 keeps the template value)")
-if N_POSITIONS > 1 and EVENTS_PER_POSITION == 0:
-    # With one source position the template's /run/beamOn is a meaningful
-    # statement about the run ("this template does 1e5 events"), so inheriting
-    # it is correct and the legacy sensitivity_template_beamOn*.mac files rely
-    # on that. With several positions it is not: the count becomes PER POSITION,
-    # so the same number silently means N_POSITIONS times more events per design
-    # point. Inheriting it there is how a stale placeholder becomes the event
-    # count without anyone choosing it, and the mistake is undetectable
-    # downstream -- a wrong-but-valid count produces a perfectly normal-looking
-    # run. So require the caller to state it.
-    raise ValueError(
-        f"SENSITIVITY_N_POSITIONS={N_POSITIONS} (>1) requires "
-        f"SENSITIVITY_EVENTS_PER_POSITION to be set explicitly.\n"
-        f"With multiple source positions the macro's /run/beamOn is a PER-POSITION "
-        f"count, so inheriting whatever the template happens to say would silently "
-        f"set the events per design point to {N_POSITIONS} x that value.\n"
-        f"The current screen used SENSITIVITY_EVENTS_PER_POSITION=125000 "
-        f"(x16 positions x2 replicas = 4e6 events per design point)."
-    )
-if TOTAL_MEM_GB <= 0 or PER_SAMPLE_MEM_GB <= 0:
-    raise ValueError("Memory budgets must be positive")
-if PER_SAMPLE_MEM_GB > TOTAL_MEM_GB:
-    raise ValueError("SENSITIVITY_PER_SAMPLE_MEM_GB cannot exceed SENSITIVITY_TOTAL_MEM_GB")
+if TOTAL_EVENTS < 0:
+    raise ValueError("SENSITIVITY_TOTAL_EVENTS must be at least 0 (0 takes the total from the template)")
 _available_gb = host_available_gb()
 if _available_gb == _available_gb and TOTAL_MEM_GB > _available_gb:
     raise ValueError(
@@ -525,29 +526,48 @@ TRAJECTORY_LENGTH = 1 + sum(
 )
 
 
-def resolve_events_per_position():
-    """The per-sub-run /run/beamOn count, resolved once and stated explicitly.
+def resolve_event_counts():
+    """(total per design point, per-sub-run /run/beamOn, provenance string).
 
-    Stage 1 ALWAYS writes this line rather than letting a generated macro
-    inherit the template's value silently. The template value is then a
-    documented fallback for single-position manual runs, not a hidden default
-    that can drift away from what a campaign actually ran.
+    ONE number is configured -- the total primary phonons per design point --
+    and the per-process count is derived. The previous scheme configured the
+    per-sub-run count instead, so the same number meant N_POSITIONS x
+    N_REPLICAS times more events depending on settings elsewhere; a
+    wrong-but-valid count of that kind is undetectable downstream, because the
+    run completes normally and only the physics is wrong.
+
+    Splitting is exact by construction: a total that does not divide evenly into
+    N_POSITIONS x N_REPLICAS sub-runs is refused rather than silently rounded,
+    since rounding would make the design points carry unequal statistics.
     """
-    if EVENTS_PER_POSITION > 0:
-        return EVENTS_PER_POSITION, "SENSITIVITY_EVENTS_PER_POSITION"
-    raw = find_macro_value(MACRO_TEMPLATE, "/run/beamOn")
-    if raw == "<missing>":
-        raise ValueError(f"Macro template defines no /run/beamOn: {MACRO_TEMPLATE}")
-    try:
-        value = int(float(raw.split()[0]))
-    except (ValueError, IndexError):
+    sub_runs_per_point = N_POSITIONS * N_REPLICAS
+
+    if TOTAL_EVENTS > 0:
+        total, source = TOTAL_EVENTS, "SENSITIVITY_TOTAL_EVENTS"
+    else:
+        raw = find_macro_value(MACRO_TEMPLATE, "/run/beamOn")
+        if raw == "<missing>":
+            raise ValueError(f"Macro template defines no /run/beamOn: {MACRO_TEMPLATE}")
+        try:
+            total = int(float(raw.split()[0]))
+        except (ValueError, IndexError):
+            raise ValueError(
+                f"Macro template's /run/beamOn is not a number: {raw!r} in "
+                f"{MACRO_TEMPLATE}. Set SENSITIVITY_TOTAL_EVENTS explicitly."
+            )
+        source = f"template {os.path.basename(MACRO_TEMPLATE)} (read as the TOTAL)"
+
+    if total <= 0:
+        raise ValueError(f"Total events per design point must be positive, got {total}.")
+    if total % sub_runs_per_point != 0:
         raise ValueError(
-            f"Macro template's /run/beamOn is not a number: {raw!r} in "
-            f"{MACRO_TEMPLATE}. Set SENSITIVITY_EVENTS_PER_POSITION explicitly."
+            f"Total events per design point ({total:,}) does not divide evenly into "
+            f"{sub_runs_per_point} sub-runs ({N_POSITIONS} positions x {N_REPLICAS} "
+            f"replicas); {total / sub_runs_per_point:.4f} events each.\n"
+            f"Choose a total that is a multiple of {sub_runs_per_point} -- rounding "
+            f"would give design points unequal statistics."
         )
-    if value <= 0:
-        raise ValueError(f"Macro template's /run/beamOn must be positive, got {value}.")
-    return value, f"template {os.path.basename(MACRO_TEMPLATE)}"
+    return total, total // sub_runs_per_point, source
 
 
 def verify_generated_beam_on(macro_files, expected):
@@ -568,7 +588,8 @@ def verify_generated_beam_on(macro_files, expected):
         raise ValueError(
             f"{len(wrong)} generated macro(s) do not carry /run/beamOn {expected}: {sample}"
         )
-    print(f"Verified /run/beamOn {expected:,} in all {len(macro_files)} generated macros.")
+    print(f"Verified /run/beamOn {expected:,} in all {len(macro_files)} generated macros "
+          f"({len(macro_files)} sub-runs x {expected:,} = {len(macro_files) * expected:,} events).")
 
 
 def build_source_positions(template_z_mm):
@@ -769,9 +790,10 @@ def print_startup_configuration(total_samples):
     print("Replicas per design point:", N_REPLICAS)
     print("CLHEP seeding:", f"explicit, base {SEED_BASE}, paired by (trajectory, replica, position)"
           if EXPLICIT_SEEDS else "<clock()-derived: NOT reproducible, streams are reused>")
-    print(f"Events per position: {RESOLVED_EVENTS_PER_POSITION:,} (from {EVENTS_SOURCE})")
-    print(f"  -> per design point: {RESOLVED_EVENTS_PER_POSITION * N_POSITIONS * N_REPLICAS:,} "
-          f"({N_POSITIONS} positions x {N_REPLICAS} replicas)")
+    print(f"TOTAL phonons per design point: {TOTAL_PER_POINT:,} (from {EVENTS_SOURCE})")
+    print(f"  -> /run/beamOn per sub-run: {EVENTS_PER_SUB_RUN:,} "
+          f"({N_POSITIONS} positions x {N_REPLICAS} replicas = "
+          f"{N_POSITIONS * N_REPLICAS} sub-runs per design point)")
     print("Total sub-runs:", total_samples * N_REPLICAS * N_POSITIONS)
     print("Memory budget: total", f"{TOTAL_MEM_GB:g} GB,",
           "per-sample", f"{PER_SAMPLE_MEM_GB:g} GB;",
@@ -906,7 +928,7 @@ def generate_runfiles(samp, samp_No):
             # them (notably /main/detector_param/update) consumes draws and
             # shifts the stream relative to the event loop.
             seed = None
-            beam_on_line = "/run/beamOn " + str(RESOLVED_EVENTS_PER_POSITION)
+            beam_on_line = "/run/beamOn " + str(EVENTS_PER_SUB_RUN)
             if EXPLICIT_SEEDS:
                 seed = sub_run_seed(samp_No, replica, position_index, TRAJECTORY_LENGTH,
                                     noise_floor=NOISE_FLOOR_N > 0)
@@ -1396,7 +1418,7 @@ if __name__ == "__main__":
     for path in (HITS_DIR, LOGS_DIR, MACROS_DIR, CRYSTALMAPS_DIR):
         os.makedirs(path, exist_ok=False)
 
-    RESOLVED_EVENTS_PER_POSITION, EVENTS_SOURCE = resolve_events_per_position()
+    TOTAL_PER_POINT, EVENTS_PER_SUB_RUN, EVENTS_SOURCE = resolve_event_counts()
     SOURCE_POSITIONS = build_source_positions(read_template_source_z())
 
     if NOISE_FLOOR_N > 0:
@@ -1438,7 +1460,7 @@ if __name__ == "__main__":
                 f"eta={format_duration(eta_seconds)}"
             )
 
-    verify_generated_beam_on(macro_files, RESOLVED_EVENTS_PER_POSITION)
+    verify_generated_beam_on(macro_files, EVENTS_PER_SUB_RUN)
 
     if GENERATE_ONLY:
         print("Generation-only mode complete; Geant4/G4CMP simulations were not started.")

@@ -21,6 +21,7 @@ levels of the calculation:
     └── 2 Monte Carlo replicas per configuration
         └── 16 source positions per replica
             └── 125,000 primary events per Geant4 process
+                (= 4,000,000 total per design point / (16 x 2))
 ```
 
 A **Morris trajectory is a path through parameter space**, not a Geant4
@@ -31,41 +32,51 @@ particle or phonon trajectory.
 Each level multiplies the one below it, so the number quoted depends entirely
 on which level is meant. All four are used in this repository:
 
-| Level | Phonon events | Where the number appears |
+**One number is configured: the TOTAL phonons per design point.** Everything
+else is derived from it, so no count can silently mean something different
+because an unrelated setting changed.
+
+| Level | Phonon events | Where it appears |
 |---|---:|---|
-| one `/run/beamOn`, i.e. **one Geant4 process = one sub-run** | **125,000** | every generated `Morris_<i>_r<r>_p<p>.mac` |
-| × 16 source positions = **one replica** | **2,000,000** | `n_sim` in `qp_manifest.jsonl` and `qp_summary.csv` |
-| × 2 replicas = **one design point** | **4,000,000** | the response `stage3_screen_analysis.py` screens on |
-| × 6,912 design points = **the whole screen** | **2.76 × 10¹⁰** | 221,184 sub-runs total |
+| **TOTAL per design point — the configured knob** | **4,000,000** | `SENSITIVITY_TOTAL_EVENTS`; `/run/beamOn` in `sensitivity_template_screen.mac`; `n_sim_total_design_point` in the manifest |
+| ÷ 2 replicas = one replica | 2,000,000 | `n_sim` in `qp_manifest.jsonl` / `qp_summary.csv` |
+| ÷ 16 positions = one sub-run (**derived** `/run/beamOn`) | 125,000 | every generated `Morris_<i>_r<r>_p<p>.mac` |
+| × 6,912 design points = the whole screen | 2.76 × 10¹⁰ | 221,184 sub-runs |
+
+Stage 1 computes `events_per_sub_run = TOTAL / (N_POSITIONS × N_REPLICAS)` and
+**refuses to run if that is not an exact integer** — rounding would give design
+points unequal statistics. With one position and one replica the total and the
+per-run count coincide, so a legacy `sensitivity_template_beamOn*.mac` behaves
+exactly as before.
 
 The primary is a single `phonon_Caustic` phonon per event, sampled from
 [0.6, 1.5] meV, so "events" and "primary phonons" are the same count here.
 
-**Where the count comes from, and why it cannot drift.** The executed macros are
-the 221,184 generated files under `output/<run_id>/macros/` — gitignored, but
-regenerating byte-identically from `SENSITIVITY_MORRIS_SEED=20260727` plus the
-env block in "Reproducing the current screen". `sensitivity_template_screen.mac`
-is a skeleton. Three rules keep its `/run/beamOn` from silently becoming the
-event count:
+**Why it cannot drift.** Every human-facing number is the total, so the
+template and the environment variable cannot disagree about what they mean —
+running the template with no env var and running it with
+`SENSITIVITY_TOTAL_EVENTS=4000000` give byte-identical macros. On top of that:
 
-1. **Stage 1 always rewrites the line**, never inherits it silently, and prints
-   the resolved value and its provenance at startup
-   (`Events per position: 125,000 (from SENSITIVITY_EVENTS_PER_POSITION)`).
-2. **With `N_POSITIONS > 1`, `SENSITIVITY_EVENTS_PER_POSITION` is required** —
-   stage 1 refuses to start without it. With several positions the number is
-   *per position*, so inheriting a stale template value would silently multiply
-   the events per design point by `N_POSITIONS × N_REPLICAS`. A single-position
-   run may still inherit, which is what the legacy
-   `sensitivity_template_beamOn*.mac` files rely on.
-3. **Every generated macro is verified** to carry the resolved count before any
+1. **Stage 1 always rewrites `/run/beamOn`**, never inherits it silently, and
+   prints the total with its provenance at startup:
+   `TOTAL phonons per design point: 4,000,000 (from SENSITIVITY_TOTAL_EVENTS)`.
+2. **A total that does not split evenly is refused**, not rounded.
+3. **Every generated macro is verified** to carry the derived count before any
    simulation starts.
+4. **`SENSITIVITY_EVENTS_PER_POSITION` is removed** and raises an error naming
+   its replacement, so an old command line cannot quietly run the old
+   semantics.
 
 A wrong-but-valid event count is undetectable downstream — the run completes
-normally and only the physics is wrong — so all three checks are at generation
-time. (A non-numeric placeholder would be worse than a stale number: Geant4
-rejects `/run/beamOn`, but the hits file is already created at
-`/run/initialize`, so the run exits 0 with a header-only file that is
-indistinguishable from the 39,430 sub-runs that legitimately produced no hits.)
+normally and only the physics is wrong — so every check is at generation time.
+(A non-numeric placeholder would be worse than a stale number: Geant4 rejects
+`/run/beamOn`, but the hits file is already created at `/run/initialize`, so the
+run exits 0 with a header-only file indistinguishable from the 39,430 sub-runs
+that legitimately produced no hits.)
+
+The executed macros are the 221,184 generated files under
+`output/<run_id>/macros/` — gitignored, but regenerating byte-identically from
+`SENSITIVITY_MORRIS_SEED=20260727` plus the env block below.
 
 ### Definitions
 
@@ -443,7 +454,7 @@ Stage 1 prints the exact stage 2 command for the run it just finished.
 | `SENSITIVITY_SAMPLE_TIMEOUT` | `0` (off) | per-sample wall-clock limit in seconds; kills the whole process group |
 | `SENSITIVITY_N_POSITIONS` | `1` | source positions per design point (scrambled Sobol, identical across points) |
 | `SENSITIVITY_N_REPLICAS` | `1` | independent CLHEP realizations per design point; kept separate in the manifest |
-| `SENSITIVITY_EVENTS_PER_POSITION` | `0` (use template) | `/run/beamOn` per sub-run; total per design point = this × positions |
+| `SENSITIVITY_TOTAL_EVENTS` | `0` (use template) | **TOTAL** primary phonons per design point; `/run/beamOn` per sub-run is derived as this ÷ (positions × replicas), and must divide exactly |
 | `SENSITIVITY_TOTAL_MEM_GB` | `300` | aggregate RSS ceiling across all concurrent sub-runs; refuses to start above host `MemAvailable` |
 | `SENSITIVITY_PER_SAMPLE_MEM_GB` | `4` | per-sub-run RSS cap (~55× a healthy 70 MB run) |
 | `SENSITIVITY_NOISE_FLOOR_N` | `0` (off) | replace the Morris design with N *identical* default points, to measure the noise floor |
@@ -622,14 +633,14 @@ and should not be treated as a quantitative optimizer training set.
 ```bash
 # 1. Noise floor (200 identical points; ~45 min on 8 workers)
 SENSITIVITY_NOISE_FLOOR_N=200 SENSITIVITY_MACRO_TEMPLATE="$PWD/sensitivity_template_screen.mac" \
-SENSITIVITY_N_POSITIONS=16 SENSITIVITY_N_REPLICAS=1 SENSITIVITY_EVENTS_PER_POSITION=250000 \
+SENSITIVITY_N_POSITIONS=16 SENSITIVITY_N_REPLICAS=1 SENSITIVITY_TOTAL_EVENTS=4000000 \
 SENSITIVITY_MAX_WORKERS=8 SENSITIVITY_SAMPLE_TIMEOUT=1800 SENSITIVITY_LOG_MODE=failures \
 python -u stage1_run_simulations.py
 
 # 2. Full T=128 screen (221,184 sub-runs; ~9.7 h on 32 workers)
 SENSITIVITY_MACRO_TEMPLATE="$PWD/sensitivity_template_screen.mac" \
 SENSITIVITY_MORRIS_SEED=20260727 \
-SENSITIVITY_N_POSITIONS=16 SENSITIVITY_N_REPLICAS=2 SENSITIVITY_EVENTS_PER_POSITION=125000 \
+SENSITIVITY_N_POSITIONS=16 SENSITIVITY_N_REPLICAS=2 SENSITIVITY_TOTAL_EVENTS=4000000 \
 SENSITIVITY_MAX_WORKERS=32 SENSITIVITY_TOTAL_MEM_GB=300 SENSITIVITY_PER_SAMPLE_MEM_GB=4 \
 SENSITIVITY_SAMPLE_TIMEOUT=1800 SENSITIVITY_LOG_MODE=failures \
 python -u stage1_run_simulations.py

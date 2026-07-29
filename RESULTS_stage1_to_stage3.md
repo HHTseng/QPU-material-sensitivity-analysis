@@ -100,15 +100,16 @@ Event accounting (a design point is no longer one run):
 
 | Level | Events |
 |---|---|
-| `/run/beamOn` per macro | **125,000** |
-| Per replica (16 positions pooled) | 2,000,000 |
-| **Per design point** (× 2 replicas) | **4,000,000** |
+| **TOTAL per design point** (the configured knob) | **4,000,000** |
+| ÷ 2 replicas = per replica | 2,000,000 |
+| ÷ 16 positions = per macro `/run/beamOn` (derived) | 125,000 |
 | Whole run (× 6912 points) | 2.76 × 10¹⁰ |
 
-The 125,000 comes from `SENSITIVITY_EVENTS_PER_POSITION`, **not** from
-`sensitivity_template_screen.mac`, whose `/run/beamOn 200000` is an inert
-placeholder that stage 1 overwrites in every generated macro. See the README's
-"Phonon event accounting".
+Configured as `SENSITIVITY_TOTAL_EVENTS=4000000`. Stage 1 derives the
+per-sub-run `/run/beamOn` and refuses a total that does not split exactly. The
+earlier scheme configured the *per-position* count, so one number silently meant
+32× more events depending on unrelated settings; see the README's "Phonon event
+accounting".
 
 Positions are **identical across all design points** — a common random number,
 so position variance cancels in the elementary-effect differences instead of
