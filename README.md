@@ -26,6 +26,31 @@ levels of the calculation:
 A **Morris trajectory is a path through parameter space**, not a Geant4
 particle or phonon trajectory.
 
+### Phonon event accounting
+
+Each level multiplies the one below it, so the number quoted depends entirely
+on which level is meant. All four are used in this repository:
+
+| Level | Phonon events | Where the number appears |
+|---|---:|---|
+| one `/run/beamOn`, i.e. **one Geant4 process = one sub-run** | **125,000** | every generated `Morris_<i>_r<r>_p<p>.mac` |
+| × 16 source positions = **one replica** | **2,000,000** | `n_sim` in `qp_manifest.jsonl` and `qp_summary.csv` |
+| × 2 replicas = **one design point** | **4,000,000** | the response `stage3_screen_analysis.py` screens on |
+| × 6,912 design points = **the whole screen** | **2.76 × 10¹⁰** | 221,184 sub-runs total |
+
+The primary is a single `phonon_Caustic` phonon per event, sampled from
+[0.6, 1.5] meV, so "events" and "primary phonons" are the same count here.
+
+> **The 125,000 is not in the macro template.** `sensitivity_template_screen.mac`
+> carries a placeholder `/run/beamOn 200000`; stage 1 overwrites that line in
+> every generated macro from `SENSITIVITY_EVENTS_PER_POSITION=125000`. The
+> template is a skeleton — the executed macros are the 221,184 generated files
+> under `output/<run_id>/macros/`, which are gitignored but regenerate
+> byte-identically from `SENSITIVITY_MORRIS_SEED=20260727` plus the env block in
+> "Reproducing the current screen". Read the template's `beamOn` as *unset*, not
+> as the event count; it only takes effect if `SENSITIVITY_EVENTS_PER_POSITION`
+> is left at its `0` default.
+
 ### Definitions
 
 | Symbol | Meaning | This screen |

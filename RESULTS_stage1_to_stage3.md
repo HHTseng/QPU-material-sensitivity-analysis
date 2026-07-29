@@ -105,6 +105,11 @@ Event accounting (a design point is no longer one run):
 | **Per design point** (× 2 replicas) | **4,000,000** |
 | Whole run (× 6912 points) | 2.76 × 10¹⁰ |
 
+The 125,000 comes from `SENSITIVITY_EVENTS_PER_POSITION`, **not** from
+`sensitivity_template_screen.mac`, whose `/run/beamOn 200000` is an inert
+placeholder that stage 1 overwrites in every generated macro. See the README's
+"Phonon event accounting".
+
 Positions are **identical across all design points** — a common random number,
 so position variance cancels in the elementary-effect differences instead of
 inflating them. Replicas are independent CLHEP realisations and are kept
