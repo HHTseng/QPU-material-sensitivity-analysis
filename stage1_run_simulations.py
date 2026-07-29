@@ -486,6 +486,25 @@ if N_REPLICAS < 1:
     raise ValueError("SENSITIVITY_N_REPLICAS must be at least 1")
 if EVENTS_PER_POSITION < 0:
     raise ValueError("SENSITIVITY_EVENTS_PER_POSITION must be at least 0 (0 keeps the template value)")
+if N_POSITIONS > 1 and EVENTS_PER_POSITION == 0:
+    # With one source position the template's /run/beamOn is a meaningful
+    # statement about the run ("this template does 1e5 events"), so inheriting
+    # it is correct and the legacy sensitivity_template_beamOn*.mac files rely
+    # on that. With several positions it is not: the count becomes PER POSITION,
+    # so the same number silently means N_POSITIONS times more events per design
+    # point. Inheriting it there is how a stale placeholder becomes the event
+    # count without anyone choosing it, and the mistake is undetectable
+    # downstream -- a wrong-but-valid count produces a perfectly normal-looking
+    # run. So require the caller to state it.
+    raise ValueError(
+        f"SENSITIVITY_N_POSITIONS={N_POSITIONS} (>1) requires "
+        f"SENSITIVITY_EVENTS_PER_POSITION to be set explicitly.\n"
+        f"With multiple source positions the macro's /run/beamOn is a PER-POSITION "
+        f"count, so inheriting whatever the template happens to say would silently "
+        f"set the events per design point to {N_POSITIONS} x that value.\n"
+        f"The current screen used SENSITIVITY_EVENTS_PER_POSITION=125000 "
+        f"(x16 positions x2 replicas = 4e6 events per design point)."
+    )
 if TOTAL_MEM_GB <= 0 or PER_SAMPLE_MEM_GB <= 0:
     raise ValueError("Memory budgets must be positive")
 if PER_SAMPLE_MEM_GB > TOTAL_MEM_GB:
@@ -504,6 +523,52 @@ TRAJECTORY_LENGTH = 1 + sum(
     len(p[1]) if type(p[1]) is list else 1
     for p in (electrode_params + detector_params + G4CMP_params + config_params + QPDE_params)
 )
+
+
+def resolve_events_per_position():
+    """The per-sub-run /run/beamOn count, resolved once and stated explicitly.
+
+    Stage 1 ALWAYS writes this line rather than letting a generated macro
+    inherit the template's value silently. The template value is then a
+    documented fallback for single-position manual runs, not a hidden default
+    that can drift away from what a campaign actually ran.
+    """
+    if EVENTS_PER_POSITION > 0:
+        return EVENTS_PER_POSITION, "SENSITIVITY_EVENTS_PER_POSITION"
+    raw = find_macro_value(MACRO_TEMPLATE, "/run/beamOn")
+    if raw == "<missing>":
+        raise ValueError(f"Macro template defines no /run/beamOn: {MACRO_TEMPLATE}")
+    try:
+        value = int(float(raw.split()[0]))
+    except (ValueError, IndexError):
+        raise ValueError(
+            f"Macro template's /run/beamOn is not a number: {raw!r} in "
+            f"{MACRO_TEMPLATE}. Set SENSITIVITY_EVENTS_PER_POSITION explicitly."
+        )
+    if value <= 0:
+        raise ValueError(f"Macro template's /run/beamOn must be positive, got {value}.")
+    return value, f"template {os.path.basename(MACRO_TEMPLATE)}"
+
+
+def verify_generated_beam_on(macro_files, expected):
+    """Assert every generated macro carries the intended event count.
+
+    Cheap insurance against a substitution silently not applying -- a failure
+    mode this project has already hit twice (an edit whose pattern did not
+    match, reported as done). A wrong-but-valid event count cannot be detected
+    downstream: the run completes normally and only the physics is wrong.
+    """
+    wrong = []
+    for sub_run in macro_files:
+        value = find_macro_value(sub_run["macro"], "/run/beamOn")
+        if value == "<missing>" or int(float(value.split()[0])) != expected:
+            wrong.append((sub_run["sub_name"], value))
+    if wrong:
+        sample = ", ".join(f"{n}={v}" for n, v in wrong[:5])
+        raise ValueError(
+            f"{len(wrong)} generated macro(s) do not carry /run/beamOn {expected}: {sample}"
+        )
+    print(f"Verified /run/beamOn {expected:,} in all {len(macro_files)} generated macros.")
 
 
 def build_source_positions(template_z_mm):
@@ -704,7 +769,9 @@ def print_startup_configuration(total_samples):
     print("Replicas per design point:", N_REPLICAS)
     print("CLHEP seeding:", f"explicit, base {SEED_BASE}, paired by (trajectory, replica, position)"
           if EXPLICIT_SEEDS else "<clock()-derived: NOT reproducible, streams are reused>")
-    print("Events per position:", EVENTS_PER_POSITION if EVENTS_PER_POSITION > 0 else "<template value>")
+    print(f"Events per position: {RESOLVED_EVENTS_PER_POSITION:,} (from {EVENTS_SOURCE})")
+    print(f"  -> per design point: {RESOLVED_EVENTS_PER_POSITION * N_POSITIONS * N_REPLICAS:,} "
+          f"({N_POSITIONS} positions x {N_REPLICAS} replicas)")
     print("Total sub-runs:", total_samples * N_REPLICAS * N_POSITIONS)
     print("Memory budget: total", f"{TOTAL_MEM_GB:g} GB,",
           "per-sample", f"{PER_SAMPLE_MEM_GB:g} GB;",
@@ -839,16 +906,12 @@ def generate_runfiles(samp, samp_No):
             # them (notably /main/detector_param/update) consumes draws and
             # shifts the stream relative to the event loop.
             seed = None
-            beam_on_line = "/run/beamOn " + str(EVENTS_PER_POSITION) if EVENTS_PER_POSITION > 0 else None
+            beam_on_line = "/run/beamOn " + str(RESOLVED_EVENTS_PER_POSITION)
             if EXPLICIT_SEEDS:
                 seed = sub_run_seed(samp_No, replica, position_index, TRAJECTORY_LENGTH,
                                     noise_floor=NOISE_FLOOR_N > 0)
-                current = beam_on_line or find_macro_value(MACRO_TEMPLATE, "/run/beamOn")
-                if beam_on_line is None:
-                    current = "/run/beamOn " + current
-                beam_on_line = f"/random/setSeeds {seed} {seed + 1}\n{current}"
-            if beam_on_line is not None:
-                sub_lines = replace_line(sub_lines, "/run/beamOn ", beam_on_line, required=True)
+                beam_on_line = f"/random/setSeeds {seed} {seed + 1}\n{beam_on_line}"
+            sub_lines = replace_line(sub_lines, "/run/beamOn ", beam_on_line, required=True)
 
             sub_macro = os.path.join(MACROS_DIR, sub_name + ".mac")
             with open(sub_macro, "w") as file:
@@ -1333,6 +1396,7 @@ if __name__ == "__main__":
     for path in (HITS_DIR, LOGS_DIR, MACROS_DIR, CRYSTALMAPS_DIR):
         os.makedirs(path, exist_ok=False)
 
+    RESOLVED_EVENTS_PER_POSITION, EVENTS_SOURCE = resolve_events_per_position()
     SOURCE_POSITIONS = build_source_positions(read_template_source_z())
 
     if NOISE_FLOOR_N > 0:
@@ -1373,6 +1437,8 @@ if __name__ == "__main__":
                 f"elapsed={format_duration(elapsed)}; "
                 f"eta={format_duration(eta_seconds)}"
             )
+
+    verify_generated_beam_on(macro_files, RESOLVED_EVENTS_PER_POSITION)
 
     if GENERATE_ONLY:
         print("Generation-only mode complete; Geant4/G4CMP simulations were not started.")

@@ -41,15 +41,31 @@ on which level is meant. All four are used in this repository:
 The primary is a single `phonon_Caustic` phonon per event, sampled from
 [0.6, 1.5] meV, so "events" and "primary phonons" are the same count here.
 
-> **The 125,000 is not in the macro template.** `sensitivity_template_screen.mac`
-> carries a placeholder `/run/beamOn 200000`; stage 1 overwrites that line in
-> every generated macro from `SENSITIVITY_EVENTS_PER_POSITION=125000`. The
-> template is a skeleton — the executed macros are the 221,184 generated files
-> under `output/<run_id>/macros/`, which are gitignored but regenerate
-> byte-identically from `SENSITIVITY_MORRIS_SEED=20260727` plus the env block in
-> "Reproducing the current screen". Read the template's `beamOn` as *unset*, not
-> as the event count; it only takes effect if `SENSITIVITY_EVENTS_PER_POSITION`
-> is left at its `0` default.
+**Where the count comes from, and why it cannot drift.** The executed macros are
+the 221,184 generated files under `output/<run_id>/macros/` — gitignored, but
+regenerating byte-identically from `SENSITIVITY_MORRIS_SEED=20260727` plus the
+env block in "Reproducing the current screen". `sensitivity_template_screen.mac`
+is a skeleton. Three rules keep its `/run/beamOn` from silently becoming the
+event count:
+
+1. **Stage 1 always rewrites the line**, never inherits it silently, and prints
+   the resolved value and its provenance at startup
+   (`Events per position: 125,000 (from SENSITIVITY_EVENTS_PER_POSITION)`).
+2. **With `N_POSITIONS > 1`, `SENSITIVITY_EVENTS_PER_POSITION` is required** —
+   stage 1 refuses to start without it. With several positions the number is
+   *per position*, so inheriting a stale template value would silently multiply
+   the events per design point by `N_POSITIONS × N_REPLICAS`. A single-position
+   run may still inherit, which is what the legacy
+   `sensitivity_template_beamOn*.mac` files rely on.
+3. **Every generated macro is verified** to carry the resolved count before any
+   simulation starts.
+
+A wrong-but-valid event count is undetectable downstream — the run completes
+normally and only the physics is wrong — so all three checks are at generation
+time. (A non-numeric placeholder would be worse than a stale number: Geant4
+rejects `/run/beamOn`, but the hits file is already created at
+`/run/initialize`, so the run exits 0 with a header-only file that is
+indistinguishable from the 39,430 sub-runs that legitimately produced no hits.)
 
 ### Definitions
 

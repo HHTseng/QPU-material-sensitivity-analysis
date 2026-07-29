@@ -132,9 +132,15 @@
 #it is crucial that the geometry is updated before running the simulation
 /main/detector_param/update
 
-# Events PER POSITION; stage 1 overwrites this from SENSITIVITY_EVENTS_PER_POSITION.
-# Total events for the design point = this x SENSITIVITY_N_POSITIONS.
-/run/beamOn 200000
+# Events PER POSITION. Stage 1 ALWAYS rewrites this line -- it never inherits it
+# silently -- and with SENSITIVITY_N_POSITIONS > 1 it REFUSES to run unless
+# SENSITIVITY_EVENTS_PER_POSITION is set explicitly, because with several
+# positions this number is per-position and the events per design point become
+# N_POSITIONS x N_REPLICAS x this.
+# The value below is therefore only a fallback for a single-position manual run.
+# It is set to what the 2026-07-28 screen actually used, so the file cannot
+# disagree with the campaign it documents.
+/run/beamOn 125000
 
 #/vis/ogl/set/printFilename muon.pdf
 #/vis/ogl/set/printMode pixmap
