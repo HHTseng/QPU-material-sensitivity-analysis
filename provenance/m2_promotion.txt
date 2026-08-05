@@ -1,0 +1,13 @@
+# M2 promotion (step 6): unexpected minimum promoted before comparison
+# run: morris_mimir_9d1248ef-329a-4577-ac50-f6339e14b024  P=16 R=8 TOTAL=40,320,000 bank=7  384 sub-runs, 0 failures
+# design: m2_promote_design.csv sha256 3652dd000e5872ee
+
+design                             yield/evt        SEM    rel
+m2p_t10_cov085_observed_min       1.5575e-05   9.77e-07   6.3%
+m2p_t10_cov090_box_corner         1.2252e-05   6.43e-07   5.2%
+m2p_reference_t1_cov064           3.6161e-05   1.25e-06   3.5%
+
+paired contrasts (replica-block bootstrap, 20000 draws, same seed bank):
+  m2p_t10_cov085_observed_min -> m2p_t10_cov090_box_corner: -21.3% [-28.4%, -10.7%] RESOLVED
+  m2p_reference_t1_cov064 -> m2p_t10_cov085_observed_min: -56.9% [-62.6%, -50.6%] RESOLVED
+  m2p_reference_t1_cov064 -> m2p_t10_cov090_box_corner: -66.1% [-68.9%, -62.5%] RESOLVED

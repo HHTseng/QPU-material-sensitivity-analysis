@@ -118,7 +118,24 @@ detector_params = [
 ("/main/detector_param/setBotAbs ", 0.736, [0.736 * lbf, 1]),
 ("/main/detector_param/setBotVSound ", 2.608, [2.608 * lbf, 2.608 * ubf]),
 #("/main/detector_param/setBotGap ", 0.0, [0.0,0.0]),
-("/main/detector_param/setBotGapThres ", 180e-6, [180e-6 * lbf, 180e-6 * ubf]),
+# DEFAULT CHANGED 2026-07-29: 180e-6 -> 191e-6, deliberately WITHOUT changing the
+# bounds. setBotGapThres is not a free bottom-film property: it is the energy
+# below which down-converted phonons stop being dangerous to the junction, so it
+# must be DERIVED from the junction gap (= setTopGap). G4CMPNormal terminates the
+# in-film cascade at setBotQPLim x setBotGapThres, and WaffleKaplanElectrode
+# re-emits a secondary only above 2 x setTopGap; with setBotQPLim = 2 the two
+# coincide exactly iff setBotGapThres == setTopGap. At the shipped 180e-6 the
+# cascade floor (360 ueV) sat below the re-emission gate (382 ueV), leaving a
+# band in which quasiparticles were tracked but their phonons were discarded.
+# Measured to be below noise (+0.0%, z = 0.00, 95% CI +/-12%) -- see the Stage-4
+# plan sec. 6e -- so this is a correctness fix, not a result change.
+#
+# The BOUNDS are left at the old 180e-6 centre on purpose. build_morris_design()
+# reads only param[2] (bounds) while build_default_design() reads param[1]
+# (default), so changing the default alone keeps the stored 2026-07-28 screen
+# exactly reproducible while moving the Stage-4 operating point. Do not "tidy"
+# the bounds to match without re-deriving that screen.
+("/main/detector_param/setBotGapThres ", 191e-6, [180e-6 * lbf, 180e-6 * ubf]),
 ("/main/detector_param/setBotQPLim ", 2, [2, 5], "int"),
 ("/main/detector_param/setBotPhLifetime ", 5.1, [5.1 * lbf, 5.1 * ubf]),
 #("/main/detector_param/setBotPhLifetimeSlope ", 5.3, [5.3*lbf,5.3*ubf]),

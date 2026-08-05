@@ -1,0 +1,51 @@
+{
+  "design_file": "m2_promote_design.csv",
+  "design_file_sha256": "3652dd000e5872ee4e1b4f95d2bb0df4f2761ceb1a6a1e5d676a0116247e916f",
+  "point_set": "m2promote",
+  "generated_utc": "2026-07-29T23:28:56+00:00",
+  "generator_sha256": "f56e411f63ea83be20dbdd4f062c41d10094d32d0c018a20ed7080c849674d9f",
+  "rows": [
+    {
+      "row": 0,
+      "sample_name": "<prefix>0",
+      "label": "m2p_t10_cov085_observed_min",
+      "setBotThickness_um": 10.0,
+      "setBotAbs": 0.736,
+      "island_um": 230.4886114323222,
+      "spacing_um": 19.511388567677812,
+      "pitch_um": 250.0,
+      "coverage": 0.8500000000000001,
+      "setBotGapThres_eV": 0.000191,
+      "setTopGap_eV": 0.000191,
+      "gapthres_is_derived": true
+    },
+    {
+      "row": 1,
+      "sample_name": "<prefix>1",
+      "label": "m2p_t10_cov090_box_corner",
+      "setBotThickness_um": 10.0,
+      "setBotAbs": 0.736,
+      "island_um": 237.17082451262843,
+      "spacing_um": 12.829175487371572,
+      "pitch_um": 250.0,
+      "coverage": 0.8999999999999999,
+      "setBotGapThres_eV": 0.000191,
+      "setTopGap_eV": 0.000191,
+      "gapthres_is_derived": true
+    },
+    {
+      "row": 2,
+      "sample_name": "<prefix>2",
+      "label": "m2p_reference_t1_cov064",
+      "setBotThickness_um": 1.0,
+      "setBotAbs": 0.736,
+      "island_um": 200.0,
+      "spacing_um": 50.0,
+      "pitch_um": 250.0,
+      "coverage": 0.6400000000000001,
+      "setBotGapThres_eV": 0.000191,
+      "setTopGap_eV": 0.000191,
+      "gapthres_is_derived": true
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "design_file": "cu_thick90_design.csv",
+  "design_file_sha256": "a2c3101641e90173172c56b3c398bf3fc5030b74cbe1891b4f9e08d5e1649e28",
+  "point_set": "thick90",
+  "generated_utc": "2026-07-31T19:14:09+00:00",
+  "generator_sha256": "a40dc1cc438fde5936100707ef4d24b74064f198fdfb047d6a95e13e20d24e00",
+  "rows": [
+    {
+      "row": 0,
+      "sample_name": "<prefix>0",
+      "label": "t5_cov090",
+      "setBotThickness_um": 5.0,
+      "setBotAbs": 0.736,
+      "island_um": 237.17082451262843,
+      "spacing_um": 12.829175487371572,
+      "pitch_um": 250.0,
+      "coverage": 0.8999999999999999,
+      "setBotGapThres_eV": 0.000191,
+      "setTopGap_eV": 0.000191,
+      "gapthres_is_derived": true
+    },
+    {
+      "row": 1,
+      "sample_name": "<prefix>1",
+      "label": "t10_cov090",
+      "setBotThickness_um": 10.0,
+      "setBotAbs": 0.736,
+      "island_um": 237.17082451262843,
+      "spacing_um": 12.829175487371572,
+      "pitch_um": 250.0,
+      "coverage": 0.8999999999999999,
+      "setBotGapThres_eV": 0.000191,
+      "setTopGap_eV": 0.000191,
+      "gapthres_is_derived": true
+    }
+  ]
+}

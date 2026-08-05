@@ -83,7 +83,11 @@
 /main/detector_param/setBotAbs 0.736
 /main/detector_param/setBotVSound 2.608
 /main/detector_param/setBotGap 0.0
-/main/detector_param/setBotGapThres 180e-6
+# Derived, not free: must equal setTopGap above, so that the in-film cascade
+# floor (setBotQPLim x setBotGapThres) coincides with the re-emission gate
+# (2 x setTopGap). Stage 1 overwrites this line from the design row anyway; it
+# is kept correct here so a direct template run is not a different experiment.
+/main/detector_param/setBotGapThres 191e-6
 /main/detector_param/setBotQPLim 2.
 /main/detector_param/setBotPhLifetime 5.1
 /main/detector_param/setBotSubGapAbs 0.0

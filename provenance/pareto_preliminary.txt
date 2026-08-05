@@ -1,0 +1,129 @@
+PRELIMINARY PARETO ANALYSIS -- Cu backside stack
+grid: 28 designs x 4 replicas   bootstrap: 20000 replica-block draws
+
+Assumptions: A1 loss monotone in coverage; A2 pitch fixed 250 um (neutrality tested
+only at t=1/f=0.64); A3 thickness IS treated as a formal cost axis -- see below.
+
+Promoted measurements substituted for 3 design(s):
+  t=1, f=0.64: grid 3.6706e-05 -> promoted 3.6161e-05 (-1.5%, R=8)
+  t=10, f=0.85: grid 1.1657e-05 -> promoted 1.5575e-05 (+33.6%, R=8)
+  t=10, f=0.90: grid 1.2897e-05 -> promoted 1.2252e-05 (-5.0%, R=8)
+
+=== 2-objective  (QP, coverage): 16 of 28 on the front ===
+label                   t_um   cov   yield/evt  relSEM   R    source  P(front)
+m2_t5_cov0.30              5  0.30  6.2004e-05    6.7%   4      grid     3.6%
+m2_t10_cov0.30            10  0.30  5.8780e-05    8.0%   4      grid    96.4%
+m2_t5_cov0.45              5  0.45  3.9187e-05    5.2%   4      grid    33.2%
+m2_t10_cov0.45            10  0.45  3.7698e-05    8.2%   4      grid    69.1%
+m2_t1_cov0.60              1  0.60  3.6706e-05   12.2%   4      grid     4.9%
+m2_t2_cov0.60              2  0.60  3.0010e-05   12.2%   4      grid    48.7%
+m2_t5_cov0.60              5  0.60  3.0258e-05   11.4%   4      grid    37.0%
+m2_t10_cov0.60            10  0.60  3.2986e-05    4.0%   4      grid     9.3%
+m2_t5_cov0.64              5  0.64  2.3810e-05   22.9%   4      grid    74.6%
+m2_t10_cov0.64            10  0.64  2.7034e-05    8.0%   4      grid     8.2%
+m2_t2_cov0.75              2  0.75  2.6042e-05   10.4%   4      grid     5.4%
+m2_t5_cov0.75              5  0.75  2.2817e-05    4.0%   4      grid    12.2%
+m2_t10_cov0.75            10  0.75  2.1825e-05    9.1%   4      grid    55.2%
+m2_t2_cov0.85              2  0.85  2.0089e-05   14.0%   4      grid     5.0%
+m2_t10_cov0.85            10  0.85  1.5575e-05    6.3%   8  promoted    91.4%
+m2_t10_cov0.90            10  0.90  1.2252e-05    5.2%   8  promoted    96.5%
+  marginal members (on the front only because they cannot be resolvedly excluded):
+    m2_t5_cov0.30            P(front) = 3.6%
+    m2_t1_cov0.60            P(front) = 4.9%
+    m2_t2_cov0.85            P(front) = 5.0%
+    m2_t2_cov0.75            P(front) = 5.4%
+    m2_t10_cov0.64           P(front) = 8.2%
+    m2_t10_cov0.60           P(front) = 9.3%
+    m2_t5_cov0.75            P(front) = 12.2%
+
+=== 3-objective  (QP, coverage, thickness): 28 of 28 on the front ===
+label                   t_um   cov   yield/evt  relSEM   R    source  P(front)
+m2_t1_cov0.30              1  0.30  8.3581e-05    4.2%   4      grid   100.0%
+m2_t2_cov0.30              2  0.30  7.6389e-05    3.0%   4      grid    95.1%
+m2_t5_cov0.30              5  0.30  6.2004e-05    6.7%   4      grid   100.0%
+m2_t10_cov0.30            10  0.30  5.8780e-05    8.0%   4      grid    96.4%
+m2_t1_cov0.45              1  0.45  5.0347e-05    9.1%   4      grid   100.0%
+m2_t2_cov0.45              2  0.45  4.7867e-05    6.9%   4      grid    73.5%
+m2_t5_cov0.45              5  0.45  3.9187e-05    5.2%   4      grid   100.0%
+m2_t10_cov0.45            10  0.45  3.7698e-05    8.2%   4      grid    69.1%
+m2_t1_cov0.60              1  0.60  3.6706e-05   12.2%   4      grid    99.7%
+m2_t2_cov0.60              2  0.60  3.0010e-05   12.2%   4      grid    85.8%
+m2_t5_cov0.60              5  0.60  3.0258e-05   11.4%   4      grid    44.0%
+m2_t10_cov0.60            10  0.60  3.2986e-05    4.0%   4      grid     9.3%
+m2_t1_cov0.64              1  0.64  3.6161e-05    3.5%   8  promoted    55.6%
+m2_t2_cov0.64              2  0.64  3.0258e-05    7.7%   4      grid    39.4%
+m2_t5_cov0.64              5  0.64  2.3810e-05   22.9%   4      grid    77.0%
+m2_t10_cov0.64            10  0.64  2.7034e-05    8.0%   4      grid     8.2%
+m2_t1_cov0.75              1  0.75  2.8026e-05    9.7%   4      grid    98.0%
+m2_t2_cov0.75              2  0.75  2.6042e-05   10.4%   4      grid    66.6%
+m2_t5_cov0.75              5  0.75  2.2817e-05    4.0%   4      grid    53.7%
+m2_t10_cov0.75            10  0.75  2.1825e-05    9.1%   4      grid    55.2%
+m2_t1_cov0.85              1  0.85  2.4306e-05   11.2%   4      grid    87.9%
+m2_t2_cov0.85              2  0.85  2.0089e-05   14.0%   4      grid    79.3%
+m2_t5_cov0.85              5  0.85  1.8849e-05    5.7%   4      grid    57.9%
+m2_t10_cov0.85            10  0.85  1.5575e-05    6.3%   8  promoted    91.4%
+m2_t1_cov0.90              1  0.90  2.2321e-05    2.9%   4      grid    86.6%
+m2_t2_cov0.90              2  0.90  1.8601e-05   18.3%   4      grid    73.5%
+m2_t5_cov0.90              5  0.90  1.4137e-05    6.6%   4      grid    95.9%
+m2_t10_cov0.90            10  0.90  1.2252e-05    5.2%   8  promoted    96.5%
+  marginal members (on the front only because they cannot be resolvedly excluded):
+    m2_t10_cov0.64           P(front) = 8.2%
+    m2_t10_cov0.60           P(front) = 9.3%
+
+--- thickness as a formal objective: the decision, and why ---
+  DO NOT make it a formal Pareto objective. The 3-objective front above
+  contains ALL 28 designs, and that degeneracy is structural, not a
+  fidelity artifact: QP decreases monotonically with thickness, so a
+  thinner design can never dominate on QP and a thicker one can never
+  dominate on cost. Every combination is non-dominated by construction,
+  P(front) saturates, and the front loses all discriminating power.
+  Thickness IS a real cost (Cu volume, deposition, stress) -- but it
+  enters correctly as a CONSTRAINT ('thickness <= X'), supplied
+  externally, exactly like a coverage cap. The operative front is
+  therefore the 2-objective one, read subject to a thickness cap.
+
+--- what this front does and does not say ---
+  * Every listed design is a legitimate candidate: nothing else is
+    cheaper on every fixed axis AND resolvedly lower in QP.
+  * The front spans the full coverage range, so the choice among these
+    designs is determined entirely by external cost information.
+  * P(front) separates strong members from ones that survive only
+    because they cannot be excluded at this fidelity.
+
+--- NO EXTERNAL CONSTRAINT SUPPLIED ---
+Expected --em-loss CSV schema (one row per geometry actually simulated/measured):
+
+    coverage,pitch_um,loss_metric,loss_value,loss_sigma,source
+    0.30,250,Qi_internal,1.85e6,0.09e6,HFSS-2026-08-03
+    0.45,250,Qi_internal,1.42e6,0.08e6,HFSS-2026-08-03
+    ...
+
+  coverage     as defined here: (l_island/(l_island+l_spacing))^2
+  pitch_um     l_island + l_spacing
+  loss_metric  free text, but ONE metric per file; state whether higher is
+               better (Qi) or worse (tan_delta, loss_rate)
+  loss_value   the metric
+  loss_sigma   1-sigma uncertainty; required, since the robust front needs it
+  source       solver + date, or measurement id -- provenance is not optional
+
+Also needed alongside, and NOT inferable here:
+  * whether the metric improves or degrades with increasing value
+  * the acceptable region (threshold or budget) that defines "constrained"
+  * whether pitch is genuinely free or bounded by fabrication
+
+MINIMUM EXTERNAL INFORMATION NEEDED. A full loss surface is ideal, but ANY ONE
+of these collapses the candidate pool to a decision:
+
+  1. maximum acceptable coverage          -> selects the highest-coverage front
+                                             design at or below it
+  2. allowed pitch range                  -> fixes A2, and if it excludes 250 um
+                                             the pitch-neutrality check must be
+                                             repeated at the front geometry
+  3. thickness / stress / Cu-volume limit -> prunes the thickness objective
+  4. max added 1/Q, or minimum Q_i        -> the constrained form proper
+  5. a device-team list of fabrication-   -> intersect it with the front and
+     admissible geometries                   report the best admissible member
+
+Item 1 alone is enough for a conditional recommendation TODAY, because the front
+is monotone in coverage: given a cap, the answer is the front member at that cap.
+

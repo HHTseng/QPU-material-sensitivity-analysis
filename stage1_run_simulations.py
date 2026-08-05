@@ -20,7 +20,11 @@ SensitivityAnalysis_Morris_run_record_Mac_M4Max.md.
 
 import numpy as np
 from scipy.stats import qmc
+import hashlib
+import math
 import os
+import platform
+from datetime import datetime, timezone
 import sys
 import csv
 import json
@@ -151,6 +155,27 @@ MAX_SAMPLES = int(os.environ.get("SENSITIVITY_MAX_SAMPLES", "0"))
 # keeps the historical non-reproducible behavior.
 _MORRIS_SEED_RAW = os.environ.get("SENSITIVITY_MORRIS_SEED", "").strip()
 MORRIS_SEED = int(_MORRIS_SEED_RAW) if _MORRIS_SEED_RAW else None
+# --- Explicit-design mode (Stage 4) ------------------------------------------
+# Path to a CSV of design points to simulate INSTEAD of generating a Morris
+# design. The header must match the canonical design column names exactly, in
+# order -- the same header write_morris_sequence() emits -- because everything
+# downstream indexes the sample row POSITIONALLY (generate_runfiles walks one
+# cursor across macro_params then config_params, and extract_qpde_params indexes
+# by name into that same row). A file with the right columns in the wrong order
+# would write every value into the wrong macro command and still run to
+# completion, so the header is compared element-by-element and mismatches are
+# refused rather than reordered.
+#
+# This is deliberately the smallest possible extension: the Morris path is
+# untouched when the variable is unset, and an explicit design reuses the whole
+# existing validation, macro-writing, manifest and seeding chain.
+DESIGN_FILE = expand_path(os.environ.get("SENSITIVITY_DESIGN_FILE", "").strip()) if \
+    os.environ.get("SENSITIVITY_DESIGN_FILE", "").strip() else ""
+# Sample-name prefix. "Morris_" keeps existing runs byte-identical; an explicit
+# design defaults to "Design_" so its artifacts cannot be mistaken for a screen.
+SAMPLE_PREFIX = os.environ.get(
+    "SENSITIVITY_SAMPLE_PREFIX", "Design_" if DESIGN_FILE else "Morris_"
+)
 # Per-sample wall-clock limit in seconds; 0 (default) disables it. Guards
 # against the G4CMPKaplanQP infinite loop documented in
 # G4CMP_crash_and_memory_analysis.md (a film with QPLim=1 spins forever and
@@ -223,10 +248,16 @@ POSITION_SEED = int(os.environ.get("SENSITIVITY_POSITION_SEED", "20260727"))
 # trajectories and replicas still get independent streams.
 SEED_BASE = int(os.environ.get("SENSITIVITY_SEED_BASE", "20260728"))
 EXPLICIT_SEEDS = os.environ.get("SENSITIVITY_EXPLICIT_SEEDS", "1") == "1"
+# Selects an independent family of streams without touching SEED_BASE. 0 (the
+# default) contributes nothing, so every existing run reproduces byte-identically.
+# Stage 4 uses a fresh bank id for final validation, so a candidate that was
+# selected on bank 0 is confirmed on streams it has never been evaluated on --
+# otherwise the winner is partly a winner of its own noise realization.
+SEED_BANK_ID = int(os.environ.get("SENSITIVITY_SEED_BANK_ID", "0"))
 
 
 def sub_run_seed(design_point_index, replica, position_index, trajectory_length,
-                 noise_floor=False):
+                 noise_floor=False, explicit_design=False):
     """Deterministic CLHEP seed for one sub-run (see SEED_BASE rationale).
 
     The grouping key differs by design type, and getting this wrong is silently
@@ -244,34 +275,71 @@ def sub_run_seed(design_point_index, replica, position_index, trajectory_length,
       bootstrap interval computed from the rows is spuriously precise. Since
       the whole purpose of that mode is to measure the noise, this would
       silently destroy the measurement rather than degrade it.
+    * Explicit-design mode keys by NOTHING -- every design point shares one bank
+      at matched (replica, position). An explicit design is a set of candidates
+      to be compared against each other, not a path or a repeat, so the
+      trajectory grouping is meaningless (there are no trajectories) and the
+      noise-floor grouping is actively wrong (it would give each candidate an
+      independent stream, discarding the pairing). Sharing the bank makes every
+      candidate-vs-candidate comparison a paired one.
+
+      Caveat, so nobody over-claims the benefit: two candidates with different
+      material parameters consume different numbers of random draws, so their
+      streams decorrelate after the first divergent event and stay decorrelated
+      for the remaining ~125,000. The pairing is free and cannot hurt, but the
+      variance reduction has NOT been measured here -- do not budget for it.
     """
-    group = design_point_index if noise_floor else design_point_index // trajectory_length
+    if explicit_design:
+        group = 0
+    elif noise_floor:
+        group = design_point_index
+    else:
+        group = design_point_index // trajectory_length
     # Mixed with distinct odd multipliers so neighbouring (group, replica,
     # position) triples do not land on nearby seeds.
     raw = (SEED_BASE
+           + SEED_BANK_ID * 7_919_003
            + group * 1_000_003
            + replica * 10_007
            + position_index * 101)
     return raw % 900_000_000 + 1  # keep well inside CLHEP's positive-int range
 
 
-def assert_seed_bank_is_sound(n_design_points, noise_floor):
+def assert_seed_bank_is_sound(n_design_points, noise_floor, explicit_design=False):
     """Fail before launching if the seed layout is not what the mode requires.
 
     Morris mode intends one bank per trajectory (shared within it); noise-floor
-    mode intends a unique seed for every sub-run. Both are checked here so a
+    mode intends a unique seed for every sub-run; explicit-design mode intends
+    exactly one bank shared by every candidate. All three are checked here so a
     mis-keyed bank cannot reach a multi-hour campaign.
     """
     if not EXPLICIT_SEEDS:
         return
     seeds = [
-        sub_run_seed(dp, r, p, TRAJECTORY_LENGTH, noise_floor=noise_floor)
+        sub_run_seed(dp, r, p, TRAJECTORY_LENGTH, noise_floor=noise_floor,
+                     explicit_design=explicit_design)
         for dp in range(n_design_points)
         for r in range(N_REPLICAS)
         for p in range(N_POSITIONS)
     ]
     unique = len(set(seeds))
-    if noise_floor:
+    if explicit_design:
+        # One bank shared across candidates: exactly N_REPLICAS x N_POSITIONS
+        # distinct streams, however many design points there are. More than that
+        # means the pairing broke; fewer means two positions or replicas of the
+        # same candidate collided, which would silently correlate what are meant
+        # to be independent samples.
+        expected = N_REPLICAS * N_POSITIONS
+        if unique != expected:
+            raise ValueError(
+                f"Explicit-design seed bank is wrong: {unique} unique seeds, expected "
+                f"{expected} ({N_REPLICAS} replicas x {N_POSITIONS} positions, shared "
+                f"across all {n_design_points} design points so comparisons are paired)."
+            )
+        print(f"Seed check: {unique} streams ({N_REPLICAS} replicas x {N_POSITIONS} positions) "
+              f"shared across all {n_design_points} design points; comparisons are paired. "
+              f"Bank id {SEED_BANK_ID}.")
+    elif noise_floor:
         expected = n_design_points * N_REPLICAS * N_POSITIONS
         if unique != expected:
             raise ValueError(
@@ -432,7 +500,16 @@ def build_qp_manifest_entries(sample_name, sub_runs, qpde_params):
         )
         entry["design_point"] = sample_name
         entry["replica"] = replica
-        entry["hits_files"] = [run["hits_file"] for run in replica_runs]
+        # Stored RELATIVE to RESULTS_DIR (e.g. "hits/M2_0_r0_p0_hitsfile.txt").
+        # Absolute paths made a results directory non-portable: a copied or moved
+        # run silently read the ORIGINAL run's hits files, so validating the copy
+        # validated the original and moving a run to another host broke stage 2
+        # outright. The macro still carries the absolute path -- Geant4 runs from
+        # a different cwd -- so only the manifest changes. Stage 2 resolves
+        # relative entries against the results dir it was pointed at and still
+        # accepts absolute paths from legacy manifests.
+        entry["hits_files"] = [os.path.relpath(run["hits_file"], RESULTS_DIR)
+                               for run in replica_runs]
         entry["seeds"] = [run.get("seed") for run in replica_runs]
         entry.pop("hits_file", None)
         entry["n_sim"] = entry["n_sim_per_position"] * len(replica_runs)
@@ -456,7 +533,7 @@ def build_qp_manifest_entry(sample_name, macroname, qpde_params):
 
     entry = {
         "sample_name": sample_name,
-        "hits_file": os.path.join(HITS_DIR, sample_name + "_hitsfile.txt"),
+        "hits_file": os.path.relpath(os.path.join(HITS_DIR, sample_name + "_hitsfile.txt"), RESULTS_DIR),
         "gap": gap,
         "qx": qx.tolist(),
         "qy": qy.tolist(),
@@ -510,6 +587,24 @@ if N_REPLICAS < 1:
     raise ValueError("SENSITIVITY_N_REPLICAS must be at least 1")
 if TOTAL_EVENTS < 0:
     raise ValueError("SENSITIVITY_TOTAL_EVENTS must be at least 0 (0 takes the total from the template)")
+# Restored 2026-07-29. Commit 501a557 dropped these two checks while rewriting
+# the event-accounting block around them. Without them a non-positive budget
+# disables the guard silently (MemoryGuard compares RSS against a ceiling of 0
+# or less, which nothing can stay under, or which nothing can exceed), and a
+# per-sample cap above the aggregate cap is incoherent: the per-sample limit can
+# never bind, so a single runaway sub-run is only caught by the aggregate ceiling
+# it has already blown through. Both matter more for Stage 4 than for the screen,
+# because the controller launches batches unattended.
+if TOTAL_MEM_GB <= 0 or PER_SAMPLE_MEM_GB <= 0:
+    raise ValueError(
+        f"Memory budgets must be positive: SENSITIVITY_TOTAL_MEM_GB={TOTAL_MEM_GB:g}, "
+        f"SENSITIVITY_PER_SAMPLE_MEM_GB={PER_SAMPLE_MEM_GB:g}"
+    )
+if PER_SAMPLE_MEM_GB > TOTAL_MEM_GB:
+    raise ValueError(
+        f"SENSITIVITY_PER_SAMPLE_MEM_GB ({PER_SAMPLE_MEM_GB:g} GB) cannot exceed "
+        f"SENSITIVITY_TOTAL_MEM_GB ({TOTAL_MEM_GB:g} GB); the per-sample cap could never bind."
+    )
 _available_gb = host_available_gb()
 if _available_gb == _available_gb and TOTAL_MEM_GB > _available_gb:
     raise ValueError(
@@ -590,6 +685,133 @@ def verify_generated_beam_on(macro_files, expected):
         )
     print(f"Verified /run/beamOn {expected:,} in all {len(macro_files)} generated macros "
           f"({len(macro_files)} sub-runs x {expected:,} = {len(macro_files) * expected:,} events).")
+
+
+DERIVED_THRESHOLD_CHECK = os.environ.get("SENSITIVITY_CHECK_DERIVED_THRESHOLDS", "1") == "1"
+
+
+def verify_derived_thresholds(macro_files):
+    """Assert setBotGapThres == setTopGap in every generated macro.
+
+    setBotGapThres is not a free bottom-film property: G4CMPNormal ends the
+    in-film cascade at setBotQPLim x setBotGapThres, while WaffleKaplanElectrode
+    re-emits a secondary only above 2 x setTopGap. With setBotQPLim = 2 those
+    coincide exactly iff setBotGapThres == setTopGap; otherwise there is a band
+    in which quasiparticles are tracked but the phonons they emit are silently
+    discarded. Nothing downstream can detect that -- the run completes normally
+    and only the physics is wrong -- so it is checked at generation time.
+
+    Explicit-design (Stage-4) mode only. The stored Morris screen deliberately
+    swept the two independently, so applying this to the Morris path would fail
+    a design that is historically correct. Disable with
+    SENSITIVITY_CHECK_DERIVED_THRESHOLDS=0 to run a deliberate decoupling study
+    (see the plan's GAPTHRES point set).
+    """
+    if not (DESIGN_FILE and DERIVED_THRESHOLD_CHECK):
+        return
+    mismatched = []
+    for sub_run in macro_files:
+        thres = find_macro_value(sub_run["macro"], "/main/detector_param/setBotGapThres ")
+        topgap = find_macro_value(sub_run["macro"], "/main/detector_param/setTopGap ")
+        try:
+            ok = math.isclose(float(thres.split()[0]), float(topgap.split()[0]), rel_tol=1e-9)
+        except (ValueError, IndexError, AttributeError):
+            ok = False
+        if not ok:
+            mismatched.append((sub_run["sub_name"], thres, topgap))
+    if mismatched:
+        sample = ", ".join(f"{n}: thres={t} vs topGap={g}" for n, t, g in mismatched[:5])
+        raise ValueError(
+            f"{len(mismatched)} generated macro(s) have setBotGapThres != setTopGap: {sample}\n"
+            f"setBotGapThres is derived from the junction gap (plan sec. 3.7). Fix the design "
+            f"file, or set SENSITIVITY_CHECK_DERIVED_THRESHOLDS=0 for a deliberate study."
+        )
+    print(f"Verified setBotGapThres == setTopGap in all {len(macro_files)} generated macros.")
+
+
+STAGE4_PROTOCOL_VERSION = "stage4-2026-07-29"
+
+
+def _sha256(path):
+    try:
+        with open(path, "rb") as handle:
+            return hashlib.sha256(handle.read()).hexdigest()
+    except OSError:
+        return None
+
+
+def write_run_metadata(n_design_points, source_positions):
+    """Machine-readable provenance for this run, written at generation time.
+
+    A prose execution log in a docstring drifts from the artifacts it describes;
+    this cannot, because it is emitted by the run itself. Everything needed to
+    say what a stored result actually is -- fidelity, seeding, spatial set, and
+    the exact bytes of the design, template and code that produced it -- lands in
+    one JSON file next to the manifest.
+
+    Hashes rather than paths, because paths are not portable and a file at the
+    same path can differ. The design CSV's hash is the join key to the semantic
+    labels its generator writes alongside it.
+    """
+    metadata = {
+        "protocol_version": STAGE4_PROTOCOL_VERSION,
+        "run_id": RUN_ID,
+        "generated_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "host": platform.node(),
+        "design": {
+            "source": ("explicit" if DESIGN_FILE else
+                       "noise_floor" if NOISE_FLOOR_N > 0 else "morris"),
+            "design_file": DESIGN_FILE or None,
+            "design_file_sha256": _sha256(DESIGN_FILE) if DESIGN_FILE else None,
+            "sample_prefix": SAMPLE_PREFIX,
+            "n_design_points": n_design_points,
+            "morris_seed": MORRIS_SEED,
+            "max_samples": MAX_SAMPLES or None,
+            "noise_floor_n": NOISE_FLOOR_N or None,
+        },
+        "fidelity": {
+            "total_events_per_design_point": TOTAL_PER_POINT,
+            "events_per_sub_run": EVENTS_PER_SUB_RUN,
+            "events_source": EVENTS_SOURCE,
+            "n_positions": N_POSITIONS,
+            "n_replicas": N_REPLICAS,
+            "n_sub_runs": n_design_points * N_POSITIONS * N_REPLICAS,
+            # Authoritative expectations for stage 2's preflight. Without these
+            # it can only check self-consistency, and a manifest that is missing
+            # its last replica everywhere looks contiguous.
+            "n_design_points": n_design_points,
+            "n_manifest_entries": n_design_points * N_REPLICAS,
+        },
+        "manifest": {"hits_paths_relative": True},
+        "seeding": {
+            "explicit_seeds": EXPLICIT_SEEDS,
+            "seed_base": SEED_BASE,
+            "seed_bank_id": SEED_BANK_ID,
+            "position_seed": POSITION_SEED,
+            "position_half_span_mm": POSITION_HALF_SPAN_MM,
+            # Recorded in full: the spatial quadrature is a fixed scenario, and
+            # a nested P16/P32 comparison is only interpretable if the exact
+            # sites are known rather than re-derived from a seed.
+            "source_positions_mm": [list(p) if p else None for p in source_positions],
+        },
+        "inputs": {
+            "macro_template": MACRO_TEMPLATE,
+            "macro_template_sha256": _sha256(MACRO_TEMPLATE),
+            "lattice_config_template": CONFIG_TEMPLATE,
+            "lattice_config_template_sha256": _sha256(CONFIG_TEMPLATE),
+            "main_executable": MAIN_EXE,
+        },
+        "code_sha256": {
+            name: _sha256(os.path.join(SCRIPT_DIR, name))
+            for name in ("stage1_run_simulations.py", "sensitivity_params.py",
+                         "sensitivity_utils.py", "stage2_compute_QPs.py")
+        },
+    }
+    path = os.path.join(RESULTS_DIR, "run_metadata.json")
+    with open(path, "w") as handle:
+        json.dump(metadata, handle, indent=2)
+    print("Wrote run provenance to:", path)
+    return path
 
 
 def build_source_positions(template_z_mm):
@@ -692,6 +914,96 @@ def build_default_design(n_points):
     return names, samples
 
 
+def canonical_design_names():
+    """The design column names, in the order the rest of the pipeline expects.
+
+    Single source of truth for both the Morris design and an explicit one, so
+    the two cannot drift into disagreeing about column order -- which is the one
+    error an explicit design could make that still runs to completion.
+    """
+    all_params = electrode_params + detector_params + G4CMP_params + config_params + QPDE_params
+    names = []
+    for param in all_params:
+        if type(param[1]) is not list:
+            names.append(design_name(param))
+        else:
+            for index in range(1, len(param[1]) + 1):
+                names.append(param[0] + "_" + str(index))
+    return names
+
+
+def build_explicit_design(path):
+    """Read design points from a CSV instead of sampling a Morris design.
+
+    The header must equal canonical_design_names() exactly, in order. This is
+    checked rather than trusted because generate_runfiles() consumes the row
+    POSITIONALLY: a file carrying the right columns in the wrong order writes
+    every value into the wrong macro command, and the run then completes
+    normally with only the physics wrong -- the same undetectable-downstream
+    failure class the event-accounting commit was written to remove.
+
+    Values are used as-is, including outside the Morris sampling bounds: an
+    explicit design exists precisely to reach places the screen did not (e.g.
+    setBotThickness at 10 um against a sampled range of [0.5, 1.5]). Bounds are
+    a sampling instruction, not a physics limit. Non-finite values ARE refused,
+    since they cannot describe a device.
+    """
+    expected = canonical_design_names()
+    with open(path, newline="") as csvfile:
+        reader = csv.reader(csvfile)
+        try:
+            header = next(reader)
+        except StopIteration:
+            raise ValueError(f"Design file is empty: {path}")
+        rows = [row for row in reader if any(cell.strip() for cell in row)]
+
+    if header != expected:
+        missing = [n for n in expected if n not in header]
+        unknown = [n for n in header if n not in expected]
+        detail = []
+        if missing:
+            detail.append(f"missing {len(missing)}: {missing[:5]}")
+        if unknown:
+            detail.append(f"unknown {len(unknown)}: {unknown[:5]}")
+        if not detail:
+            first = next((i for i, (a, b) in enumerate(zip(header, expected)) if a != b), None)
+            detail.append(f"same columns, wrong ORDER (first difference at index {first}: "
+                          f"{header[first]!r} where {expected[first]!r} was expected)")
+        raise ValueError(
+            f"Design file header does not match the canonical design columns.\n"
+            f"  file: {path}\n"
+            f"  expected {len(expected)} columns, got {len(header)}\n"
+            f"  " + "; ".join(detail) + "\n"
+            f"Generate a template with:\n"
+            f"  python -c \"import stage1_run_simulations as s; "
+            f"print(','.join(s.canonical_design_names()))\""
+        )
+    if not rows:
+        raise ValueError(f"Design file has a valid header but no design points: {path}")
+
+    samples = []
+    for line_no, row in enumerate(rows, start=2):
+        if len(row) != len(expected):
+            raise ValueError(
+                f"{path} line {line_no}: {len(row)} values for {len(expected)} columns."
+            )
+        try:
+            values = [float(cell) for cell in row]
+        except ValueError as exc:
+            raise ValueError(f"{path} line {line_no}: non-numeric value ({exc}).")
+        bad = [expected[i] for i, v in enumerate(values) if not np.isfinite(v)]
+        if bad:
+            raise ValueError(f"{path} line {line_no}: non-finite value(s) in {bad[:5]}.")
+        samples.append(values)
+
+    samples = np.array(samples, dtype=float)
+    if MAX_SAMPLES > 0:
+        samples = samples[:MAX_SAMPLES]
+    print(f"Explicit design: {samples.shape[0]} design point(s) x {len(expected)} parameters "
+          f"from {path}")
+    return expected, samples
+
+
 # A parameter whose unit field is "ratio:<other>" is swept as a dimensionless
 # fraction of <other> rather than in its own units; generate_runfiles multiplies
 # it back out when writing the file. This exists to make physically impossible
@@ -788,8 +1100,19 @@ def print_startup_configuration(total_samples):
           f"(scrambled Sobol, seed {POSITION_SEED}, +/-{POSITION_HALF_SPAN_MM:g} mm)" if N_POSITIONS > 1
           else "(template position, unchanged)")
     print("Replicas per design point:", N_REPLICAS)
-    print("CLHEP seeding:", f"explicit, base {SEED_BASE}, paired by (trajectory, replica, position)"
-          if EXPLICIT_SEEDS else "<clock()-derived: NOT reproducible, streams are reused>")
+    if DESIGN_FILE:
+        print("Design source:", f"explicit design file {DESIGN_FILE}")
+        print("Sample name prefix:", SAMPLE_PREFIX)
+    else:
+        print("Design source:", "noise-floor (identical defaults)" if NOISE_FLOOR_N > 0
+              else "Morris sampler")
+    if EXPLICIT_SEEDS:
+        _keyed = ("(replica, position), shared across design points" if DESIGN_FILE
+                  else "(design point, replica, position)" if NOISE_FLOOR_N > 0
+                  else "(trajectory, replica, position)")
+        print("CLHEP seeding:", f"explicit, base {SEED_BASE}, bank {SEED_BANK_ID}, keyed by {_keyed}")
+    else:
+        print("CLHEP seeding: <clock()-derived: NOT reproducible, streams are reused>")
     print(f"TOTAL phonons per design point: {TOTAL_PER_POINT:,} (from {EVENTS_SOURCE})")
     print(f"  -> /run/beamOn per sub-run: {EVENTS_PER_SUB_RUN:,} "
           f"({N_POSITIONS} positions x {N_REPLICAS} replicas = "
@@ -816,7 +1139,7 @@ def generate_runfiles(samp, samp_No):
         lines = file.readlines()
     file.close()
 
-    sample_name = "Morris_" + str(samp_No)
+    sample_name = SAMPLE_PREFIX + str(samp_No)
     # /g4cmp/HitsFile is NOT written here: it differs per sub-run and is
     # substituted at the very end, once per (replica, position).
     lines = replace_line(
@@ -931,7 +1254,8 @@ def generate_runfiles(samp, samp_No):
             beam_on_line = "/run/beamOn " + str(EVENTS_PER_SUB_RUN)
             if EXPLICIT_SEEDS:
                 seed = sub_run_seed(samp_No, replica, position_index, TRAJECTORY_LENGTH,
-                                    noise_floor=NOISE_FLOOR_N > 0)
+                                    noise_floor=NOISE_FLOOR_N > 0,
+                                    explicit_design=bool(DESIGN_FILE))
                 beam_on_line = f"/random/setSeeds {seed} {seed + 1}\n{beam_on_line}"
             sub_lines = replace_line(sub_lines, "/run/beamOn ", beam_on_line, required=True)
 
@@ -1421,12 +1745,30 @@ if __name__ == "__main__":
     TOTAL_PER_POINT, EVENTS_PER_SUB_RUN, EVENTS_SOURCE = resolve_event_counts()
     SOURCE_POSITIONS = build_source_positions(read_template_source_z())
 
-    if NOISE_FLOOR_N > 0:
+    if DESIGN_FILE and NOISE_FLOOR_N > 0:
+        raise ValueError(
+            "SENSITIVITY_DESIGN_FILE and SENSITIVITY_NOISE_FLOOR_N are mutually "
+            "exclusive: the first supplies the design, the second replaces it."
+        )
+    if DESIGN_FILE:
+        names, samples = build_explicit_design(DESIGN_FILE)
+    elif NOISE_FLOOR_N > 0:
         names, samples = build_default_design(NOISE_FLOOR_N)
     else:
         names, samples = build_morris_design()
+    # Every path must agree on column order, since generate_runfiles indexes the
+    # row positionally. Checked here rather than trusted so a future edit to one
+    # builder cannot silently misalign the others.
+    _canonical = canonical_design_names()
+    if list(names) != _canonical:
+        raise ValueError(
+            f"Design column order disagrees with canonical_design_names() "
+            f"({len(names)} vs {len(_canonical)} columns). The macro writer indexes "
+            f"rows positionally, so this would write values into the wrong commands."
+        )
     total_samples = samples.shape[0]
-    assert_seed_bank_is_sound(total_samples, noise_floor=NOISE_FLOOR_N > 0)
+    assert_seed_bank_is_sound(total_samples, noise_floor=NOISE_FLOOR_N > 0,
+                              explicit_design=bool(DESIGN_FILE))
     sequence_file = write_morris_sequence(names, samples)
     print("Wrote Morris sample sequence (all sampled parameter values) to:", sequence_file)
     print_startup_configuration(total_samples)
@@ -1436,7 +1778,7 @@ if __name__ == "__main__":
     macro_files = []
     generation_start = time.monotonic()
     print(
-        f"Generating {total_samples} Morris design points "
+        f"Generating {total_samples} {'explicit' if DESIGN_FILE else 'Morris'} design points "
         f"x {N_REPLICAS} replica(s) x {N_POSITIONS} position(s) "
         f"= {total_samples * N_REPLICAS * N_POSITIONS} sub-runs."
     )
@@ -1461,6 +1803,8 @@ if __name__ == "__main__":
             )
 
     verify_generated_beam_on(macro_files, EVENTS_PER_SUB_RUN)
+    verify_derived_thresholds(macro_files)
+    write_run_metadata(total_samples, SOURCE_POSITIONS)
 
     if GENERATE_ONLY:
         print("Generation-only mode complete; Geant4/G4CMP simulations were not started.")

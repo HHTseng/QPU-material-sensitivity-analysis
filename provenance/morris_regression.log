@@ -1,0 +1,22 @@
+# Morris byte-identity regression
+# Purpose: prove the Stage-4 refactor (explicit-design mode, seed modes,
+#   memory guards, setBotGapThres default) did not perturb the Morris path.
+# Baseline: output/morris_mimir_c7a18a17-91ce-491b-8124-78a4ff16576a/macros
+#   (the stored 2026-07-28 T=128 screen)
+# Run: 2026-07-29T19:50:39Z  host=mimir.sdcc.bnl.gov
+# Template: git show a3390bf:sensitivity_template_screen.mac  (the version
+#   the screen actually used -- NOT the current file, whose comment block differs)
+# Env: GENERATE_ONLY=1 MORRIS_SEED=20260727 N_POSITIONS=16 N_REPLICAS=2
+#      TOTAL_EVENTS=4000000 MAX_SAMPLES=54 EXPLICIT_SEEDS=0
+# Normalization: run-id substring in /g4cmp/HitsFile only
+
+## code under test (sha256)
+09b6d12f3f643d1520e7fc938eb1cd4a32b9acf49a158e9912210e11c84824f1  stage1_run_simulations.py
+ae83eecbc9c7c00849fbdb92939e39937485e07ece77c9bba83c1f6670b0c504  sensitivity_params.py
+6997dad8c4020c5e6fa467bc981a5c38b4a1b28f2a56224e27348842f8e43231  sensitivity_utils.py
+2032428208cd3a64bdbcb96c4246e6b02eea20829803b55a402729481cdfac1a  template@a3390bf
+
+## result
+macros compared: 1728   differing: 0
+lattice configs compared: 54   differing: 0
+VERDICT: PASS
