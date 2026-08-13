@@ -1,0 +1,138 @@
+Comment these out:
+
+("/main/detector_param/setTopThickness ", 0.12, [0.12*lbf,0.12*ubf], " um"),
+("/main/detector_param/setTopFilmThickness ", 0.075, [0.075*lbf,0.075*ubf], " um"),
+("/main/detector_param/setBotThickness ", 1, [1*lbf,1*ubf], " um"),
+
+
+("alpha ", 0.5, [0.5*lbf,0.5*ubf], " /eV"),
+("acDeform ", 6.6, [6.6*lbf,6.6*ubf], " eV"),
+("ivDeform ", [0.5e8, 0.8e8, 11e8, 0.3e8, 2e8, 2e8], [[0.5e8*lbf,0.5e8*ubf], [0.8e8*lbf,0.8e8*ubf], [11e8*lbf,11e8*ubf], [0.3e8*lbf,0.3e8*ubf], [2e8*lbf,2e8*ubf], [2e8*lbf,2e8*ubf]], " eV/cm"),
+("ivEnergy ", [12.0e-3, 18.4e-3, 61.8e-3, 18.9e-3, 47.2e-3, 58.8e-3], [[12.0e-3*lbf,12.0e-3*ubf], [18.4e-3*lbf,18.4e-3*ubf], [61.8e-3*lbf,61.8e-3*ubf], [18.9e-3*lbf,18.9e-3*ubf], [47.2e-3*lbf,47.2e-3*ubf], [58.8e-3*lbf,58.8e-3*ubf]], " eV"),
+("neutDens ", 1e11, [1e11*lbf,1e11*ubf], " /cm3"),
+("epsilon ", 11.68, [11.68*lbf,11.68*ubf]),
+# Intervalley scattering (Linear and Quadratic models)
+#("ivModel ", "Linear"),
+("ivLinRate0 ",  1.5e6, [1.5e6*lbf,1.5e6*ubf], " Hz"),
+("ivLinRate1 ",  1.5, [1.5*lbf,1.5*ubf], " Hz"),
+("ivLinPower ",  4.0, [4.0*lbf,4.0*ubf]),
+("ivQuadRate ",  3.5e-20, [3.5*lbf,3.5*ubf], "e-20 Hz"),
+("ivQuadField ", 3395, [3395*lbf,3395*ubf], " V/m"),
+("ivQuadPower ", 7.47, [7.47*lbf,7.47*ubf])
+
+("hmass ", 0.50, [0.50*lbf,0.50*ubf]),
+("emass ", [0.91, 0.19, 0.19], [[0.91*lbf,0.91*ubf], [0.19*lbf,0.19*ubf], [0.19*lbf,0.19*ubf]]),
+("l0_e ", 16.9e-6, [16.9e-6*lbf,16.9e-6*ubf], " m"),
+("l0_h ", 7.5e-5, [7.5e-5*lbf,7.5e-5*ubf], " m"),
+
+-----------------
+Fix the following parameters: 
+
+fix setTopQPLim = 3: ("/main/detector_param/setTopQPLim ", 3, [1,5], "int"),
+
+# Properties of the Josephson junction. Keep aluminum values
+# Alternative approach is to tune these values (can try later). Is it possible to create a phonon buffer using acoustic mismatch?
+fix 3.582 ("/main/detector_param/setTopVSound ", 3.582, [3.582*lbf,3.582*ubf]),
+fix 191.0e-6 ("/main/detector_param/setTopGap ", 191.0e-6, [(191.0e-6)*lbf,(191.0e-6)*ubf]),
+fix 0.242 ("/main/detector_param/setTopPhLifetime ", 0.242, [0.242*lbf,0.242*ubf]),
+fix 0.29 ("/main/detector_param/setTopPhLifetimeSlope ", 0.29, [0.29*lbf,0.29*ubf]),
+
+# Specularity probabilities
+# Let's assume that the top and bottom of the substrate has a polished surface (can change later). The sidewall will be rough, likely.
+fix at 0.8: ("/main/detector_param/setTopFilmPSpecProb ", 0.8, [0,1]),
+fix at 0.8: ("/main/detector_param/setTopPSpecProb ", 0.8, [0,1]),
+fix at 0: ("/main/detector_param/setWallPSpecProb ", 0.0, [0,1]),
+fix at 0.8: ("/main/detector_param/setBotPSpecProb ", 0.8, [0,1]),
+
+# Fix at 3 to prevent memory blow ups
+fix at 3: ("/main/detector_param/setTopFilmQPLim ", 3, [1,5], "int"),
+fix at 3: ("/main/detector_param/setBotQPLim ", 3, [1,5], "int"),
+
+# Thermalization parameter. Not a function of materials, in principle (though in practice material choice may change how the chip thermally sinks to the environment)
+fix at 0.02: ("/main/detector_param/setWallAbs ", 0.02, [0.0,0.5]),
+
+# Injection scenario. Fixed for every candidate -- an injection condition, not a material property.
+# Energy protocol adopted 2026-08-12 (was: setEnergy swept over [191,573] ueV, minEPhonons 382 ueV).
+# At the old setting the primary sat exactly on the Al pair-breaking gate 2*Delta_Al = 382 ueV and
+# minEPhonons killed every downconversion daughter at the first decay, so the cascade -- the mechanism
+# through which scat/decay/decayTT/the elastic tensor act -- was not simulated. Measured: ~4x more QPs
+# per primary event. 1.0 meV is mid-range of the validated [0.6, 1.5] meV window (floor = the 382 ueV
+# gate with margin; ceiling = isotope MFP 137 um vs the 525 um substrate).
+fix 1.0e-3 eV:   ("/main/gun/setEnergy ", 1.0e-3, [1.0e-3, 1.0e-3], " eV"),
+
+# Keep fixed. If we start changing the aluminum values of the Josephson junction, then we should adjust minEPhonons accordingly
+# NOTE: this cut must stay BELOW the physical threshold 2*setTopGap, or a numerical cut preempts a physical one.
+fix 0.0000382:   ("/g4cmp/minEPhonons ", 0.0000382, [0.0000382*lbf,0.0000382*ubf], " eV"),
+            ("/g4cmp/chargeBounces ", 1, [1,100], "int"),
+fix 10000:  ("/g4cmp/phononBounces ", 10000, [1,10000], "int"),
+            ("/g4cmp/clearance ", 1e-06, [1,10], "e-6 mm"),
+
+# electron parameters instead of phonon parameters, so fix for now
+("/g4cmp/eTrappingMFP ", 0.3, [0.1,0.5], " mm"),
+("/g4cmp/hTrappingMFP ", 0.3, [0.1,0.5], " mm"),
+
+# Third order stiffness tensor parameters. Too complicated to calculate (need to use DFT) and no observed sensitivity, so not worth the effort.
+("dyn ", [-42.9, -94.5, 52.4, 68.0], [[-42.9*ubf,-42.9*lbf], [-94.5*ubf,-94.5*lbf], [52.4*lbf,52.4*ubf], [68.0*lbf,68.0*ubf]], " GPa"),
+
+# The lifetime slope for the superconductor may be a universal value (either way it doesn't move much in real systems)
+("/main/detector_param/setTopFilmPhLifetimeSlope ", 0.29, [0.29*lbf,0.29*ubf]),
+
+--------------------
+
+Tune the following parameters:
+
+("/main/detector_param/setTopFilmVSound ", 2.444, [2.444*lbf,2.444*ubf]),
+("/main/detector_param/setTopFilmGap ", 1.5384e-3, [1.5384e-3*lbf,1.5384e-3*ubf]),
+("/main/detector_param/setTopFilmPhLifetime ", 0.00417, [0.00417*lbf,0.00417*ubf]),
+
+("/main/detector_param/setBotVSound ", 2.608, [2.608*lbf,2.608*ubf]),
+("/main/detector_param/setBotGap ", 0.0, [0.0,0.0]),
+("/main/detector_param/setBotGapThres ", 180e-6, [180e-6*lbf,180e-6*ubf]),
+("/main/detector_param/setBotPhLifetime ", 5.1, [5.1*lbf,5.1*ubf]),
+("/g4cmp/temperature ", 0.0, [0.0, 0.1], " K"),
+
+# Crystal parameters
+# First pass, let's query the materials in the Materials Project database for the ranges
+("cubic ", 5.431, [5.431*lbf, 5.431*ubf], " Ang"), # Use this along with the elements to estimate the density of the material
+("stiffness 1 1 ", 165.6, [165.6*lbf, 165.6*ubf], " GPa"),
+("stiffness 1 2 ",  63.9, [63.9*lbf, 63.9*ubf], " GPa"),
+("stiffness 4 4 ",  79.5, [79.5*lbf, 79.5*ubf], " GPa"),
+
+# Phonon parameters
+("scat ", 2.43e-42, [(2.43)*lbf,(2.43)*ubf], "e-42 s3"),
+("decay ", 7.41e-56, [(7.41)*lbf,(7.41)*ubf], "e-56 s4"),
+("decayTT ", 0.74, [0.74*lbf,1]),
+
+# Lattice orientation
+/main/detector_param/setMiller 0 0 1 # we should scan this using the fibonacci sphere algorithm set in the velocity calculation
+("/main/detector_param/setLatticeDeg ", 45, [45*lbf,45*ubf]),
+
+
+-------------------
+
+Calculated and determined by from tuned Parameters above:
+
+# Calculate from the stiffness parameters using the provided scripts
+[vtrans < vsound ]:
+("vsound ", 9000, [9000*lbf,9000*ubf], " m/s"),
+("vtrans ", 5400, [5400*lbf,5400*ubf], " m/s"),
+
+# These are the phonon transmission coefficients and need to be calculated by the material mass density and phonon velocities. I will provide a script.
+Si -> Al: ("/main/detector_param/setTopAbs ", 0.795, [0.795*lbf,1]),
+Si -> Ground plane metal ("/main/detector_param/setTopFilmAbs ", 0.745, [0.745*lbf,1]),
+Si -> Back plane metal ("/main/detector_param/setBotAbs ", 0.736, [0.736*lbf,1]),
+
+# The physics is too far away from the Debye energy and the sensitivity analysis agrees that this parameter doesn't matter
+# I'm putting this here, however, so that we double check before choosing a material to make sure the Debye temperature is still reasonably large. Let's consider this a dangerously irrelevant variable.
+("Debye ", 15, [15*lbf,15*ubf], " THz") 
+
+
+-----------------------
+
+17-qubit locations
+
+/main/electrode_param/setXLocations -2.000000, 0.000000, 2.000000, -2.000000, 0.000000, 2.000000, -2.000000, 0.000000, 2.000000, 1.000000, -1.000000, 1.000000, -1.000000, -3.000000, 1.000000, -1.000000, 3.000000
+/main/electrode_param/setYLocations -2.000000, -2.000000, -2.000000, 0.000000, 0.000000, 0.000000, 2.000000, 2.000000, 2.000000, -3.000000, -1.000000, 1.000000, 3.000000, -1.000000, -1.000000, 1.000000, 1.000000
+
+
+

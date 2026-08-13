@@ -1,0 +1,8 @@
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Generated/private catalog snapshots
+catalog/private/
+

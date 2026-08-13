@@ -1,0 +1,145 @@
+# Stage 3 experiment contract.
+#
+# Every value below is classified as exactly one of `fixed`, `decision`, or
+# `derived`. stage3_contract.py refuses to load this file if any key is
+# unclassified or appears in more than one class -- that is checklist item 1's
+# exit condition, enforced rather than asserted in prose.
+#
+#   fixed    : identical for every candidate; defines the controlled comparison
+#   decision : what the campaign is allowed to select over
+#   derived  : computed from a decision; never set by hand, never optimized
+#
+# See STAGE3_SMALL_MATERIAL_START.md for the checklist this implements and
+# STAGE3_MATERIAL_OPTIMIZATION_PIPELINE.md sec 3 for the parameter contract.
+
+campaign_id: stage3_baseline_v1
+description: >
+  Baseline-only slice: Si/Nb/Cu, no material selection yet. Establishes the
+  evaluator, ledger and cache identity so that later items are resolver changes
+  rather than evaluator changes.
+
+# --------------------------------------------------------------------------
+# fixed -- the controlled comparison
+# --------------------------------------------------------------------------
+fixed:
+  # Injection scenario. See the excitation-threshold contract in
+  # STAGE3_MATERIAL_OPTIMIZATION_PIPELINE.md sec 3.1.1:
+  #   minEPhonons < 2*setTopGap <= E_gun < 2*setTopFilmGap
+  gun_energy_eV: 1.0e-3
+  min_e_phonons_eV: 0.0000382
+  gun_type: phonon_Caustic
+
+  # Al junction -- fixed for every candidate, including in the small-material
+  # study. setTopGap sets the pair-breaking gate that E_gun must clear.
+  setTopVSound: 3.582
+  setTopGap: 191.0e-6
+  setTopQPLim: 3
+  setTopPhLifetime: 0.242
+  setTopPhLifetimeSlope: 0.29
+  setTopThickness_um: 0.12
+
+  # Geometry
+  setSubWidth_mm: 10
+  setSubHeight_mm: 10
+  setSubThickness_um: 525
+  electrode_width_um: 10.0
+  electrode_height_um: 10.0
+  electrode_island_um: 200.0
+  electrode_island_spacing_um: 50.0
+
+  # 17 readout electrodes. DISTINCT from the injection sites below: these are
+  # where QPs are counted, and all 17 are present in every single sub-run.
+  electrode_x_mm: [-2.0, 0.0, 2.0, -2.0, 0.0, 2.0, -2.0, 0.0, 2.0,
+                    1.0, -1.0, 1.0, -1.0, -3.0, 1.0, -1.0, 3.0]
+  electrode_y_mm: [-2.0, -2.0, -2.0, 0.0, 0.0, 0.0, 2.0, 2.0, 2.0,
+                   -3.0, -1.0, 1.0, 3.0, -1.0, -1.0, 1.0, 1.0]
+
+  # Surfaces and transport
+  setWallAbs: 0.02
+  setTopPSpecProb: 0.8
+  setTopFilmPSpecProb: 0.8
+  setBotPSpecProb: 0.8
+  setWallPSpecProb: 0.0
+  chargeBounces: 1
+  phononBounces: 10000
+  clearance_mm: 1.0e-6
+  eTrappingMFP_mm: 0.3
+  hTrappingMFP_mm: 0.3
+  temperature_K: 0.0
+
+  # Injection-site set. Fixed spatial quadrature, IDENTICAL for every candidate
+  # (a common random number). Power of two: a scrambled Sobol set is only
+  # balanced at powers of two. Weights are uniform; if that changes, the
+  # objective definition changes with it.
+  n_positions: 16
+  position_seed: 20260727
+  position_half_span_mm: 4.0
+  position_weights: uniform
+
+  # Replication and seeding
+  n_replicas: 2
+  seed_base: 20260728
+  seed_bank_id: 0
+  explicit_seeds: true
+
+  # Resource policy. 32 first: it is the level validated end-to-end
+  # (221,184 sub-runs, 0 failures, 2.15 GB peak). 64 is extrapolation.
+  max_workers: 32
+  total_mem_gb: 200
+  per_sample_mem_gb: 4
+  sample_timeout_s: 1800
+
+  # Objective. Sum of QPs over all 17 electrodes and all declared injection
+  # sites, normalised per primary event when event counts differ.
+  objective: total_QPs_per_primary
+  require_complete_scenarios: true
+
+# --------------------------------------------------------------------------
+# decision -- what the campaign may select over
+# --------------------------------------------------------------------------
+# This baseline slice deliberately enables exactly one option per layer, so the
+# evaluator can be validated with no material science in play. The small-material
+# study adds the second candidate to each list.
+decision:
+  substrate:
+    allowed: [Si]
+    value: Si
+  top_ground_film:
+    allowed: [Nb]
+    value: Nb
+  bottom_film:
+    allowed: [Cu]
+    value: Cu
+  orientation:
+    # Integer Miller indices only: G4LatticePhysical::SetMillerOrientation takes
+    # (G4int h, G4int k, G4int l, G4double rot). A Fibonacci-sphere direction
+    # cannot be represented and would truncate toward zero.
+    allowed_miller: [[0, 0, 1]]
+    miller: [0, 0, 1]
+    lattice_deg: 45.0
+  fidelity:
+    # Derived from the measured 3.69e-5 QPs per primary event.
+    # F1 ~ 37 QPs per candidate, F2 ~ 370.
+    allowed: [F1, F2]
+    value: F1
+    events_total_per_candidate:
+      F1: 1000000
+      F2: 10000000
+
+# --------------------------------------------------------------------------
+# derived -- computed from a decision, never set by hand
+# --------------------------------------------------------------------------
+# Listed so the contract is complete and so nothing here can be silently
+# promoted to a decision variable. Values are produced by the resolver at
+# evaluation time and recorded in the ledger.
+derived:
+  - vsound            # Christoffel spherical average from the tensor + density
+  - vtrans            # ditto; 0 < vtrans < vsound is a hard gate
+  - setTopAbs         # substrate / Al junction interface
+  - setTopFilmAbs     # substrate / top ground film interface
+  - setBotAbs         # substrate / bottom film interface
+  - substrate_density # from the material record, NOT the Si constant
+  - g4_material_name
+  - lattice_map_name
+  - events_per_sub_run   # events_total / (n_positions * n_replicas), exact
+  - sub_run_seeds        # f(seed_base, bank, trajectory-or-candidate, replica, position)
