@@ -73,6 +73,19 @@ def main():
     ap.add_argument("--lifetime-scale", choices=("nominal", "low", "high"), default="nominal",
                     help="use an end of each film's declared lifetime uncertainty")
     ap.add_argument("--baseline", default="Si/Nb/Cu")
+    ap.add_argument("--only", default=None,
+                    help="comma-separated candidate names (sub/top/bot) to run; "
+                         "used to shard one campaign across concurrent processes")
+    ap.add_argument("--timeout", type=float, default=None,
+                    help="per-sub-run wall clock seconds; overrides the contract. "
+                         "MUST be raised for large beamOn -- the default 1800 s "
+                         "would kill every sub-run above ~1e6 events.")
+    ap.add_argument("--tag", default=None, help="campaign_id suffix, e.g. 'e7'")
+    ap.add_argument("--total-mem-gb", type=float, default=None,
+                    help="aggregate RSS budget FOR THIS PROCESS. When sharding, "
+                         "divide the machine budget by the number of shards -- each "
+                         "shard runs its own guard and only sees its own sub-runs.")
+    ap.add_argument("--per-sample-mem-gb", type=float, default=None)
     args = ap.parse_args()
 
     contract = load_contract(args.contract)
@@ -81,6 +94,21 @@ def main():
     contract.fixed["max_workers"] = args.workers
     fidelity = contract.decision["fidelity"]["value"]
     contract.decision["fidelity"]["events_total_per_candidate"][fidelity] = args.events
+    if args.timeout is not None:
+        contract.fixed["sample_timeout_s"] = args.timeout
+    if args.total_mem_gb is not None:
+        contract.fixed["total_mem_gb"] = args.total_mem_gb
+    if args.per_sample_mem_gb is not None:
+        contract.fixed["per_sample_mem_gb"] = args.per_sample_mem_gb
+    if args.tag:
+        contract.campaign_id = f"{contract.campaign_id}_{args.tag}"
+    # A sub-run that outlives the watchdog is killed and the trial is refused, so
+    # check the budget against the timeout rather than discovering it at hour 3.
+    per_sub = args.events // (args.positions * args.replicas)
+    est_s = per_sub * 1.4e-4          # measured at 10 meV, 125k -> ~17 s
+    if contract.fixed.get("sample_timeout_s") and est_s > 0.5 * contract.fixed["sample_timeout_s"]:
+        print(f"WARNING: estimated {est_s / 60:.0f} min per sub-run vs a "
+              f"{contract.fixed['sample_timeout_s'] / 60:.0f} min timeout. Raise --timeout.")
 
     if args.lifetime_scale != "nominal":
         touched, skipped = apply_lifetime_bracket(args.lifetime_scale)
@@ -90,6 +118,12 @@ def main():
 
     subs, tops, bots = enabled(SUBSTRATES), enabled(TOP_FILMS), enabled(BOTTOM_FILMS)
     combos = list(itertools.product(subs, tops, bots))
+    if args.only:
+        wanted = {x.strip() for x in args.only.split(",") if x.strip()}
+        combos = [c for c in combos if f"{c[0]}/{c[1]}/{c[2]}" in wanted]
+        missing = wanted - {f"{a}/{b}/{c}" for a, b, c in combos}
+        if missing:
+            sys.exit(f"--only names not in the enabled catalog: {sorted(missing)}")
     print(f"Campaign {contract.campaign_id}: {len(subs)}x{len(tops)}x{len(bots)} = "
           f"{len(combos)} combinations at {args.events:,} events "
           f"({args.positions} positions x {args.replicas} replicas), "
