@@ -12,11 +12,13 @@
 # See STAGE3_SMALL_MATERIAL_START.md for the checklist this implements and
 # STAGE3_MATERIAL_OPTIMIZATION_PIPELINE.md sec 3 for the parameter contract.
 
-campaign_id: stage3_baseline_v1
+campaign_id: stage3_factorial_v1
 description: >
-  Baseline-only slice: Si/Nb/Cu, no material selection yet. Establishes the
-  evaluator, ledger and cache identity so that later items are resolver changes
-  rather than evaluator changes.
+  First enumeration: 3 substrates x 3 top films x 2 bottom films = 18
+  combinations, evaluated exhaustively with common seeds and a common injection
+  site set. Exhaustive enumeration is used deliberately -- at ~25 s per
+  candidate the whole factorial is minutes of compute, so a surrogate optimizer
+  would add model risk without saving anything.
 
 # --------------------------------------------------------------------------
 # fixed -- the controlled comparison
@@ -24,8 +26,12 @@ description: >
 fixed:
   # Injection scenario. See the excitation-threshold contract in
   # STAGE3_MATERIAL_OPTIMIZATION_PIPELINE.md sec 3.1.1:
-  #   minEPhonons < 2*setTopGap <= E_gun < 2*setTopFilmGap
-  gun_energy_eV: 1.0e-3
+  #   minEPhonons < 2*setTopGap <= E_gun   (lower gates are hard)
+  # E_gun vs 2*setTopFilmGap classifies the REGIME, it is not a gate: the
+  # Junction hit type means film absorptions are never recorded, so the
+  # objective is junction-only at any energy. Above the film gap the ground
+  # plane competes for phonons; that regime must be constant across candidates.
+  gun_energy_eV: 10.0e-3
   min_e_phonons_eV: 0.0000382
   gun_type: phonon_Caustic
 
@@ -102,13 +108,13 @@ fixed:
 # study adds the second candidate to each list.
 decision:
   substrate:
-    allowed: [Si]
+    allowed: [Si, Ge, GaAs]
     value: Si
   top_ground_film:
-    allowed: [Nb]
+    allowed: [Nb, Ta, Ti]
     value: Nb
   bottom_film:
-    allowed: [Cu]
+    allowed: [Cu, Au]
     value: Cu
   orientation:
     # Integer Miller indices only: G4LatticePhysical::SetMillerOrientation takes

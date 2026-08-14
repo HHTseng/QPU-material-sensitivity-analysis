@@ -63,35 +63,105 @@ from sensitivity_utils import replace_line, find_macro_value, format_config_entr
 from sensitivity_memguard import MemoryGuard                          # noqa: E402
 import stage1_run_simulations as harness                              # noqa: E402
 from stage2_compute_QPs import calculate_QPs                          # noqa: E402
+from interface_transmission import (                                  # noqa: E402
+    resolve_all_interfaces, validation_report, InterfaceModelError)
 
 
 # --------------------------------------------------------------------------
-# Baseline material records. A real catalog replaces this dict; the shape is
-# what `material_resolver.py` must produce, so the evaluator does not change
-# when the catalog arrives.
+# Material records. A curated catalog replaces these dicts; the SHAPE is what
+# `material_resolver.py` must produce, so the evaluator will not change when the
+# catalog arrives.
+#
+# `config_mode: native_g4cmp` means the candidate's own complete G4CMP lattice
+# record is used verbatim -- its lattice constant, tensor, dyn, scat, decay,
+# decayTT, DOS fractions and Debye. The legacy FIXED_CONFIG_COMMANDS (Si's dyn
+# and Debye 15 THz) are NOT applied on this path; they stay on the old Si
+# sensitivity path only. Mixing a candidate tensor with Si's third-order
+# elasticity or Debye would be a pseudo-material.
 # --------------------------------------------------------------------------
-BASELINE_SUBSTRATES = {
+def _load_catalog(path=None):
+    """Curated catalog -> the record shape the resolver already expects.
+
+    Disabled records are kept, not dropped: the resolver then reports WHY a
+    material is unavailable instead of pretending it does not exist.
+    """
+    import yaml
+    path = path or os.environ.get("STAGE3_CATALOG",
+                                  os.path.join(HERE, "material_catalog.yaml"))
+    if not os.path.isfile(path):
+        return None
+    with open(path) as handle:
+        raw = yaml.safe_load(handle) or {}
+    return raw
+
+
+_CATALOG = _load_catalog()
+
+
+def _catalog_section(name):
+    if not _CATALOG:
+        return {}
+    return {k: dict(v) for k, v in (_CATALOG.get(name) or {}).items()}
+
+
+_FALLBACK_SUBSTRATES = {
     "Si": {
         "g4_material": "G4_Si",
         "lattice_map": "Si",
-        "density_kg_m3": 2329.0,
+        "expected_density_kg_m3": 2329.0,
         "c11_GPa": 165.6, "c12_GPa": 63.9, "c44_GPa": 79.5,
-        "provenance": "harness baseline (CrystalMaps/Si/config.txt)",
+        "native_vsound_m_s": 9000.0, "native_vtrans_m_s": 5400.0,
+        "config_mode": "native_g4cmp",
+        "provenance": "G4CMP CrystalMaps/Si/config.txt; density = Geant4 G4_Si (2.330 g/cm3)",
+    },
+    "Ge": {
+        "g4_material": "G4_Ge",
+        "lattice_map": "Ge",
+        "expected_density_kg_m3": 5323.0,
+        "c11_GPa": 126.0, "c12_GPa": 44.0, "c44_GPa": 67.0,
+        "native_vsound_m_s": 5324.2077, "native_vtrans_m_s": 3258.7879,
+        "config_mode": "native_g4cmp",
+        "provenance": ("G4CMP CrystalMaps/Ge/config.txt; density = Geant4 G4_Ge "
+                       "(5.323 g/cm3, measured from a live run, not a table)"),
     },
 }
-BASELINE_TOP_FILMS = {
+_FALLBACK_TOP_FILMS = {
     "Nb": {"g4_material": "G4_Nb", "gap_eV": 1.5384e-3, "vsound_km_s": 2.444,
            "ph_lifetime_ns": 0.00417, "ph_lifetime_slope": 0.29, "qp_limit": 3,
-           "thickness_um": 0.075, "abs_baseline": 0.745,
-           "provenance": "harness baseline"},
+           "thickness_um": 0.075, "provenance": "harness baseline"},
 }
-BASELINE_BOTTOM_FILMS = {
+_FALLBACK_BOTTOM_FILMS = {
     "Cu": {"g4_material": "G4_Cu", "gap_eV": 0.0, "gap_threshold_eV": 180e-6,
            "vsound_km_s": 2.608, "ph_lifetime_ns": 5.1, "qp_limit": 3,
-           "thickness_um": 1.0, "normal_metal": True, "abs_baseline": 0.736,
-           "provenance": "harness baseline"},
+           "thickness_um": 1.0, "normal_metal": True, "provenance": "harness baseline"},
 }
-AL_JUNCTION_ABS_BASELINE = 0.795
+SUBSTRATES = _catalog_section("substrates") or _FALLBACK_SUBSTRATES
+TOP_FILMS = _catalog_section("top_films") or _FALLBACK_TOP_FILMS
+BOTTOM_FILMS = _catalog_section("bottom_films") or _FALLBACK_BOTTOM_FILMS
+
+JUNCTION_FILM = {"g4_material": "G4_Al", "vsound_km_s": 3.582,
+                 "provenance": "fixed Al junction"}
+
+# Geant4 NIST densities for the substrate materials, used to verify that the
+# density the resolver derived speeds with is the density G4CMP actually used.
+# G4LatticeManager::LoadLattice does newLat->SetDensity(Mat->GetDensity()), so
+# the G4Material IS the density inside the phonon kinematics -- a resolver-side
+# density that disagrees with it would be an internally inconsistent candidate.
+G4_MATERIAL_DENSITY_KG_M3 = {
+    "G4_Si": 2330.0,                 # measured from a live Geant4 run
+    "G4_Ge": 5323.0,                 # measured from a live Geant4 run
+    "G4_GALLIUM_ARSENIDE": 5310.0,   # measured from a live Geant4 run
+}
+
+# Fractional tolerances, declared here rather than inline.
+DENSITY_TOLERANCE = 0.005      # 0.5%, per the checklist
+# 2% on the derived-vs-native speed reconstruction. Measured convention spread
+# between the spherical Christoffel average and the shipped scalar values is
+# 0.2-0.6% (Si) and 0.8-1.0% (Ge); the failure this guards against -- using the
+# wrong density -- is ~50% (Ge tensor with Si density gives 7966 vs 5324 m/s).
+# The tolerance therefore separates "averaging convention" from "wrong material"
+# by more than an order of magnitude.
+DERIVED_SPEED_TOLERANCE = 0.02
 
 
 @dataclass
@@ -123,59 +193,175 @@ class TrialResult:
 # --------------------------------------------------------------------------
 # Resolver (baseline-only slice)
 # --------------------------------------------------------------------------
-def resolve_candidate(contract, candidate):
-    """Resolve one (substrate, top film, bottom film) triplet to concrete values.
+def resolve_candidate(contract, candidate, debye_override_THz=None):
+    """Resolve one (substrate, top film, bottom film) triplet.
 
-    Baseline-only for now. Anything else fails loudly with the reason, because
-    the two Si-specific hazards in the harness are silent:
-      * derived speeds divide by a hardcoded Si density (~50% error for Ge);
-      * FIXED_CONFIG_COMMANDS force Si's Debye/dyn over the candidate's.
+    Every value the simulation consumes is derived here from the candidate's own
+    record. Nothing is borrowed from another material, and every gate below
+    fails BEFORE Geant4 runs.
     """
     sub, top, bot = candidate["substrate"], candidate["top_ground_film"], candidate["bottom_film"]
-    for name, table, what in ((sub, BASELINE_SUBSTRATES, "substrate"),
-                              (top, BASELINE_TOP_FILMS, "top_ground_film"),
-                              (bot, BASELINE_BOTTOM_FILMS, "bottom_film")):
+    for name, table, what in ((sub, SUBSTRATES, "substrate"),
+                              (top, TOP_FILMS, "top_ground_film"),
+                              (bot, BOTTOM_FILMS, "bottom_film")):
         if name not in table:
             raise ContractError(
-                f"{what}={name!r} is not implemented in this slice (available: "
-                f"{sorted(table)}). Implementing it requires, at minimum: a material "
-                f"record with density and provenance, candidate density propagated "
-                f"into the derived sound speeds, candidate-aware config overrides "
-                f"(Debye/dyn are currently forced to Si values), and the interface "
-                f"transmission model for setTopAbs/setTopFilmAbs/setBotAbs."
+                f"{what}={name!r} has no material record (available: {sorted(table)}). "
+                f"A record needs, at minimum: Geant4 material name and density, "
+                f"G4CMP lattice map, elastic constants with a declared convention, "
+                f"and provenance for every cryogenic value. Partial records are "
+                f"refused rather than completed from another material."
             )
-    s = BASELINE_SUBSTRATES[sub]
-    t = BASELINE_TOP_FILMS[top]
-    b = BASELINE_BOTTOM_FILMS[bot]
+    s_rec, t_rec, b_rec = SUBSTRATES[sub], TOP_FILMS[top], BOTTOM_FILMS[bot]
 
-    # Derived speeds: density passed explicitly, never taken from the module
-    # constant, so a future non-Si record cannot silently inherit Si's.
-    vsound, vtrans = harness.derive_cubic_sound_speeds(
-        s["c11_GPa"], s["c12_GPa"], s["c44_GPa"], density=s["density_kg_m3"])
-    if not 0 < vtrans < vsound:
+    for layer, name, record in (("substrate", sub, s_rec), ("top_ground_film", top, t_rec),
+                                ("bottom_film", bot, b_rec)):
+        if record.get("enabled") is False:
+            raise ContractError(
+                f"{layer}={name!r} is in the catalog but disabled: "
+                f"{record.get('enabled_blocked_by', 'no reason recorded')}. "
+                f"Supply the missing value with provenance and set enabled: true. "
+                f"It is deliberately NOT defaulted from another material."
+            )
+
+    # Required fields, checked by name so a partial record fails with the field
+    # that is missing rather than a bare KeyError three frames deeper.
+    required = {
+        "substrate": (s_rec, ("g4_material", "lattice_map", "expected_density_kg_m3",
+                              "c11_GPa", "c12_GPa", "c44_GPa", "native_vsound_m_s",
+                              "native_vtrans_m_s", "config_mode", "provenance")),
+        "top_ground_film": (t_rec, ("g4_material", "gap_eV", "vsound_km_s",
+                                    "ph_lifetime_ns", "qp_limit", "thickness_um",
+                                    "density_kg_m3", "provenance")),
+        "bottom_film": (b_rec, ("g4_material", "gap_eV", "gap_threshold_eV",
+                                "vsound_km_s", "ph_lifetime_ns", "qp_limit",
+                                "thickness_um", "density_kg_m3", "provenance")),
+    }
+    for layer, (record, fields) in required.items():
+        absent = [f for f in fields if record.get(f) is None]
+        if absent:
+            raise ContractError(
+                f"{layer} record is incomplete: missing {absent}. Resolution fails "
+                f"rather than borrowing another material's value for the gap."
+            )
+
+    if s_rec.get("config_mode") != "native_g4cmp":
         raise ContractError(
-            f"derived speeds violate 0 < vtrans < vsound (vsound={vsound:.1f}, "
-            f"vtrans={vtrans:.1f}); G4CMP's group-velocity map assumes v_L > v_T "
-            f"and would index off the end of its table."
+            f"substrate {sub!r} declares config_mode="
+            f"{s_rec.get('config_mode')!r}; only 'native_g4cmp' is supported. A "
+            f"curated override must supply a coherent record for EVERY active "
+            f"phonon field (tensor, dyn, scat, decay, decayTT, DOS, Debye, "
+            f"speeds, density) -- a partial override is a pseudo-material."
         )
 
-    # Interface absorption. Baseline slice uses the calibrated Si values
-    # directly; the interface model replaces this and must reproduce them.
+    # (1) Density: the G4Material is what G4CMP actually uses, so the resolver's
+    # density must agree with it, not merely with a catalog.
+    g4_name = s_rec["g4_material"]
+    if g4_name not in G4_MATERIAL_DENSITY_KG_M3:
+        raise ContractError(
+            f"no verified Geant4 density for {g4_name!r}. Measure it from a live "
+            f"run before using this material; a table value may disagree with the "
+            f"NIST material Geant4 actually builds."
+        )
+    g4_density = G4_MATERIAL_DENSITY_KG_M3[g4_name]
+    expected_density = s_rec["expected_density_kg_m3"]
+    density_dev = abs(g4_density - expected_density) / expected_density
+    if density_dev > DENSITY_TOLERANCE:
+        raise ContractError(
+            f"{sub}: Geant4 {g4_name} density {g4_density} kg/m3 differs from the "
+            f"record's {expected_density} kg/m3 by {density_dev:.2%} (> "
+            f"{DENSITY_TOLERANCE:.1%}). G4CMP would use the Geant4 value while the "
+            f"resolver used the record's -- an internally inconsistent candidate."
+        )
+    # Everything downstream uses the density G4CMP will actually use.
+    density = g4_density
+
+    # (2) Derived speeds from the candidate tensor AND the candidate density.
+    vsound, vtrans = harness.derive_cubic_sound_speeds(
+        s_rec["c11_GPa"], s_rec["c12_GPa"], s_rec["c44_GPa"], density=density)
+    if not 0 < vtrans < vsound:
+        raise ContractError(
+            f"{sub}: derived speeds violate 0 < vtrans < vsound "
+            f"(vsound={vsound:.1f}, vtrans={vtrans:.1f}); G4CMP's group-velocity "
+            f"map assumes v_L > v_T and would index off the end of its table."
+        )
+
+    # (3) Consistency against the material's own native scalars. This is the
+    # check that catches a wrong density: the Ge tensor with Si's density gives
+    # 7966 m/s against Ge's native 5324, a ~50% error, while a genuine averaging
+    # convention difference is under ~1%.
+    speed_dev = {
+        "vsound": abs(vsound - s_rec["native_vsound_m_s"]) / s_rec["native_vsound_m_s"],
+        "vtrans": abs(vtrans - s_rec["native_vtrans_m_s"]) / s_rec["native_vtrans_m_s"],
+    }
+    worst = max(speed_dev.values())
+    if worst > DERIVED_SPEED_TOLERANCE:
+        raise ContractError(
+            f"{sub}: derived speeds disagree with the native lattice record by "
+            f"{worst:.2%} (> {DERIVED_SPEED_TOLERANCE:.1%}).\n"
+            f"  derived: vsound={vsound:.1f} vtrans={vtrans:.1f}\n"
+            f"  native : vsound={s_rec['native_vsound_m_s']:.1f} "
+            f"vtrans={s_rec['native_vtrans_m_s']:.1f}\n"
+            f"  density used: {density} kg/m3\n"
+            f"A deviation this large usually means the wrong density was used."
+        )
+
+    # (4) Candidate-specific interfaces. Changing the substrate recomputes all
+    # three; changing one film recomputes only its own.
+    substrate_for_model = {"density_kg_m3": density,
+                           "vsound_m_s": vsound, "vtrans_m_s": vtrans}
+    si_rec = SUBSTRATES["Si"]
+    si_density = G4_MATERIAL_DENSITY_KG_M3[si_rec["g4_material"]]
+    si_vs, si_vt = harness.derive_cubic_sound_speeds(
+        si_rec["c11_GPa"], si_rec["c12_GPa"], si_rec["c44_GPa"], density=si_density)
+    si_for_model = {"density_kg_m3": si_density, "vsound_m_s": si_vs, "vtrans_m_s": si_vt}
+    try:
+        abs_values, abs_diag = resolve_all_interfaces(
+            substrate_for_model,
+            {"g4_material": JUNCTION_FILM["g4_material"],
+             "vsound_m_s": JUNCTION_FILM["vsound_km_s"] * 1000.0},
+            {"g4_material": t_rec["g4_material"], "vsound_m_s": t_rec["vsound_km_s"] * 1000.0,
+             "density_kg_m3": t_rec.get("density_kg_m3")},
+            {"g4_material": b_rec["g4_material"], "vsound_m_s": b_rec["vsound_km_s"] * 1000.0,
+             "density_kg_m3": b_rec.get("density_kg_m3")},
+            si_for_model)
+    except InterfaceModelError as exc:
+        raise ContractError(f"{sub}: interface model failed: {exc}") from exc
+    for key, value in abs_values.items():
+        if not 0.0 <= value <= 1.0:
+            raise ContractError(f"{sub}: {key}={value} outside [0,1]")
+
     derived = {
-        "substrate_density_kg_m3": s["density_kg_m3"],
-        "g4_material_name": s["g4_material"],
-        "lattice_map_name": s["lattice_map"],
+        "substrate_density_kg_m3": density,
+        "substrate_density_expected_kg_m3": expected_density,
+        "substrate_density_source": f"Geant4 {g4_name}",
+        "g4_material_name": g4_name,
+        "lattice_map_name": s_rec["lattice_map"],
+        "config_mode": s_rec["config_mode"],
         "vsound_m_s": round(vsound, 6),
         "vtrans_m_s": round(vtrans, 6),
-        "setTopAbs": AL_JUNCTION_ABS_BASELINE,
-        "setTopFilmAbs": t["abs_baseline"],
-        "setBotAbs": b["abs_baseline"],
-        "interface_model": "si_baseline_constants",
-        "c11_GPa": s["c11_GPa"], "c12_GPa": s["c12_GPa"], "c44_GPa": s["c44_GPa"],
-        "top_film_gap_eV": t["gap_eV"],
+        "native_vsound_m_s": s_rec["native_vsound_m_s"],
+        "native_vtrans_m_s": s_rec["native_vtrans_m_s"],
+        "derived_speed_deviation": {k: round(v, 6) for k, v in speed_dev.items()},
+        "setTopAbs": round(abs_values["setTopAbs"], 6),
+        "setTopFilmAbs": round(abs_values["setTopFilmAbs"], 6),
+        "setBotAbs": round(abs_values["setBotAbs"], 6),
+        "interface_model": "baseline_calibrated_effective_AMM",
+        "interface_diagnostics": {k: {kk: (round(vv, 6) if isinstance(vv, float) else vv)
+                                      for kk, vv in d.items()}
+                                  for k, d in abs_diag.items()},
+        "c11_GPa": s_rec["c11_GPa"], "c12_GPa": s_rec["c12_GPa"], "c44_GPa": s_rec["c44_GPa"],
+        "top_film_gap_eV": t_rec["gap_eV"],
+        "provenance": {"substrate": s_rec["provenance"], "top_film": t_rec["provenance"],
+                       "bottom_film": b_rec["provenance"]},
     }
-    contract.check_excitation_thresholds(top_film_gap_eV=t["gap_eV"])
-    return {"substrate": s, "top_film": t, "bottom_film": b}, derived
+    if debye_override_THz is not None:
+        # A/B diagnostic only. Recorded in `derived`, so it is part of the cache
+        # key and the two arms can never collide.
+        derived["debye_override_THz"] = debye_override_THz
+
+    contract.check_excitation_thresholds(top_film_gap_eV=t_rec["gap_eV"])
+    return {"substrate": s_rec, "top_film": t_rec, "bottom_film": b_rec}, derived
 
 
 # --------------------------------------------------------------------------
@@ -231,30 +417,89 @@ def candidate_seed(seed_base, seed_bank_id, candidate_key, replica, position):
 # Macro / lattice generation
 # --------------------------------------------------------------------------
 def _write_lattice_config(contract, resolved, derived, dest_dir):
-    """Candidate lattice config, written from the material's own template."""
+    """Write the candidate's lattice config.
+
+    `native_g4cmp` mode copies the material's own complete G4CMP record
+    VERBATIM -- lattice constant, tensor, `dyn`, `scat`, `decay`, `decayTT`, DOS
+    fractions and `Debye`. The legacy FIXED_CONFIG_COMMANDS are deliberately NOT
+    applied: they carry Si's third-order `dyn` and `Debye 15 THz`, and forcing
+    those onto a Ge lattice would overwrite `Debye 2 THz` with a value 7.5x too
+    large while leaving everything else looking Ge-like.
+
+    Only two lines are rewritten, both derived from the candidate's own record:
+    `vsound` and `vtrans`, so the scalars agree with the tensor and the density
+    actually in use. An explicit `debye_override_THz` (A/B diagnostic) is the
+    single sanctioned exception and is recorded in the cache key.
+    """
     lattice = derived["lattice_map_name"]
     src = os.path.join(harness.G4CMP_SOURCE_CRYSTALMAPS, lattice, "config.txt")
     if not os.path.isfile(src):
         raise ContractError(f"No G4CMP lattice map for {lattice!r}: {src}")
     with open(src) as handle:
         lines = handle.readlines()
-    s = resolved["substrate"]
-    for key, value, unit in (("cubic ", None, None),
-                             ("stiffness 1 1 ", s["c11_GPa"], " GPa"),
-                             ("stiffness 1 2 ", s["c12_GPa"], " GPa"),
-                             ("stiffness 4 4 ", s["c44_GPa"], " GPa")):
-        if value is None:
-            continue
-        lines = replace_line(lines, key, format_config_entry(key, value, unit),
-                             append_if_missing=True)
+
+    # Guard: the Si-only overrides must never reach this path.
+    forced = {prefix.strip() for prefix, _ in getattr(harness, "FIXED_CONFIG_COMMANDS", ())}
+    if forced and lattice != "Si":
+        # Nothing applies them here; this asserts that a future edit cannot.
+        for prefix in forced:
+            for line in lines:
+                if line.strip().startswith(prefix) and "15 THz" in line and prefix == "Debye":
+                    raise ContractError(
+                        f"native {lattice} config unexpectedly carries Si's Debye 15 THz")
+
     for key, value in (("vsound ", derived["vsound_m_s"]), ("vtrans ", derived["vtrans_m_s"])):
         lines = replace_line(lines, key, format_config_entry(key, value, " m/s"),
                              append_if_missing=True)
+    if derived.get("debye_override_THz") is not None:
+        lines = replace_line(lines, "Debye ",
+                             format_config_entry("Debye ", derived["debye_override_THz"], " THz"),
+                             append_if_missing=True)
+
     out = os.path.join(dest_dir, lattice, "config.txt")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w") as handle:
         handle.writelines(lines)
     return out
+
+
+def _verify_runtime_material(log_path, expected_g4_name, expected_density_kg_m3):
+    """Confirm from the Geant4 log that the intended material and density were used.
+
+    The resolver derives speeds and impedances from a density; this checks that
+    Geant4 built the same one. `G4LatticeManager::LoadLattice` calls
+    `SetDensity(Mat->GetDensity())`, so a mismatch means the phonon kinematics
+    ran on a different material than the one that was resolved.
+
+    Returns (ok, message, observed_density_g_cm3 or None).
+    """
+    try:
+        with open(log_path, errors="replace") as handle:
+            text = handle.read()
+    except OSError as exc:
+        return False, f"cannot read log: {exc}", None
+    marker = "Material:"
+    observed_name, observed_density = None, None
+    for line in text.splitlines():
+        if marker in line and "density:" in line:
+            parts = line.split()
+            try:
+                observed_name = parts[parts.index("Material:") + 1]
+                observed_density = float(parts[parts.index("density:") + 1])
+            except (ValueError, IndexError):
+                continue
+            break
+    if observed_name is None:
+        return False, "no material/density line in the Geant4 log", None
+    if observed_name != expected_g4_name:
+        return False, f"ran {observed_name}, expected {expected_g4_name}", observed_density
+    dev = abs(observed_density * 1000.0 - expected_density_kg_m3) / expected_density_kg_m3
+    if dev > DENSITY_TOLERANCE:
+        return (False,
+                f"{observed_name} density {observed_density} g/cm3 differs from the "
+                f"resolved {expected_density_kg_m3 / 1000.0:.4f} g/cm3 by {dev:.2%}",
+                observed_density)
+    return True, f"{observed_name} at {observed_density} g/cm3", observed_density
 
 
 def _write_sub_run_macro(contract, resolved, derived, template, macro_path,
@@ -342,7 +587,8 @@ def _write_sub_run_macro(contract, resolved, derived, template, macro_path,
 # --------------------------------------------------------------------------
 # Execution
 # --------------------------------------------------------------------------
-def _run_one(sub_run, lattice_root, timeout_s, guard, logs_dir):
+def _run_one(sub_run, lattice_root, timeout_s, guard, logs_dir,
+             expected_g4_name=None, expected_density=None):
     """Run one sub-run; return (status, return_code, runtime, reason)."""
     command = harness.build_run_command(sub_run["macro"], lattice_name=None)
     command = command.replace(
@@ -412,6 +658,13 @@ def _run_one(sub_run, lattice_root, timeout_s, guard, logs_dir):
         return STATUS_MACRO_ABORTED, rc, runtime, "exit 0 without completion marker"
     if not os.path.exists(sub_run["hits_file"]):
         return STATUS_CORRUPT, rc, runtime, "completion marker present but no hits file"
+    if expected_g4_name is not None:
+        ok, message, _ = _verify_runtime_material(log_file, expected_g4_name, expected_density)
+        if not ok:
+            # The run completed, but not on the material that was resolved -- so
+            # the speeds, impedances and interface values do not describe what
+            # was simulated. That is corrupt, not successful.
+            return STATUS_CORRUPT, rc, runtime, f"material mismatch: {message}"
     return STATUS_SUCCESS, rc, runtime, None
 
 
@@ -441,12 +694,13 @@ def _score(contract, sub_runs, events_per_sub_run):
 
 
 def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
-             runs_root=None, force=False, verbose=True):
+             runs_root=None, force=False, verbose=True, debye_override_THz=None):
     """Evaluate one candidate. Returns a TrialResult; never raises on a physics
     failure (that is a status), only on a contract/programming error."""
     fidelity = fidelity or contract.decision["fidelity"]["value"]
     seed_bank_id = (contract.fixed["seed_bank_id"] if seed_bank_id is None else seed_bank_id)
-    resolved, derived = resolve_candidate(contract, candidate)
+    resolved, derived = resolve_candidate(contract, candidate,
+                                         debye_override_THz=debye_override_THz)
 
     events_total = int(contract.decision["fidelity"]["events_total_per_candidate"][fidelity])
     events_per_sub_run = contract.events_per_sub_run(fidelity)
@@ -555,7 +809,9 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
         failures = []
         try:
             with ThreadPoolExecutor(max_workers=max(1, min(workers, len(todo) or 1))) as pool:
-                futures = {pool.submit(_run_one, sr, lattice_root, timeout_s, guard, logs_dir): sr
+                futures = {pool.submit(_run_one, sr, lattice_root, timeout_s, guard,
+                                       logs_dir, derived["g4_material_name"],
+                                       derived["substrate_density_kg_m3"]): sr
                            for sr in todo}
                 for future in as_completed(futures):
                     sr = futures[future]

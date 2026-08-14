@@ -16,3 +16,8 @@ __pycache__/
 
 # Local operational backups (e.g. pre-sync copies of macro templates)
 backup_pre_mac_sync_*/
+
+# Secrets: never commit API keys
+.env
+*.env
+!.env.example

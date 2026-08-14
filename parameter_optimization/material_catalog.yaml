@@ -1,0 +1,242 @@
+# Stage 3 curated material catalog.
+#
+# PROVENANCE IS PER FIELD. Materials Project supplies bulk crystal structure,
+# density and elasticity. It does NOT supply superconducting gaps, phonon
+# lifetimes, or thin-film cryogenic parameters, and those must never be inferred
+# from MP bulk data (STAGE3_SMALL_MATERIAL_START.md sec 4.1).
+#
+# Two measured facts from the 2026-08-13 MP pull (db 2026.04.13, mp-api 0.46.4)
+# that shape this file:
+#
+#  1. MP density is DFT-relaxed and disagrees with the Geant4 NIST density by
+#     0.5-6.6% (Cu +2.9%, Au -6.6%). G4CMP uses the Geant4 material's density
+#     (G4LatticeManager::LoadLattice -> SetDensity(Mat->GetDensity())), so the
+#     Geant4 value is authoritative here and MP's is recorded only as a
+#     cross-check.
+#  2. MP elastic tensors for these METALS are unreliable: Al comes back
+#     C11=70 C12=80 C44=-28 (mechanically unstable, literature 107/61/28),
+#     Au C44=-8 (literature 41.5), Nb non-cubic by 8.5% though it is bcc.
+#     Films do not need a tensor anyway -- the G4CMP film model consumes a
+#     single scalar sound speed -- so film elasticity is taken from literature.
+#     MP elasticity IS used for substrates, where it is well converged and where
+#     the tensor genuinely enters the physics.
+#
+# `enabled: false` means the resolver will refuse the material and say which
+# field is missing. That is the intended behaviour for an incomplete record.
+
+meta:
+  mp_database_version: "2026.04.13"
+  mp_api_version: "0.46.4"
+  retrieved_utc: "2026-08-13T19:17:40Z"
+  raw_snapshots:
+    - catalog/films_raw.json
+    - catalog/substrates_raw.json
+
+# ---------------------------------------------------------------------------
+# Substrates. Need a COMPLETE native G4CMP lattice record (tensor, dyn, scat,
+# decay, decayTT, DOS fractions, Debye) -- which MP cannot supply. The binding
+# constraint is therefore the lattice map, not the catalog: of 392 distinct
+# formulas returned by the filtered MP search, only 4 have one.
+#
+# Available G4CMP lattice maps: Al2O3, Al2O3_SULI, CaF2, CaWO4, GaAs, Ge, LiF, Si
+# Cubic among them (the derivation assumes cubic): CaF2, GaAs, Ge, LiF, Si
+# ---------------------------------------------------------------------------
+substrates:
+  Si:
+    enabled: true
+    g4_material: G4_Si
+    lattice_map: Si
+    expected_density_kg_m3: 2330.0        # Geant4 G4_Si, measured from a live run
+    mp_density_kg_m3: 2312.8              # cross-check only; -0.74% vs Geant4
+    mp_id: mp-149
+    c11_GPa: 165.6
+    c12_GPa: 63.9
+    c44_GPa: 79.5
+    native_vsound_m_s: 9000.0
+    native_vtrans_m_s: 5400.0
+    config_mode: native_g4cmp
+    provenance:
+      density: "Geant4 G4_Si NIST material, read from run output"
+      elasticity: "G4CMP CrystalMaps/Si/config.txt (native record)"
+      lattice_record: "G4CMP native; dyn/scat/decay/decayTT/DOS/Debye all Si's own"
+
+  Ge:
+    enabled: true
+    g4_material: G4_Ge
+    lattice_map: Ge
+    expected_density_kg_m3: 5323.0        # Geant4 G4_Ge, measured from a live run
+    mp_density_kg_m3: 5323.0
+    mp_id: mp-32
+    c11_GPa: 126.0
+    c12_GPa: 44.0
+    c44_GPa: 67.0
+    native_vsound_m_s: 5324.2077
+    native_vtrans_m_s: 3258.7879
+    config_mode: native_g4cmp
+    provenance:
+      density: "Geant4 G4_Ge NIST material, read from run output (5.323 g/cm3)"
+      elasticity: "G4CMP CrystalMaps/Ge/config.txt (native record)"
+      lattice_record: "G4CMP native; verified generated config keeps Ge dyn/scat/decay/DOS/Debye"
+
+  GaAs:
+    enabled: true
+    g4_material: G4_GALLIUM_ARSENIDE
+    lattice_map: GaAs
+    expected_density_kg_m3: 5310.0        # Geant4, measured from a live run
+    mp_density_kg_m3: 5316.0              # cross-check, +0.11% -- MP agrees well here
+    mp_id: mp-2534
+    c11_GPa: 121.57
+    c12_GPa: 57.4
+    c44_GPa: 59.5
+    native_vsound_m_s: 5130.0
+    native_vtrans_m_s: 3020.0
+    config_mode: native_g4cmp
+    provenance:
+      density: "Geant4 G4_GALLIUM_ARSENIDE, read from run output (5.310 g/cm3)"
+      elasticity: "G4CMP CrystalMaps/GaAs/config.txt; lattice constant DOI:10.1103/PhysRevB.32.5245"
+      speeds: "native record, DOI:10.1088/0953-8984/10/14/009; derived agrees to 1.71%/0.99%"
+      lattice_record: "G4CMP native; Debye 6.56 THz, scat/decay/decayTT all GaAs's own"
+
+# ---------------------------------------------------------------------------
+# Top ground-plane films (superconducting, excludes the fixed Al junctions).
+#
+# NO UPPER GAP GATE. The earlier screening that disqualified 23 of 27 elements
+# rested on a false premise and is WITHDRAWN (2026-08-13). Measured: with
+# /main/sensor/setHitType Junction, PhononSensitivity::IsHit requires
+# GetJunctionHit(), so a ground-film absorption is never recorded. At E_gun =
+# 10 meV -- 3.25x the Nb gap, so the Nb plane IS absorbing -- 68 of 68 recorded
+# surface hits were still inside junction footprints, zero outside.
+#
+# Consequence: every superconducting film is admissible on gap grounds. What the
+# gap now controls is the physics REGIME (whether the ground plane competes for
+# phonons), which must be held constant across a comparison set. At 10 meV every
+# elemental superconductor is well below E_gun, so all are active absorbers and
+# the set is self-consistent.
+#
+# Practical selection therefore reverts to physics interest, not admissibility:
+# Ta (Tc 4.47 K, used in state-of-the-art transmons), Pb (7.19 K), Nb baseline.
+#
+# Delta values are MEASURED T=0 gaps where established, not BCS, because Nb and
+# Pb are strong-coupling (2D/kTc = 3.9 and 4.4 vs the BCS 3.53).
+# ---------------------------------------------------------------------------
+top_films:
+  Nb:
+    enabled: true
+    g4_material: G4_Nb
+    gap_eV: 1.5384e-3
+    vsound_km_s: 2.444
+    ph_lifetime_ns: 0.00417
+    ph_lifetime_slope: 0.29
+    qp_limit: 3
+    thickness_um: 0.075
+    tc_K: 9.25
+    density_kg_m3: 8570.0
+    provenance:
+      gap: "harness baseline (1.5384 meV; consistent with measured 2D/kTc = 3.9)"
+      ph_lifetime: "harness baseline"
+      density: "Geant4 G4_Nb / standard reference (MP gives 8450, -1.4%)"
+      elasticity: "not used -- the G4CMP film model consumes a scalar sound speed"
+
+  Ta:
+    # Recommended second candidate: clears the gate with 40% margin, and Ta
+    # ground planes are used in state-of-the-art transmons, so the comparison
+    # is scientifically meaningful rather than merely admissible.
+    enabled: true
+    g4_material: G4_Ta
+    gap_eV: 0.70e-3
+    vsound_km_s: 4.159
+    ph_lifetime_ns: 0.0227
+    ph_lifetime_uncertainty_ns: [0.015, 0.040]   # for the sec 5.4 ranking-stability bracket
+    ph_lifetime_slope: 0.29
+    qp_limit: 3
+    thickness_um: 0.075
+    tc_K: 4.47
+    density_kg_m3: 16650.0
+    provenance:
+      gap: "measured T=0 gap 0.70 meV (2D/kTc = 3.63); 2D = 1.40 meV = 1.40x E_gun"
+      vsound: "longitudinal 4159 m/s, standard reference"
+      density: "standard reference 16650 (MP gives 16573, -0.5%)"
+      ph_lifetime: "supplied 2026-08-13; uncertainty [0.015, 0.040] ns spans 1.8x"
+
+  Ti:
+    # Supplied as `model: superconducting`, so it belongs here rather than in
+    # bottom_films. Tc 0.40 K -> Delta 0.061 meV, so 2*Delta = 0.12 meV is far
+    # below E_gun = 10 meV: the Ti ground plane is a strongly active absorber.
+    # That is admissible (the upper gap gate was withdrawn) but it places Ti in
+    # the same regime as the others only in the sense that all are active; its
+    # gap is ~25x smaller than Nb's, so it competes for phonons far more
+    # aggressively. Expect a large effect, and report it as such.
+    enabled: true
+    g4_material: G4_Ti
+    gap_eV: 0.061e-3
+    vsound_km_s: 4.140
+    ph_lifetime_ns: 0.414
+    ph_lifetime_uncertainty_ns: [0.25, 0.70]
+    ph_lifetime_slope: 0.29
+    qp_limit: 3
+    thickness_um: 0.075
+    tc_K: 0.40
+    density_kg_m3: 4540.0
+    provenance:
+      gap: "BCS from Tc 0.40 K -> Delta 0.061 meV"
+      vsound: "longitudinal 4140 m/s, standard reference"
+      density: "standard reference 4540 (MP gives 4670, +2.9%)"
+      ph_lifetime: "supplied 2026-08-13; uncertainty [0.25, 0.70] ns"
+      model: "superconducting film (supplied classification)"
+
+  Pb:
+    enabled: false
+    enabled_blocked_by: "ph_lifetime_ns has no sourced value"
+    g4_material: G4_Pb
+    gap_eV: 1.36e-3
+    vsound_km_s: 2.160
+    ph_lifetime_ns: null
+    ph_lifetime_slope: 0.29
+    qp_limit: 3
+    thickness_um: 0.075
+    tc_K: 7.19
+    density_kg_m3: 11340.0
+    provenance:
+      gap: "measured T=0 gap 1.36 meV (strong coupling, 2D/kTc = 4.4); 2D = 2.72x E_gun"
+      density: "standard reference 11340 (MP gives 11080, -2.3%)"
+      ph_lifetime: "supplied 2026-08-13 as the energy-scaling coefficient in G4CMPNormal;
+        uncertainty [10.0, 30.0] ns. NOTE: with setBotNormal true the bottom MPT
+        carries phononLifetime but NOT phononLifetimeSlope, so the slope field is
+        inert for this layer."
+
+# ---------------------------------------------------------------------------
+# Bottom films (normal metal in this model: gap 0, gapThreshold set to setTopGap).
+# ---------------------------------------------------------------------------
+bottom_films:
+  Cu:
+    enabled: true
+    g4_material: G4_Cu
+    gap_eV: 0.0
+    gap_threshold_eV: 180.0e-6
+    vsound_km_s: 2.608
+    ph_lifetime_ns: 5.1
+    qp_limit: 3
+    thickness_um: 1.0
+    normal_metal: true
+    density_kg_m3: 8960.0
+    provenance:
+      all: "harness baseline"
+      density: "Geant4 G4_Cu / standard reference (MP gives 9219, +2.9%)"
+
+  Au:
+    enabled: true
+    g4_material: G4_Au
+    gap_eV: 0.0
+    gap_threshold_eV: 180.0e-6
+    vsound_km_s: 3.240
+    ph_lifetime_ns: 16.0
+    ph_lifetime_uncertainty_ns: [10.0, 30.0]
+    ph_lifetime_slope: 0.0
+    qp_limit: 3
+    thickness_um: 1.0
+    normal_metal: true
+    density_kg_m3: 19300.0
+    provenance:
+      vsound: "longitudinal 3240 m/s, standard reference"
+      density: "standard reference 19300 (MP gives 18026, -6.6% -- MP unreliable here)"
+      ph_lifetime: "NOT SOURCED"

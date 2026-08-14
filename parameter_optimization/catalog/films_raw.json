@@ -1,0 +1,856 @@
+{
+  "provenance": {
+    "retrieved_utc": "2026-08-13T19:13:05.224396+00:00",
+    "mode": "explicit_ids",
+    "mp_api_version": "0.46.4",
+    "emmet_core_version": "0.87.1",
+    "pymatgen_version": "2026.5.4",
+    "mp_database_version": "2026.04.13",
+    "summary_fields_requested": [
+      "material_id",
+      "formula_pretty",
+      "symmetry",
+      "density",
+      "band_gap",
+      "energy_above_hull",
+      "is_stable",
+      "is_metal",
+      "theoretical",
+      "nsites",
+      "volume",
+      "structure"
+    ],
+    "elastic_fields_requested": [
+      "material_id",
+      "formula_pretty",
+      "elastic_tensor",
+      "last_updated",
+      "warnings"
+    ],
+    "filters": {
+      "explicit_ids": [
+        "mp-75",
+        "mp-20483",
+        "mp-50",
+        "mp-26",
+        "mp-30",
+        "mp-81",
+        "mp-124",
+        "mp-134",
+        "mp-72"
+      ]
+    },
+    "note": "MP supplies density/elasticity/structure only. Superconducting gap, phonon lifetime and film thickness are curated separately and are never derived from MP bulk data."
+  },
+  "accepted": [
+    {
+      "material_id": "mp-75",
+      "formula": "Nb",
+      "source": "materials_project",
+      "crystal_system": "Cubic",
+      "spacegroup": "Im-3m",
+      "mp_density_g_cm3": 8.449671971791625,
+      "mp_density_kg_m3": 8449.671971791626,
+      "lattice_a_ang": 2.8731547070309853,
+      "band_gap_eV": 0.0,
+      "is_metal": true,
+      "energy_above_hull_eV": 0.0,
+      "is_stable": true,
+      "theoretical": false,
+      "elastic_tensor_GPa": [
+        [
+          206.0,
+          155.0,
+          161.0,
+          -16.0,
+          1.0,
+          1.0
+        ],
+        [
+          155.0,
+          203.0,
+          160.0,
+          17.0,
+          -0.0,
+          -1.0
+        ],
+        [
+          161.0,
+          160.0,
+          189.0,
+          -1.0,
+          -2.0,
+          -1.0
+        ],
+        [
+          -16.0,
+          17.0,
+          -1.0,
+          43.0,
+          -1.0,
+          1.0
+        ],
+        [
+          1.0,
+          -0.0,
+          -2.0,
+          -1.0,
+          42.0,
+          -16.0
+        ],
+        [
+          1.0,
+          -1.0,
+          -1.0,
+          1.0,
+          -16.0,
+          26.0
+        ]
+      ],
+      "tensor_format": "ieee",
+      "tensor_convention": "Voigt, engineering strain, GPa",
+      "c11_GPa": 199.33333333333334,
+      "c12_GPa": 158.66666666666666,
+      "c44_GPa": 37.0,
+      "cubic_validation": {
+        "ok": false,
+        "cubic_spread_fraction": 0.08528428093645485,
+        "born_stable": true,
+        "reason": "diagonal spread 8.5% too large for cubic averaging"
+      },
+      "elastic_last_updated": "2025-03-20T19:40:33.536000+00:00",
+      "elastic_warnings": [],
+      "curated_fields_required": [
+        "gap_eV",
+        "ph_lifetime_ns",
+        "ph_lifetime_slope",
+        "qp_limit",
+        "thickness_um",
+        "tc_K"
+      ],
+      "enabled": false,
+      "enabled_blocked_by": "curated cryogenic fields not supplied"
+    },
+    {
+      "material_id": "mp-20483",
+      "formula": "Pb",
+      "source": "materials_project",
+      "crystal_system": "Cubic",
+      "spacegroup": "Fm-3m",
+      "mp_density_g_cm3": 11.079630631735755,
+      "mp_density_kg_m3": 11079.630631735756,
+      "lattice_a_ang": 3.528116004054082,
+      "band_gap_eV": 0.0,
+      "is_metal": true,
+      "energy_above_hull_eV": 0.0,
+      "is_stable": true,
+      "theoretical": false,
+      "elastic_tensor_GPa": [
+        [
+          49.0,
+          35.0,
+          35.0,
+          0.0,
+          -0.0,
+          -0.0
+        ],
+        [
+          35.0,
+          49.0,
+          35.0,
+          0.0,
+          -0.0,
+          -0.0
+        ],
+        [
+          35.0,
+          35.0,
+          49.0,
+          0.0,
+          0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          15.0,
+          -0.0,
+          0.0
+        ],
+        [
+          -0.0,
+          -0.0,
+          0.0,
+          -0.0,
+          15.0,
+          0.0
+        ],
+        [
+          -0.0,
+          -0.0,
+          -0.0,
+          0.0,
+          0.0,
+          15.0
+        ]
+      ],
+      "tensor_format": "ieee",
+      "tensor_convention": "Voigt, engineering strain, GPa",
+      "c11_GPa": 49.0,
+      "c12_GPa": 35.0,
+      "c44_GPa": 15.0,
+      "cubic_validation": {
+        "ok": true,
+        "cubic_spread_fraction": 0.0,
+        "born_stable": true,
+        "reason": null
+      },
+      "elastic_last_updated": "2025-03-20T19:34:39.077000+00:00",
+      "elastic_warnings": [],
+      "curated_fields_required": [
+        "gap_eV",
+        "ph_lifetime_ns",
+        "ph_lifetime_slope",
+        "qp_limit",
+        "thickness_um",
+        "tc_K"
+      ],
+      "enabled": false,
+      "enabled_blocked_by": "curated cryogenic fields not supplied"
+    },
+    {
+      "material_id": "mp-50",
+      "formula": "Ta",
+      "source": "materials_project",
+      "crystal_system": "Cubic",
+      "spacegroup": "Im-3m",
+      "mp_density_g_cm3": 16.57316469871799,
+      "mp_density_kg_m3": 16573.16469871799,
+      "lattice_a_ang": 2.8664184427230914,
+      "band_gap_eV": 0.0,
+      "is_metal": true,
+      "energy_above_hull_eV": 0.009149912666664761,
+      "is_stable": false,
+      "theoretical": false,
+      "elastic_tensor_GPa": [
+        [
+          268.0,
+          158.0,
+          158.0,
+          -0.0,
+          0.0,
+          0.0
+        ],
+        [
+          158.0,
+          268.0,
+          158.0,
+          -0.0,
+          0.0,
+          0.0
+        ],
+        [
+          158.0,
+          158.0,
+          268.0,
+          -0.0,
+          0.0,
+          0.0
+        ],
+        [
+          -0.0,
+          -0.0,
+          -0.0,
+          72.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          72.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          -0.0,
+          72.0
+        ]
+      ],
+      "tensor_format": "ieee",
+      "tensor_convention": "Voigt, engineering strain, GPa",
+      "c11_GPa": 268.0,
+      "c12_GPa": 158.0,
+      "c44_GPa": 72.0,
+      "cubic_validation": {
+        "ok": true,
+        "cubic_spread_fraction": 0.0,
+        "born_stable": true,
+        "reason": null
+      },
+      "elastic_last_updated": "2025-03-20T19:37:20.696000+00:00",
+      "elastic_warnings": [],
+      "curated_fields_required": [
+        "gap_eV",
+        "ph_lifetime_ns",
+        "ph_lifetime_slope",
+        "qp_limit",
+        "thickness_um",
+        "tc_K"
+      ],
+      "enabled": false,
+      "enabled_blocked_by": "curated cryogenic fields not supplied"
+    },
+    {
+      "material_id": "mp-26",
+      "formula": "La",
+      "source": "materials_project",
+      "crystal_system": "Hexagonal",
+      "spacegroup": "P6_3/mmc",
+      "mp_density_g_cm3": 6.139065901187602,
+      "mp_density_kg_m3": 6139.065901187602,
+      "lattice_a_ang": 3.79631058,
+      "band_gap_eV": 0.0,
+      "is_metal": true,
+      "energy_above_hull_eV": 0.0,
+      "is_stable": true,
+      "theoretical": false,
+      "elastic_tensor_GPa": [
+        [
+          52.0,
+          17.0,
+          12.0,
+          0.0,
+          0.0,
+          -0.0
+        ],
+        [
+          17.0,
+          52.0,
+          12.0,
+          0.0,
+          -0.0,
+          -0.0
+        ],
+        [
+          12.0,
+          12.0,
+          49.0,
+          -0.0,
+          0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          -0.0,
+          15.0,
+          -0.0,
+          0.0
+        ],
+        [
+          0.0,
+          -0.0,
+          0.0,
+          -0.0,
+          15.0,
+          -0.0
+        ],
+        [
+          -0.0,
+          -0.0,
+          -0.0,
+          0.0,
+          -0.0,
+          18.0
+        ]
+      ],
+      "tensor_format": "ieee",
+      "tensor_convention": "Voigt, engineering strain, GPa",
+      "c11_GPa": 51.0,
+      "c12_GPa": 13.666666666666666,
+      "c44_GPa": 16.0,
+      "cubic_validation": {
+        "ok": false,
+        "cubic_spread_fraction": 0.09803921568627451,
+        "born_stable": true,
+        "reason": "diagonal spread 9.8% too large for cubic averaging"
+      },
+      "elastic_last_updated": "2025-03-20T19:27:14.637000+00:00",
+      "elastic_warnings": [],
+      "curated_fields_required": [
+        "gap_eV",
+        "ph_lifetime_ns",
+        "ph_lifetime_slope",
+        "qp_limit",
+        "thickness_um",
+        "tc_K"
+      ],
+      "enabled": false,
+      "enabled_blocked_by": "curated cryogenic fields not supplied"
+    },
+    {
+      "material_id": "mp-30",
+      "formula": "Cu",
+      "source": "materials_project",
+      "crystal_system": "Cubic",
+      "spacegroup": "Fm-3m",
+      "mp_density_g_cm3": 9.218996060025667,
+      "mp_density_kg_m3": 9218.996060025667,
+      "lattice_a_ang": 2.5296252999953506,
+      "band_gap_eV": 0.0,
+      "is_metal": true,
+      "energy_above_hull_eV": 0.0,
+      "is_stable": true,
+      "theoretical": false,
+      "elastic_tensor_GPa": [
+        [
+          186.0,
+          134.0,
+          134.0,
+          -0.0,
+          -0.0,
+          0.0
+        ],
+        [
+          134.0,
+          186.0,
+          134.0,
+          -0.0,
+          -0.0,
+          0.0
+        ],
+        [
+          134.0,
+          134.0,
+          186.0,
+          -0.0,
+          0.0,
+          0.0
+        ],
+        [
+          -0.0,
+          -0.0,
+          -0.0,
+          77.0,
+          0.0,
+          -0.0
+        ],
+        [
+          -0.0,
+          -0.0,
+          0.0,
+          0.0,
+          77.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          -0.0,
+          -0.0,
+          77.0
+        ]
+      ],
+      "tensor_format": "ieee",
+      "tensor_convention": "Voigt, engineering strain, GPa",
+      "c11_GPa": 186.0,
+      "c12_GPa": 134.0,
+      "c44_GPa": 77.0,
+      "cubic_validation": {
+        "ok": true,
+        "cubic_spread_fraction": 0.0,
+        "born_stable": true,
+        "reason": null
+      },
+      "elastic_last_updated": "2025-03-20T19:36:20.759000+00:00",
+      "elastic_warnings": [],
+      "curated_fields_required": [
+        "gap_eV",
+        "ph_lifetime_ns",
+        "ph_lifetime_slope",
+        "qp_limit",
+        "thickness_um",
+        "tc_K"
+      ],
+      "enabled": false,
+      "enabled_blocked_by": "curated cryogenic fields not supplied"
+    },
+    {
+      "material_id": "mp-81",
+      "formula": "Au",
+      "source": "materials_project",
+      "crystal_system": "Cubic",
+      "spacegroup": "Fm-3m",
+      "mp_density_g_cm3": 18.02564920807207,
+      "mp_density_kg_m3": 18025.64920807207,
+      "lattice_a_ang": 2.9495462029697044,
+      "band_gap_eV": 0.0,
+      "is_metal": true,
+      "energy_above_hull_eV": 0.0,
+      "is_stable": true,
+      "theoretical": false,
+      "elastic_tensor_GPa": [
+        [
+          129.0,
+          137.0,
+          137.0,
+          0.0,
+          -0.0,
+          -0.0
+        ],
+        [
+          137.0,
+          129.0,
+          137.0,
+          0.0,
+          0.0,
+          -0.0
+        ],
+        [
+          137.0,
+          137.0,
+          129.0,
+          0.0,
+          0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          -8.0,
+          0.0,
+          -0.0
+        ],
+        [
+          -0.0,
+          0.0,
+          0.0,
+          0.0,
+          -8.0,
+          -0.0
+        ],
+        [
+          -0.0,
+          -0.0,
+          -0.0,
+          -0.0,
+          -0.0,
+          -8.0
+        ]
+      ],
+      "tensor_format": "ieee",
+      "tensor_convention": "Voigt, engineering strain, GPa",
+      "c11_GPa": 129.0,
+      "c12_GPa": 137.0,
+      "c44_GPa": -8.0,
+      "cubic_validation": {
+        "ok": false,
+        "cubic_spread_fraction": 0.0,
+        "born_stable": false,
+        "reason": "fails Born stability (C11-C12>0, C11+2C12>0, C44>0)"
+      },
+      "elastic_last_updated": "2025-03-20T19:40:50.994000+00:00",
+      "elastic_warnings": [
+        "Elastic tensor has negative eigenvalue(s), indicating that the structure is mechanically unstable.",
+        "Negative modulus: voigt shear modulus is -6.116, indicating that the structure is mechanically unstable.",
+        "Negative modulus: reuss shear modulus is -5.354, indicating that the structure is mechanically unstable.",
+        "Negative modulus: vrh shear modulus is -5.735, indicating that the structure is mechanically unstable.",
+        "Fitting elastic tensor resulted in unphysical modulus"
+      ],
+      "curated_fields_required": [
+        "gap_eV",
+        "ph_lifetime_ns",
+        "ph_lifetime_slope",
+        "qp_limit",
+        "thickness_um",
+        "tc_K"
+      ],
+      "enabled": false,
+      "enabled_blocked_by": "curated cryogenic fields not supplied"
+    },
+    {
+      "material_id": "mp-124",
+      "formula": "Ag",
+      "source": "materials_project",
+      "crystal_system": "Cubic",
+      "spacegroup": "Fm-3m",
+      "mp_density_g_cm3": 10.362566650857447,
+      "mp_density_kg_m3": 10362.566650857447,
+      "lattice_a_ang": 2.902218654456314,
+      "band_gap_eV": 0.0,
+      "is_metal": true,
+      "energy_above_hull_eV": 0.0021267149999992796,
+      "is_stable": false,
+      "theoretical": false,
+      "elastic_tensor_GPa": [
+        [
+          98.0,
+          82.0,
+          82.0,
+          -0.0,
+          -0.0,
+          0.0
+        ],
+        [
+          82.0,
+          98.0,
+          82.0,
+          -0.0,
+          -0.0,
+          0.0
+        ],
+        [
+          82.0,
+          82.0,
+          98.0,
+          -0.0,
+          0.0,
+          0.0
+        ],
+        [
+          -0.0,
+          -0.0,
+          -0.0,
+          18.0,
+          0.0,
+          -0.0
+        ],
+        [
+          -0.0,
+          -0.0,
+          0.0,
+          0.0,
+          18.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          -0.0,
+          -0.0,
+          18.0
+        ]
+      ],
+      "tensor_format": "ieee",
+      "tensor_convention": "Voigt, engineering strain, GPa",
+      "c11_GPa": 98.0,
+      "c12_GPa": 82.0,
+      "c44_GPa": 18.0,
+      "cubic_validation": {
+        "ok": true,
+        "cubic_spread_fraction": 0.0,
+        "born_stable": true,
+        "reason": null
+      },
+      "elastic_last_updated": "2025-03-20T19:31:31.845000+00:00",
+      "elastic_warnings": [],
+      "curated_fields_required": [
+        "gap_eV",
+        "ph_lifetime_ns",
+        "ph_lifetime_slope",
+        "qp_limit",
+        "thickness_um",
+        "tc_K"
+      ],
+      "enabled": false,
+      "enabled_blocked_by": "curated cryogenic fields not supplied"
+    },
+    {
+      "material_id": "mp-134",
+      "formula": "Al",
+      "source": "materials_project",
+      "crystal_system": "Cubic",
+      "spacegroup": "Fm-3m",
+      "mp_density_g_cm3": 2.7200502090190675,
+      "mp_density_kg_m3": 2720.0502090190676,
+      "lattice_a_ang": 2.8559542459167657,
+      "band_gap_eV": 0.0,
+      "is_metal": true,
+      "energy_above_hull_eV": 0.0,
+      "is_stable": true,
+      "theoretical": false,
+      "elastic_tensor_GPa": [
+        [
+          70.0,
+          80.0,
+          80.0,
+          -0.0,
+          0.0,
+          0.0
+        ],
+        [
+          80.0,
+          70.0,
+          80.0,
+          -0.0,
+          0.0,
+          0.0
+        ],
+        [
+          80.0,
+          80.0,
+          70.0,
+          -0.0,
+          -0.0,
+          0.0
+        ],
+        [
+          -0.0,
+          -0.0,
+          -0.0,
+          -28.0,
+          -0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          -0.0,
+          -0.0,
+          -28.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          -0.0,
+          0.0,
+          -28.0
+        ]
+      ],
+      "tensor_format": "ieee",
+      "tensor_convention": "Voigt, engineering strain, GPa",
+      "c11_GPa": 70.0,
+      "c12_GPa": 80.0,
+      "c44_GPa": -28.0,
+      "cubic_validation": {
+        "ok": false,
+        "cubic_spread_fraction": 0.0,
+        "born_stable": false,
+        "reason": "fails Born stability (C11-C12>0, C11+2C12>0, C44>0)"
+      },
+      "elastic_last_updated": "2025-03-20T19:32:19.526000+00:00",
+      "elastic_warnings": [
+        "Elastic tensor has negative eigenvalue(s), indicating that the structure is mechanically unstable.",
+        "Negative modulus: voigt shear modulus is -18.471, indicating that the structure is mechanically unstable.",
+        "Negative modulus: reuss shear modulus is -9.501, indicating that the structure is mechanically unstable.",
+        "Negative modulus: vrh shear modulus is -13.986, indicating that the structure is mechanically unstable.",
+        "Fitting elastic tensor resulted in unphysical modulus"
+      ],
+      "curated_fields_required": [
+        "gap_eV",
+        "ph_lifetime_ns",
+        "ph_lifetime_slope",
+        "qp_limit",
+        "thickness_um",
+        "tc_K"
+      ],
+      "enabled": false,
+      "enabled_blocked_by": "curated cryogenic fields not supplied"
+    },
+    {
+      "material_id": "mp-72",
+      "formula": "Ti",
+      "source": "materials_project",
+      "crystal_system": "Hexagonal",
+      "spacegroup": "P6/mmm",
+      "mp_density_g_cm3": 4.670172253933062,
+      "mp_density_kg_m3": 4670.172253933062,
+      "lattice_a_ang": 4.56737542,
+      "band_gap_eV": 0.0,
+      "is_metal": true,
+      "energy_above_hull_eV": 0.0,
+      "is_stable": true,
+      "theoretical": false,
+      "elastic_tensor_GPa": [
+        [
+          198.0,
+          81.0,
+          53.0,
+          -0.0,
+          0.0,
+          0.0
+        ],
+        [
+          81.0,
+          198.0,
+          53.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          53.0,
+          53.0,
+          246.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          54.0,
+          0.0,
+          -0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          54.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          59.0
+        ]
+      ],
+      "tensor_format": "ieee",
+      "tensor_convention": "Voigt, engineering strain, GPa",
+      "c11_GPa": 214.0,
+      "c12_GPa": 62.333333333333336,
+      "c44_GPa": 55.666666666666664,
+      "cubic_validation": {
+        "ok": false,
+        "cubic_spread_fraction": 0.22429906542056074,
+        "born_stable": true,
+        "reason": "diagonal spread 22.4% too large for cubic averaging"
+      },
+      "elastic_last_updated": "2025-03-20T19:24:24.978000+00:00",
+      "elastic_warnings": [],
+      "curated_fields_required": [
+        "gap_eV",
+        "ph_lifetime_ns",
+        "ph_lifetime_slope",
+        "qp_limit",
+        "thickness_um",
+        "tc_K"
+      ],
+      "enabled": false,
+      "enabled_blocked_by": "curated cryogenic fields not supplied"
+    }
+  ],
+  "rejected": [],
+  "counts": {
+    "accepted": 9,
+    "rejected": 0
+  }
+}

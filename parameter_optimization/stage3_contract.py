@@ -136,13 +136,15 @@ class Contract:
 
     # -- physics gate -------------------------------------------------------
     def check_excitation_thresholds(self, top_film_gap_eV):
-        """minEPhonons < 2*setTopGap <= E_gun < 2*top_film_gap.
+        """Hard gates: minEPhonons < 2*setTopGap <= E_gun.
 
         "Above minEPhonons" is not the gate: minEPhonons is a numerical tracking
         cut, not a physical threshold. Below 2*setTopGap no phonon can break a
         pair at the junction and the objective is identically zero for every
-        material; at or above 2*top_film_gap the ground plane also absorbs and
-        the objective stops being junction-only.
+        material.
+
+        The top-film gap is NOT an upper gate. It classifies the regime -- see
+        the note at `ground_plane_active` below.
         """
         e_gun = float(self.fixed["gun_energy_eV"])
         min_e = float(self.fixed["min_e_phonons_eV"])
@@ -169,19 +171,21 @@ class Contract:
                 f"gun energy sits exactly on the gate ({ueV(e_gun)}); the outcome "
                 f"would depend on one '>=' vs '>' comparison. Use positive margin."
             )
-        if e_gun >= film_gate:
-            raise ContractError(
-                f"gun energy ({ueV(e_gun)}) is at or above the top-film gap "
-                f"({ueV(film_gate)}); the ground plane would also absorb and the "
-                f"objective would no longer be junction-only QPs."
-            )
+        # Not a failure: the Junction hit type means film absorptions are never
+        # recorded, so the objective stays junction-only at any energy (measured
+        # at 10 meV: 68/68 recorded hits inside junction footprints). Above the
+        # film gap the ground plane becomes an ACTIVE ABSORBER competing for
+        # phonons -- a physics regime that must be identical across a comparison
+        # set, so it is recorded and checked for consistency, not forbidden.
+        ground_plane_active = e_gun >= film_gate
         return {
             "min_e_phonons_eV": min_e,
             "junction_gate_eV": junction_gate,
             "gun_energy_eV": e_gun,
             "film_gate_eV": film_gate,
             "margin_above_junction_gate": e_gun / junction_gate,
-            "margin_below_film_gate": film_gate / e_gun,
+            "ground_plane_active_absorber": bool(ground_plane_active),
+            "e_gun_over_film_gate": e_gun / film_gate,
         }
 
     # -- event accounting ---------------------------------------------------
@@ -265,7 +269,9 @@ if __name__ == "__main__":
     # Nb baseline gap; the resolver supplies this per candidate.
     gate = c.check_excitation_thresholds(top_film_gap_eV=1.5384e-3)
     print(f"  thresholds OK: gun is {gate['margin_above_junction_gate']:.2f}x the "
-          f"junction gate and {gate['margin_below_film_gate']:.2f}x below the film gate")
+          f"junction gate; ground plane "
+          f"{'ACTIVE absorber' if gate['ground_plane_active_absorber'] else 'transparent'} "
+          f"(E_gun / 2*film_gap = {gate['e_gun_over_film_gate']:.2f})")
     for fid in c.decision["fidelity"]["allowed"]:
         print(f"  {fid}: {c.events_per_sub_run(fid):,} events per sub-run")
     fp = c.code_fingerprint()

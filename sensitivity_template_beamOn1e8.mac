@@ -12,12 +12,12 @@
 
 /main/gun/setGunType phonon_Caustic
 /main/gun/setPosition 3.47 -2.249825 0.259875 mm
-/main/gun/setEnergy 382.0e-6
+/main/gun/setEnergy 10.0e-3 eV
 /main/gun/setKinematic
 
 /g4cmp/clearance 1e-6 mm
 /g4cmp/chargeBounces 1
-/g4cmp/phononBounces 1000
+/g4cmp/phononBounces 10000
 /g4cmp/minEPhonons 0.0000382 eV
 /g4cmp/eTrappingMFP 0.3 mm
 /g4cmp/hTrappingMFP 0.3 mm
@@ -43,7 +43,7 @@
 #/main/detector_param/setSubstrateName Si
 
 #Absorption Conditions
-/main/detector_param/setWallAbs 0.025
+/main/detector_param/setWallAbs 0.02
 
 #Material Properties
 #-----Top Junction------#
@@ -52,7 +52,7 @@
 /main/detector_param/setTopAbs 0.795
 /main/detector_param/setTopVSound 3.582
 /main/detector_param/setTopGap 191.0e-6
-/main/detector_param/setTopQPLim 3.
+/main/detector_param/setTopQPLim 3
 /main/detector_param/setTopPhLifetime 0.242
 /main/detector_param/setTopPhLifetimeSlope 0.29
 /main/detector_param/setTopSubGapAbs 0.0
@@ -64,7 +64,7 @@
 /main/detector_param/setTopFilmAbs 0.745
 /main/detector_param/setTopFilmVSound 2.444
 /main/detector_param/setTopFilmGap 1.5384e-3
-/main/detector_param/setTopFilmQPLim 3.
+/main/detector_param/setTopFilmQPLim 3
 /main/detector_param/setTopFilmPhLifetime 0.00417
 /main/detector_param/setTopFilmPhLifetimeSlope 0.29
 /main/detector_param/setTopFilmSubGapAbs 0.0
@@ -78,7 +78,7 @@
 /main/detector_param/setBotVSound 2.608
 /main/detector_param/setBotGap 0.0
 /main/detector_param/setBotGapThres 180e-6
-/main/detector_param/setBotQPLim 2.
+/main/detector_param/setBotQPLim 3
 /main/detector_param/setBotPhLifetime 5.1
 /main/detector_param/setBotSubGapAbs 0.0
 /main/detector_param/setBotThickness 1 um
@@ -86,10 +86,10 @@
 
 /main/detector_param/setMitigation None
 
-# /main/detector_param/setTopPSpecProb 0
-# /main/detector_param/setTopFilmPSpecProb 0
-# /main/detector_param/setBotPSpecProb 0
-# /main/detector_param/setWallPSpecProb 0
+/main/detector_param/setTopPSpecProb 0.8
+/main/detector_param/setTopFilmPSpecProb 0.8
+/main/detector_param/setBotPSpecProb 0.8
+/main/detector_param/setWallPSpecProb 0
 
 /main/detector_param/setMiller 0 0 1
 /main/detector_param/setLatticeDeg 45

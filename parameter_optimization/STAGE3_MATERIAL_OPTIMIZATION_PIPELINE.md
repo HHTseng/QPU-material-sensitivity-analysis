@@ -111,7 +111,7 @@ dimensions in Stage 3:
 | top-film lifetime slope | `0.29` |
 | bottom gap | `0` (a `[0,0]` interval is not a decision variable) |
 | `minEPhonons` | **`0.0000382 eV`** (38.2 µeV) — see §3.1.1 and §12.5 |
-| gun energy | **`1.0e-3 eV`** (1.0 meV), fixed for every candidate — see §3.1.1 |
+| gun energy | **`10.0e-3 eV`** (10 meV — the muon-strike maximum), fixed for every candidate — see §3.1.1 |
 | charge / phonon bounces | `1 / 10000` |
 | clearance | `1e-6 mm` |
 | electron / hole trapping MFP | `0.3 / 0.3 mm` |
@@ -132,8 +132,10 @@ no phonon can break a Cooper pair at the junction below `2 × setTopGap`.
 The gate is the following chain, every link of which must hold:
 
 ```text
-minEPhonons  <  2*setTopGap   <=   E_gun   <   2*setTopFilmGap
-   38.2 µeV       382 µeV        1000 µeV       3076.8 µeV
+minEPhonons  <  2*setTopGap   <=   E_gun          (hard gates)
+   38.2 µeV       382 µeV        10000 µeV
+
+E_gun vs 2*setTopFilmGap  ->  regime classification, NOT a gate
 ```
 
 | Link | Value | Why it is required |
@@ -141,8 +143,8 @@ minEPhonons  <  2*setTopGap   <=   E_gun   <   2*setTopFilmGap
 | `minEPhonons < 2*setTopGap` | 38.2 < 382 µeV | Otherwise a numerical cut preempts the physical one and truncates the downconversion cascade — the mechanism `scat`/`decay`/`decayTT`/the tensor act through. |
 | `E_gun >= 2*setTopGap` | 1000 >= 382 µeV | `JunctionKaplanElectrode::IsNearElectrode` requires `PhEnergy >= 2*GapJunc`. Below it the objective is identically zero regardless of material. |
 | `E_gun` strictly above, not equal | 2.62× margin | At exact equality the result depends on `>=` vs `>` in one C++ comparison and on float representation. Do not sit on the gate. |
-| `E_gun < 2*setTopFilmGap` | 1000 < 3076.8 µeV | Above the Nb ground-plane gap the **ground plane also absorbs**, so `total_QPs` stops being purely junction QPs and the objective silently changes meaning (see §12 note on hit provenance). |
-| transport ceiling | 1.5 meV | Isotope MFP falls to 137 µm against a 525 µm substrate. Substrate-dependent — recheck per candidate (§12.5). |
+| ~~`E_gun < 2*setTopFilmGap`~~ | **WITHDRAWN** | This was wrong. `PhononSensitivity::IsHit` with `setHitType Junction` requires `GetJunctionHit()`, so a ground-film absorption is never *recorded*. Measured at 10 meV (3.25× the Nb gap): 68/68 recorded hits inside junction footprints, 0 outside. The objective is junction-only at any energy. What the film gap controls is the **regime** — above it the ground plane competes for phonons — which must be constant across a comparison set and is recorded as `ground_plane_active_absorber`. |
+| transport regime | note, not a limit | Isotope MFP scales as ω⁻⁴: 137 µm at 1.5 meV, **~0.07 µm at 10 meV**. At 10 meV transport is strongly diffusive with rapid downconversion near the injection site — the correct picture for a muon strike, and measured to give ~10× the QP yield per event. |
 
 If a future campaign injects a **spectrum** rather than a monoenergetic primary,
 the contract becomes: declare the excitation spectrum and the fraction of its

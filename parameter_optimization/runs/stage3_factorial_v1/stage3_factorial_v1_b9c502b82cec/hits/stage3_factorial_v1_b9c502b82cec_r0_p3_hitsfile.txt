@@ -1,0 +1,3 @@
+Run ID,Event ID,Track ID,Particle Name,Start Energy [eV],Start X [m],Start Y [m],Start Z [m],Start Time [ns],Energy Deposited [eV],Track Weight,End X [m],End Y [m],End Z [m],Final Time [ns]
+0,43514,6,phononTS,0.000488412,0.00170791,0.00178578,-0.000262498,2060.54,0.000382,1,0.00199631,0.00199661,0.0002625,2194.68
+0,101512,7,phononTF,0.000520027,-0.00299763,-0.00100102,0.000262498,1113.02,0.000520027,1,-0.00318957,-0.000801807,-0.0002625,1214.61

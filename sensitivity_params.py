@@ -1,15 +1,6 @@
 """
-Single source of truth for the Morris sensitivity-analysis parameter
-definitions (macro command, default value, sampling bounds, unit), shared by
-every stage-1 "physics simulation" runner:
-
-- SensitivityAnalysis_Morris_debug_mac_QP.py (serial)
-- SensitivityAnalysis_Morris_Mac_M4Max.py (parallel)
-
-Both scripts import these lists instead of defining their own copies, so
-they can't silently drift apart and stop simulating the same physics. Each
-script still builds its own `all_params`/`macro_params`/Morris design from
-these lists -- this module only holds the parameter data itself.
+Single source of truth for the active Morris sensitivity-analysis parameters
+and the fixed settings used by stage1_run_simulations.py.
 
 Each parameter entry is a tuple: (macro command, default value, bounds, unit
 (optional)). A 3-element tuple has no unit; a 4-element tuple's last item is
@@ -17,15 +8,24 @@ either a G4 unit suffix string (e.g. " um") or the literal "int" to round
 the sampled value to an integer. A list-valued default/bounds means the
 command takes a vector (each element sampled independently).
 
-Commented-out entries are macro commands that are supported but not
-currently swept -- kept visible here as the reference for what could be
-added to the Morris design.
+Commented-out entries are supported commands that are not independently
+swept. Fixed commands are enforced through FIXED_MACRO_COMMANDS and
+FIXED_CONFIG_COMMANDS so a template cannot silently override them.
+
+This file implements parameter_optimization/parameter_set.txt. The current
+runner still uses a Si Geant4 substrate (rho=2329 kg/m^3). Consequently,
+substrate vsound/vtrans are dependent values derived by Stage 1 from the
+sampled cubic stiffness tensor and that fixed density. The three interface
+absorption probabilities are also dependent in the intended material model,
+but the promised transmission-coefficient calculator and candidate-material
+densities are not present yet; they therefore remain at the documented Si
+baseline in the macro templates and are not independent Morris dimensions.
 """
 
 lbf = 0.5  # lower bound factor
 ubf = 1.5  # upper bound factor
 
-# The three QPLim parameters below are swept over [2, 5], not [1, 5]. A film
+# QPLim is fixed at 3, never 1. A film
 # with lowQPLimit = 1 makes G4CMPKaplanQP::AbsorbPhonon loop forever the first
 # time a phonon breaks a pair there: the phonon-emission sampler's floor is
 # strictly above the gap energy, so the survival test qpE >= 1*gapEnergy can
@@ -35,12 +35,15 @@ ubf = 1.5  # upper bound factor
 # an at-risk sample is ~1. QPLim = 1 is not a physically meaningful operating
 # point in this model anyway -- it asks quasiparticles to radiate down to
 # exactly the gap, which the sampler cannot reach by construction.
-# Do not lower these back to 1 without first fixing G4CMPKaplanQP upstream.
+# Do not lower the fixed values to 1 without first fixing G4CMPKaplanQP upstream.
 
 # Detector electrode parameters. Format is (macro command, default value, range, unit (optional)).
 electrode_params = [
 # The sensitivity template uses phonon_Caustic; GeV energies produce invalid phonon tracks.
-("/main/gun/setEnergy ", 2 * 191.0e-6, [(2 * 191.0e-6) * lbf, (2 * 191.0e-6) * ubf], " eV"),
+# Gun energy is an INJECTION CONDITION, not a material property, so Stage 3 must
+# hold it fixed for every candidate; it is enforced through FIXED_MACRO_COMMANDS.
+# It is also no longer 382 ueV -- see the FIXED_MACRO_COMMANDS entry for why.
+# ("/main/gun/setEnergy ", 2 * 191.0e-6, [(2 * 191.0e-6) * lbf, (2 * 191.0e-6) * ubf], " eV"),
 ("/main/electrode_param/setHeight ", 10, [10 * lbf, 10 * ubf]),
 ("/main/electrode_param/setWidth ", 10, [10 * lbf, 10 * ubf]),
 #("/main/electrode_param/setXLocations ", 0, [-3.98,3.98]),
@@ -52,9 +55,10 @@ electrode_params = [
 
 # Detector geometry/material parameters. Format is (macro command, default value, range, unit (optional)).
 detector_params = [
-("/main/detector_param/setTopThickness ", 0.12, [0.12 * lbf, 0.12 * ubf], " um"),
-("/main/detector_param/setTopFilmThickness ", 0.075, [0.075 * lbf, 0.075 * ubf], " um"),
-("/main/detector_param/setBotThickness ", 1, [1 * lbf, 1 * ubf], " um"),
+# Film thicknesses are fixed; see FIXED_MACRO_COMMANDS.
+# ("/main/detector_param/setTopThickness ", 0.12, [0.12 * lbf, 0.12 * ubf], " um"),
+# ("/main/detector_param/setTopFilmThickness ", 0.075, [0.075 * lbf, 0.075 * ubf], " um"),
+# ("/main/detector_param/setBotThickness ", 1, [1 * lbf, 1 * ubf], " um"),
 #("/main/detector_param/setSubThickness ", 525, [525*lbf,525*ubf]),
 #("/main/detector_param/setSubWidth ", 8, [8*lbf,8*ubf]),
 #("/main/detector_param/setSubHeight ", 8, [8*lbf,8*ubf]),
@@ -63,35 +67,41 @@ detector_params = [
 #("/main/detector_param/setMiller ", [0, 0, 1]),
 ("/main/detector_param/setLatticeDeg ", 45, [45 * lbf, 45 * ubf]),
 #("/main/detector_param/setTopSourceMat ", "G4_Al"),
-("/main/detector_param/setTopAbs ", 0.795, [0.795 * lbf, 1]),
-("/main/detector_param/setTopVSound ", 3.582, [3.582 * lbf, 3.582 * ubf]),
-("/main/detector_param/setTopGap ", 191.0e-6, [(191.0e-6) * lbf, (191.0e-6) * ubf]),
-("/main/detector_param/setTopQPLim ", 3, [2, 5], "int"),
-("/main/detector_param/setTopPhLifetime ", 0.242, [0.242 * lbf, 0.242 * ubf]),
-("/main/detector_param/setTopPhLifetimeSlope ", 0.29, [0.29 * lbf, 0.29 * ubf]),
+# setTopAbs is a dependent interface-transmission value, held at its
+# template baseline until the material transmission calculator is supplied.
+# ("/main/detector_param/setTopAbs ", 0.795, [0.795 * lbf, 1]),
+# Aluminum junction properties are fixed; see FIXED_MACRO_COMMANDS.
+# ("/main/detector_param/setTopVSound ", 3.582, [3.582 * lbf, 3.582 * ubf]),
+# ("/main/detector_param/setTopGap ", 191.0e-6, [(191.0e-6) * lbf, (191.0e-6) * ubf]),
+# ("/main/detector_param/setTopQPLim ", 3, [2, 5], "int"),
+# ("/main/detector_param/setTopPhLifetime ", 0.242, [0.242 * lbf, 0.242 * ubf]),
+# ("/main/detector_param/setTopPhLifetimeSlope ", 0.29, [0.29 * lbf, 0.29 * ubf]),
 #("/main/detector_param/setTopSubGapAbs ", 0.0, [0.0,179.75e-6]),
-("/main/detector_param/setTopPSpecProb ", 0.0, [0, 1]),
+# ("/main/detector_param/setTopPSpecProb ", 0.8, [0, 1]),
 #("/main/detector_param/setTopFilmSourceMat ", "G4_Nb")
-("/main/detector_param/setTopFilmAbs ", 0.745, [0.745 * lbf, 1]),
+# Dependent interface-transmission value; see setTopAbs above.
+# ("/main/detector_param/setTopFilmAbs ", 0.745, [0.745 * lbf, 1]),
 ("/main/detector_param/setTopFilmVSound ", 2.444, [2.444 * lbf, 2.444 * ubf]),
 ("/main/detector_param/setTopFilmGap ", 1.5384e-3, [1.5384e-3 * lbf, 1.5384e-3 * ubf]),
-("/main/detector_param/setTopFilmQPLim ", 3, [2, 5], "int"),
+# ("/main/detector_param/setTopFilmQPLim ", 3, [2, 5], "int"),
 ("/main/detector_param/setTopFilmPhLifetime ", 0.00417, [0.00417 * lbf, 0.00417 * ubf]),
-("/main/detector_param/setTopFilmPhLifetimeSlope ", 0.29, [0.29 * lbf, 0.29 * ubf]),
+# ("/main/detector_param/setTopFilmPhLifetimeSlope ", 0.29, [0.29 * lbf, 0.29 * ubf]),
 #("/main/detector_param/setTopFilmSubGapAbs ", 0.0, [0,1.5384e-3]),
-("/main/detector_param/setTopFilmPSpecProb ", 0.0, [0, 1]),
+# ("/main/detector_param/setTopFilmPSpecProb ", 0.8, [0, 1]),
 #("/main/detector_param/setBotSourceMat ", "G4_Cu")
-("/main/detector_param/setBotAbs ", 0.736, [0.736 * lbf, 1]),
+# Dependent interface-transmission value; see setTopAbs above.
+# ("/main/detector_param/setBotAbs ", 0.736, [0.736 * lbf, 1]),
 ("/main/detector_param/setBotVSound ", 2.608, [2.608 * lbf, 2.608 * ubf]),
-#("/main/detector_param/setBotGap ", 0.0, [0.0,0.0]),
+# A [0, 0] interval is not optimizable; keep the normal-metal gap fixed at 0.
+# ("/main/detector_param/setBotGap ", 0.0, [0.0, 0.0]),
 ("/main/detector_param/setBotGapThres ", 180e-6, [180e-6 * lbf, 180e-6 * ubf]),
-("/main/detector_param/setBotQPLim ", 2, [2, 5], "int"),
+# ("/main/detector_param/setBotQPLim ", 3, [2, 5], "int"),
 ("/main/detector_param/setBotPhLifetime ", 5.1, [5.1 * lbf, 5.1 * ubf]),
 #("/main/detector_param/setBotPhLifetimeSlope ", 5.3, [5.3*lbf,5.3*ubf]),
 #("/main/detector_param/setBotSubGapAbs ", 0.0, [0.0,0.0]),
-("/main/detector_param/setBotPSpecProb ", 0.0, [0, 1]),
-("/main/detector_param/setWallAbs ", 0.2, [0.0, 0.5]),
-("/main/detector_param/setWallPSpecProb ", 0.0, [0, 1]),
+# ("/main/detector_param/setBotPSpecProb ", 0.8, [0, 1]),
+# ("/main/detector_param/setWallAbs ", 0.02, [0.0, 0.5]),
+# ("/main/detector_param/setWallPSpecProb ", 0.0, [0, 1]),
 #"/main/detector_param/setBotNormal ",
 # Microstructure Parameters:
 #"/main/detector_param/setHoleDepth ",
@@ -116,23 +126,21 @@ detector_params = [
 G4CMP_params = [
 #"/g4cmp/LatticeData ",
 #"/g4cmp/verbose ",
-("/g4cmp/clearance ", 1e-06, [1, 10], "e-6 mm"),
+# ("/g4cmp/clearance ", 1e-06, [1, 10], "e-6 mm"),
 #"/g4cmp/voltage ",
 #"/g4cmp/EPotFile ",
 #"/g4cmp/scaleEPot ",
 #"/g4cmp/minimumStep ",
 # ("/g4cmp/chargeBounces ", 1, [1,100], "int"),
-# phononBounces is pinned to 1000 (not swept); written as a fixed value via
-# PINNED_G4CMP_COMMANDS in each script's generate_runfiles().
-# ("/g4cmp/phononBounces ", 1000, [1,10000], "int"),
+# phononBounces is fixed at 10000 (not swept); see FIXED_MACRO_COMMANDS.
+# ("/g4cmp/phononBounces ", 10000, [1,10000], "int"),
 #("/g4cmp/producePhonons ", 1),
 #("/g4cmp/produceCharges ", 1),
 #("/g4cmp/sampleLuke ", 1),
 #("/g4cmp/maxLukePhonons ", -1),
 #("/g4cmp/samplingEnergy ", -1),
 #("/g4cmp/combiningStepLength ", 0.0), # mm
-# minEPhonons is pinned to 0.000382 eV (not swept); written as a fixed value via
-# PINNED_G4CMP_COMMANDS in each script's generate_runfiles().
+# minEPhonons is fixed at 0.0000382 eV (38.2 ueV, not swept); see FIXED_MACRO_COMMANDS.
 # ("/g4cmp/minEPhonons ", 0.000382, [0.000382*lbf,0.000382*ubf], " eV"),
 #("/g4cmp/minECharges ", 0.0), # eV
 #("/grcmp/recordMinETracks ", 1),
@@ -146,20 +154,64 @@ G4CMP_params = [
 #("/g4cmp/eATrapIonizationMFP ", 1.79769e+308, [0,np.sqrt(2)*10], " mm"),
 #("/g4cmp/hDTrapIonizationMFP ", 1.79769e+308, [0,np.sqrt(2)*10], " mm"),
 #("/g4cmp/hATrapIonizationMFP ", 1.79769e+308, [0,np.sqrt(2)*10], " mm"),
-("/g4cmp/temperature ", 0.0, [0.0, 0.2], " K"),
+("/g4cmp/temperature ", 0.0, [0.0, 0.1], " K"),
 #("/g4cmp/NIELPartition ", "19G4CMPLewinSmithNIEL"),
 #"/g4cmp/createChargeCloud ",
 #"/g4cmp/orientation ",
 #"/g4cmp/HitsFile ",
 ]
 
-# Fixed (non-swept) G4CMP macro overrides applied by every stage-1 script's
-# generate_runfiles(), regardless of what the macro template currently says.
-# Kept here -- not just in G4CMP_params' comments above -- so the pinned
-# values themselves have one canonical source too.
-PINNED_G4CMP_COMMANDS = (
-    ("/g4cmp/phononBounces ", "/g4cmp/phononBounces 1000"),
-    ("/g4cmp/minEPhonons ", "/g4cmp/minEPhonons 0.000382 eV"),
+# Fixed (non-swept) overrides applied by Stage 1 regardless of the selected
+# macro template. Values come from parameter_optimization/parameter_set.txt.
+FIXED_MACRO_COMMANDS = (
+    # --- Injection scenario (energy protocol, adopted 2026-08-12) -------------
+    # Gun energy 10 meV and minEPhonons 38.2 ueV replace the previous
+    # 382 ueV / 382 ueV pair. At the old setting the primary sat EXACTLY on the
+    # Al pair-breaking gate (2*Delta_Al = 2*191 ueV = 382 ueV, and
+    # JunctionKaplanElectrode requires PhEnergy >= 2*GapJunc), while
+    # minEPhonons killed every downconversion daughter at the first decay -- so
+    # the phonon cascade was not simulated at all. That suppresses exactly the
+    # mechanism Stage 3 optimizes: scat, decay, decayTT and the elastic tensor
+    # act THROUGH the cascade.
+    #
+    # 10 meV is the largest phonon energy produced in the muon-strike
+    # simulations, so it is the physically motivated injection energy for this
+    # objective. It is 26x the 382 ueV junction pair-breaking gate. It is also
+    # ABOVE 2*setTopFilmGap, which is deliberate and not a violation: the
+    # Junction hit type records only junction absorptions, so the objective
+    # stays junction-only (measured: 68/68 recorded hits inside junction
+    # footprints at 10 meV). The ground plane becomes an active competitor for
+    # phonons, which is a regime to hold constant across candidates, not a fault.
+    # Measured at 10 meV: 3.9e-4 QPs per primary event, ~10x the 1 meV rate. See
+    # parameter_optimization/STAGE3_MATERIAL_OPTIMIZATION_PIPELINE.md sec 12.5.
+    #
+    # minEPhonons 38.2 ueV also restores the value the v0 template shipped with;
+    # 382 ueV was a later change that put a numerical cut above the physical one.
+    # If setTopGap is ever unfrozen, recompute BOTH: the gate is 2*setTopGap.
+    ("/main/gun/setEnergy ", "/main/gun/setEnergy 10.0e-3 eV"),
+    ("/main/detector_param/setTopThickness ", "/main/detector_param/setTopThickness 0.12 um"),
+    ("/main/detector_param/setTopFilmThickness ", "/main/detector_param/setTopFilmThickness 0.075 um"),
+    ("/main/detector_param/setBotThickness ", "/main/detector_param/setBotThickness 1 um"),
+    ("/main/detector_param/setTopVSound ", "/main/detector_param/setTopVSound 3.582"),
+    ("/main/detector_param/setTopGap ", "/main/detector_param/setTopGap 191.0e-6"),
+    ("/main/detector_param/setTopQPLim ", "/main/detector_param/setTopQPLim 3"),
+    ("/main/detector_param/setTopPhLifetime ", "/main/detector_param/setTopPhLifetime 0.242"),
+    ("/main/detector_param/setTopPhLifetimeSlope ", "/main/detector_param/setTopPhLifetimeSlope 0.29"),
+    ("/main/detector_param/setTopFilmPSpecProb ", "/main/detector_param/setTopFilmPSpecProb 0.8"),
+    ("/main/detector_param/setTopPSpecProb ", "/main/detector_param/setTopPSpecProb 0.8"),
+    ("/main/detector_param/setWallPSpecProb ", "/main/detector_param/setWallPSpecProb 0"),
+    ("/main/detector_param/setBotPSpecProb ", "/main/detector_param/setBotPSpecProb 0.8"),
+    ("/main/detector_param/setTopFilmQPLim ", "/main/detector_param/setTopFilmQPLim 3"),
+    ("/main/detector_param/setBotQPLim ", "/main/detector_param/setBotQPLim 3"),
+    ("/main/detector_param/setWallAbs ", "/main/detector_param/setWallAbs 0.02"),
+    ("/main/detector_param/setTopFilmPhLifetimeSlope ", "/main/detector_param/setTopFilmPhLifetimeSlope 0.29"),
+    ("/main/detector_param/setBotGap ", "/main/detector_param/setBotGap 0.0"),
+    ("/g4cmp/chargeBounces ", "/g4cmp/chargeBounces 1"),
+    ("/g4cmp/phononBounces ", "/g4cmp/phononBounces 10000"),
+    ("/g4cmp/minEPhonons ", "/g4cmp/minEPhonons 0.0000382 eV"),
+    ("/g4cmp/clearance ", "/g4cmp/clearance 1e-6 mm"),
+    ("/g4cmp/eTrappingMFP ", "/g4cmp/eTrappingMFP 0.3 mm"),
+    ("/g4cmp/hTrappingMFP ", "/g4cmp/hTrappingMFP 0.3 mm"),
 )
 
 # G4CMP config.txt parameters. Format is (macro command, default value, range, unit (optional)).
@@ -170,7 +222,8 @@ config_params = [
 ("stiffness 1 2 ",  63.9, [63.9*lbf, 63.9*ubf], " GPa"),
 ("stiffness 4 4 ",  79.5, [79.5*lbf, 79.5*ubf], " GPa"),
 # Phonon parameters
-("dyn ", [-42.9, -94.5, 52.4, 68.0], [[-42.9*ubf,-42.9*lbf], [-94.5*ubf,-94.5*lbf], [52.4*lbf,52.4*ubf], [68.0*lbf,68.0*ubf]], " GPa"),
+# Third-order stiffness is fixed; see FIXED_CONFIG_COMMANDS.
+# ("dyn ", [-42.9, -94.5, 52.4, 68.0], [[-42.9*ubf,-42.9*lbf], [-94.5*ubf,-94.5*lbf], [52.4*lbf,52.4*ubf], [68.0*lbf,68.0*ubf]], " GPa"),
 ("scat ", 2.43e-42, [(2.43)*lbf,(2.43)*ubf], "e-42 s3"),
 ("decay ", 7.41e-56, [(7.41)*lbf,(7.41)*ubf], "e-56 s4"),
 ("decayTT ", 0.74, [0.74*lbf,1]),
@@ -178,13 +231,15 @@ config_params = [
 #("LDOS ",  0.093), #Need to figure out how to vary while maintaining LDOS + STDOS + FTDOS = 1
 #("STDOS ", 0.531),
 #("FTDOS ", 0.376),
-("Debye ", 15, [15*lbf,15*ubf], " THz"),
+# Debye is checked per candidate but is not an optimization dimension.
+# ("Debye ", 15, [15*lbf,15*ubf], " THz"),
 # Charge carrier parameters
 # ("bandgap ", 1.17, [1.17*lbf,1.17*ubf], " eV"),
 # ("pairEnergy ", 3.81, [3.81*lbf,3.81*ubf], " eV"),
 # ("fanoFactor ", 0.15, [0.15*lbf,0.15*ubf]),
-("vsound ", 9000, [9000*lbf,9000*ubf], " m/s"),
-("vtrans ", 5400, [5400*lbf,5400*ubf], " m/s"),
+# Derived by Stage 1 from C11/C12/C44 and SUBSTRATE_DENSITY_KG_M3.
+# ("vsound ", 9000, [9000*lbf,9000*ubf], " m/s"),
+# ("vtrans ", 5400, [5400*lbf,5400*ubf], " m/s"),
 # ("l0_e ", 16.9e-6, [16.9e-6*lbf,16.9e-6*ubf], " m"),
 # ("l0_h ", 7.5e-5, [7.5e-5*lbf,7.5e-5*ubf], " m"),
 # #hole and electron masses taken from Robert's thesis
@@ -210,6 +265,15 @@ config_params = [
 # ("ivQuadField ", 3395, [3395*lbf,3395*ubf], " V/m"),
 # ("ivQuadPower ", 7.47, [7.47*lbf,7.47*ubf])
 ]
+
+# The current Geant4 material remains G4_Si. Stage 3 must replace this with the
+# selected candidate's density before evaluating non-Si materials.
+SUBSTRATE_DENSITY_KG_M3 = 2329.0
+
+FIXED_CONFIG_COMMANDS = (
+    ("dyn ", "dyn -42.9 -94.5 52.4 68.0 GPa"),
+    ("Debye ", "Debye 15 THz"),
+)
 
 # Parameters for the quasiparticle decoherence-rate ODE (calculate_xQPs in
 # stage2_compute_QPs.py), sourced from Paul Baity's notebook. f_01 and s are

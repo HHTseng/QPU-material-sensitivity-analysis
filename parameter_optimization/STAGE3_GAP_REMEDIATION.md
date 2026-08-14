@@ -121,6 +121,222 @@ Verified:
 - `minEPhonons (38.2 µeV) < 2*setTopGap (382 µeV)` — the numerical cut is now
   below the physical threshold, which is the invariant that must hold.
 
+### 2026-08-13 — Stage 3 STARTED: first 18-combination factorial complete
+
+Catalog completed with the supplied film lifetimes and GaAs enabled; the full
+enumeration ran end to end. Results and caveats in
+`STAGE3_SMALL_MATERIAL_START.md`.
+
+**Enabled**: substrates Si / Ge / **GaAs** (Geant4 density 5.310 g/cm3 measured
+from a live run; derived speeds agree with the native record to 1.71%/0.99%);
+top films Nb / **Ta** (0.0227 ns) / **Ti** (0.414 ns); bottom films Cu / **Au**
+(16.0 ns). Supplied uncertainty ranges stored alongside each value for the
+sec 5.4 bracket test. Pb remains disabled, still lacking a lifetime.
+
+**Result**: 18/18 `success`, 288 sub-runs, 0 failures, ~12 min on 32 workers.
+Baseline Si/Nb/Cu = 1578 QPs. Best **GaAs/Nb/Cu = 954 (-39.5%, z = -12.4)** and
+**Ge/Nb/Cu = 972 (-38.4%)**, indistinguishable from each other. Worst
+Si/Ta/Au = 4160. Bottom film dominates: every Cu combination beats every Au one.
+
+**Two bugs found and fixed while enabling the new materials:**
+
+1. **The interface calibration cancelled the film out.** The reference
+   transmission used the *candidate* film on both sides, so for a Si substrate
+   `T_cand / T_ref` was identically 1 and Si/Nb, Si/Ta and Si/Ti all returned
+   0.745 -- Nb's anchor. The reference is now the calibrated **baseline pair**
+   (Si + the film each anchor was measured with). Film choice now moves the
+   interface value (Si/Ta 0.4533, Si/Ti 0.7554 vs Si/Nb 0.7450), and the Si
+   baseline still reconstructs 0.795/0.745/0.736 exactly.
+2. **Film density had two sources of truth** -- a hardcoded table in the
+   interface model and the catalog record. Adding Au and Ta exposed it as a hard
+   failure. Density now comes from the catalog record, with the table reduced to
+   the fixed Al junction, and `density_kg_m3` became a required film field.
+
+**Ti was requested as a substrate but added as a top film.** There is no G4CMP
+lattice map for Ti, and a substrate must be a phonon-carrying crystal with a
+complete lattice record rather than a metal; the supplied data itself labels Ti
+`model: superconducting`. Flagged to the user rather than silently reinterpreted.
+
+**On MP data**: retained for modelling as instructed, with the DFT-vs-experiment
+deviation recorded per field in the catalog rather than hidden. MP density is a
+cross-check only; the Geant4 material density is authoritative because G4CMP
+reads it directly. Film elasticity remains literature-sourced, since MP returns
+mechanically unstable tensors for several of these metals.
+
+### 2026-08-13 — E_gun raised to 10 meV; upper gate CORRECTED (my error)
+
+Injection energy changed from 1.0 meV to **10 meV**, the largest phonon energy
+produced in the muon-strike simulations. Verifying the consequences overturned
+one of my own earlier conclusions.
+
+#### Correction: the upper gap gate was based on a false premise
+
+I had made `E_gun < 2*setTopFilmGap` a hard error, justified by the claim that
+above it "total_QPs stops being purely junction QPs". **That claim is wrong.**
+
+`PhononSensitivity::IsHit` with `setHitType Junction` requires
+`fJunctionElectrode->GetJunctionHit()` (`PhononSensitivity.cc:123`), which is
+false for a ground-film absorption. Film absorptions therefore happen but are
+**never recorded as hits**. Measured directly at 10 meV -- 3.25x the Nb gap, so
+the Nb plane is definitely absorbing -- over 2M events:
+
+| E_gun | recorded surface hits | inside a junction | outside |
+|---|---:|---:|---:|
+| 1 meV | 24 | **24** | 0 |
+| 10 meV | 68 | **68** | 0 |
+
+The objective is junction-only at any energy. My earlier 1 meV test could not
+have discriminated, because at 382 ueV the film was sub-gap and could not absorb
+at all -- I over-generalised from it.
+
+**Consequence: the screening that disqualified 23 of the 27 requested elemental
+superconductors is WITHDRAWN.** It rested entirely on that false gate. Every
+superconducting film is admissible on gap grounds; selection reverts to physics
+interest rather than admissibility.
+
+The film gap now classifies the physics **regime** instead: above `2*Delta` the
+ground plane competes with the junctions for phonons. That must be held constant
+across a comparison set, so it is recorded (`ground_plane_active_absorber`) and
+reported, not forbidden. At 10 meV every elemental superconductor is far below
+E_gun, so the whole candidate set is in one consistent regime.
+
+#### What 10 meV changes, measured
+
+| | 1 meV | 10 meV |
+|---|---:|---:|
+| QPs per primary event | 3.85e-05 | **3.945e-04** (10x) |
+| mean energy per recorded hit | 0.414 meV | 0.522 meV |
+| max energy per recorded hit | 0.764 meV | 3.056 meV |
+| runtime per event | 1x | ~2.2x |
+| isotope MFP (omega^-4) | 137 um | **~0.07 um** |
+
+Net: ~4.5x more signal per unit compute. The transport regime changes from
+quasi-ballistic to strongly diffusive with rapid downconversion near the
+injection site -- which is the physically correct picture for a muon strike, and
+is why 10 meV is the right choice for this objective.
+
+Note the mean QPs per recorded hit is only 2.7, not the ~52 a fully-absorbed
+10 meV phonon would give: the primary downconverts before reaching a junction,
+consistent with the 70 nm MFP.
+
+#### First result with real signal
+
+At 4M events, 16 positions x 2 replicas, common seeds and sites:
+
+| candidate | total_QPs | per primary event | runtime |
+|---|---:|---:|---:|
+| Si/Nb/Cu | **1578** | 3.945e-04 | 16.8 s |
+| Ge/Nb/Cu | **972** | 2.430e-04 | 31.2 s |
+
+Difference 606 QPs against a Poisson sigma of 50.5 -- **z ~ 12**, so Ge produces
+~38% fewer junction QPs than Si under this model. Preliminary: one orientation,
+one film pair, model-dependent interface values, and the interface model's
+`physics_validation_passed` is still False.
+
+#### Changed
+
+- All five templates, `sensitivity_params.py`, `stage3_config.yaml`: `E_gun = 10.0e-3 eV`.
+- `assert_excitation_thresholds()` (stage 1) and `check_excitation_thresholds()`
+  (Stage 3 contract): upper bound converted from a hard error to a recorded
+  regime classification. Lower gates unchanged and still hard.
+- `material_catalog.yaml`: the disqualification note replaced with the measured
+  finding and the withdrawal.
+
+### 2026-08-13 — Materials Project catalog; film screening; API key hygiene
+
+**SECURITY FIRST: a live MP API key was sitting in `.env.example`** — the file
+whose stated purpose is to hold a placeholder and which itself says "never
+commit the real key" — and the top-level `.gitignore` had no `.env` rule. The
+key was moved to `.env` (mode 600, gitignored), the placeholder was restored,
+and `.env`/`*.env` were added to `.gitignore` with `!.env.example`. It was never
+committed (`parameter_optimization/` is untracked), but rotate it if it has been
+shared anywhere else.
+
+`mp-api` was installed into an **isolated venv**, not the G4CMP env, so the
+working numpy 2.4.6 / pandas 3.0.3 are untouched.
+
+#### Top-film screening: 23 of 27 requested elements are disqualified
+
+The contract requires `E_gun (1.0 meV) < 2*Delta_topfilm`; below that the Nb
+ground plane also absorbs and the objective stops being junction-only QPs.
+Using measured T=0 gaps (not BCS — Nb and Pb are strong-coupling, 2D/kTc = 3.9
+and 4.4):
+
+| Admissible (>25% margin) | Marginal | Disqualified |
+|---|---|---|
+| Nb 3.10x, Pb 2.72x, La 1.50x, **Ta 1.40x** | Sn 1.15x, In 1.05x | Tl, Pa, Th, Al, Ga, Mo, Zn, Os, Zr, Cd, Ru, Ti, Hf, Ir, Be, W, Li, Rh, Pt, Cr, Pd |
+
+Ta is the recommended second candidate: it clears the gate by 40% and Ta ground
+planes are used in state-of-the-art transmons, so the comparison is
+scientifically meaningful rather than merely admissible.
+
+#### Materials Project data quality — measured, and it constrains the plan
+
+*Films.* MP elastic tensors for these metals are **unreliable**: Al returns
+`C11=70 C12=80 C44=-28` (mechanically unstable; literature 107/61/28), Au
+`C44=-8` (literature 41.5), and Nb is non-cubic by 8.5% though it is bcc. MP
+densities disagree with Geant4/NIST by up to **6.6%** (Au) and 2.9% (Cu).
+Films do not need a tensor anyway — the G4CMP film model consumes a scalar sound
+speed — so film properties are taken from literature, with MP density kept only
+as a cross-check.
+
+*Substrates.* The filtered search works and MP elasticity is well converged
+there. It returned **396 accepted / 4 rejected** (Born stability and cubic
+spread) across 392 distinct formulas. But the binding constraint is not the
+catalog: a substrate needs a complete native G4CMP lattice record (`dyn`,
+`scat`, `decay`, `decayTT`, DOS, `Debye`), which MP cannot supply. Only **4 of
+392** have one. Available lattice maps: Al2O3, Al2O3_SULI, CaF2, CaWO4, GaAs,
+Ge, LiF, Si — of which the cubic ones are CaF2, GaAs, Ge, LiF, Si.
+
+**Conclusion: the G4CMP lattice record, not the Materials Project catalog, is
+what limits the substrate axis.**
+
+#### Delivered
+
+- `build_material_catalog.py` — explicit-ID and filtered-search modes kept
+  strictly separate (the defect in the old exporter), full provenance: MP db
+  version, mp-api version, retrieval timestamp, requested fields, filters,
+  raw snapshot, per-row cubic/Born validation and machine-readable rejections.
+- `catalog/films_raw.json`, `catalog/substrates_raw.json` — immutable snapshots.
+- `material_catalog.yaml` — curated catalog with **per-field** provenance,
+  wired into the resolver. Records missing a sourced value carry
+  `enabled: false` plus the blocking field, and the resolver refuses them by
+  name rather than defaulting from another material.
+
+Verified: Si and Ge resolve and run; Ta, Pb, Au and GaAs are correctly blocked
+naming the exact missing field.
+
+### 2026-08-13 — Item 4 + 5: candidate material propagation and interfaces
+
+Implemented the six requested decisions; all verified against real Geant4 runs.
+Full results in `STAGE3_SMALL_MATERIAL_START.md`.
+
+| Decision | Outcome |
+|---|---|
+| `G4_Ge` density | **5.323 g/cm3, measured from a live Geant4 run**, not a table. Re-verified per sub-run from the log; a mismatch is `corrupt_or_incomplete`, not success |
+| Complete native Ge config | `config_mode: native_g4cmp` copies Ge's record verbatim — verified the generated config keeps Ge's `dyn -73.2 -70.8 37.6 56.1`, `scat 3.67e-41`, `decay 1.6456e-54`, DOS `0.0978/0.5354/0.3668`, `Debye 2 THz`. Only `vsound`/`vtrans` are rewritten |
+| No Si `FIXED_CONFIG_COMMANDS` | Never applied on the Stage 3 path, plus an assertion that a native non-Si config has not acquired Si's `Debye 15 THz` |
+| Derived-speed consistency | 2% tolerance, reasoning stated: convention spread is 0.19–1.03%, the wrong-density failure is ~50%. **Si-density Ge rejected at 50.02%** |
+| Candidate-specific interfaces | New `interface_transmission.py`. Si reproduces 0.795/0.745/0.736 exactly; Ge gets 0.7259/0.7632/0.7665. Substrate change recomputes all three |
+| Debye 2 vs 7.8 THz A/B | **Bit-identical: 144 vs 144 QPs** at 4M events (Poisson sigma 17.0). Debye is inactive because `phonon_Caustic` creates its primary directly, bypassing `G4CMPEnergyPartition::GeneratePhonons()`. Tested, not assumed |
+
+All eight item-4 acceptance tests pass, including that a missing record field
+and a density mismatch both fail *by name* before Geant4 starts.
+
+**Interface honesty flags** are reported separately as required:
+`baseline_reconstruction_passed = True`, `physics_validation_passed = False` —
+recovering constants the model was calibrated to is a plumbing test, not physics.
+
+**Cost measured:** 4,000,000 events over 16 positions x 2 replicas in **4.1 s
+wall** on 32 workers. At F2 = 1e7 a candidate is ~10 s, so the eight-combination
+factorial with replicates is minutes of compute. This settles the optimizer
+question in favour of exhaustive enumeration. Yield 3.600e-05 QPs/primary event
+against the 3.69e-5 planning figure.
+
+**Standing caveat recorded:** the Debye result is conditional on the gun type.
+If the injection ever changes to something that deposits energy (gamma, muon,
+eh_pair), energy partitioning becomes active and Debye must be revisited.
+
 ### 2026-08-13 — Stage 3 first slice implemented: contract, ledger, evaluator
 
 Built and validated the triage's recommended first slice. Four new files in
