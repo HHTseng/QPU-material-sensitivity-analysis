@@ -1,0 +1,2 @@
+Campaign stage3_factorial_v1_e7: 3x3x2 = 3 combinations at 320,000,000 events (16 positions x 2 replicas), lifetime=nominal
+  Si/Ta/Cu         success  QPs= 162844  5.089e-04/event  3523.4s
