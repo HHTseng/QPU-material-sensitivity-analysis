@@ -1,0 +1,8 @@
+Campaign stage3_factorial_v1_e8: 3x3x2 = 1 combinations at 3,200,000,000 events (16 positions x 2 replicas), lifetime=nominal
+  Si/Nb/Cu         success  QPs=1241212  3.879e-04/event  29944.6s
+
+RANKED (lower = less QP damage). Baseline Si/Nb/Cu = 1241212
+  Si/Nb/Cu         1241212  <-- baseline
+
+1 scored, 0 not scored, 0 rejected before running.
+Ledger: /home/htseng/Sensitivity_Analysis_HT/parameter_optimization/stage3_trials_e8.sqlite

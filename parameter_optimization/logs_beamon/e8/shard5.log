@@ -1,0 +1,10 @@
+Campaign stage3_factorial_v1_e8: 3x3x2 = 1 combinations at 3,200,000,000 events (16 positions x 2 replicas), lifetime=nominal
+  Si/Ti/Cu         success  QPs=1403836  4.387e-04/event  40695.0s
+
+Baseline Si/Nb/Cu not among the observations; ranking by raw count.
+
+RANKED (lower = less QP damage)
+  Si/Ti/Cu         1403836
+
+1 scored, 0 not scored, 0 rejected before running.
+Ledger: /home/htseng/Sensitivity_Analysis_HT/parameter_optimization/stage3_trials_e8.sqlite

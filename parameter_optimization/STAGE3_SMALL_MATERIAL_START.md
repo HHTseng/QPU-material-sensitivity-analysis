@@ -918,6 +918,115 @@ classification, so that is where it went. GaAs *was* added as a substrate --
 Geant4 density measured at 5.310 g/cm3 from a live run, derived speeds agreeing
 with its native record to 1.71%/0.99%.
 
+
+## beamOn scaling study (2026-08-15): does the 125k ranking hold?
+
+Three tiers, identical injection sites and seed bank throughout, so the 125k
+events are literally the first 125,000 of each 1e7/1e8 stream:
+
+| tier | events per sub-run | per candidate | candidates | ledger |
+|---|---:|---:|---:|---|
+| baseline | 125,000 | 4.0e6 | 18 | `stage3_trials.sqlite` |
+| **e7** | 1e7 | 3.2e8 | 18 | `stage3_trials_e7.sqlite` |
+| **e8** | 1e8 | 3.2e9 | 6 | `stage3_trials_e8.sqlite` |
+
+### Headline: e7 is converged; 125k was not
+
+**e7 vs e8: Spearman rho = Kendall tau = 1.0000**, every candidate within
+**1.6%** (RMS 0.9%). Going from 1e7 to 1e8 -- 10x the events -- changed nothing.
+
+**125k vs e7: rho = 0.994, tau = 0.961** -- the broad ordering was right, but
+**the top-1 flipped and two adjacent pairs flipped**:
+
+| pair | z at 125k | z at e7 | z at e8 | outcome |
+|---|---:|---:|---:|---|
+| GaAs/Nb/Cu vs Ge/Nb/Cu | +0.4 | -15.0 | -59.4 | **order flipped** |
+| Ge/Ti/Cu vs Ge/Ta/Cu | +0.2 | -11.5 | -43.6 | **order flipped** |
+| Si/Nb/Cu vs Si/Ti/Cu | +0.5 | +33.5 | +100.0 | confirmed |
+
+`GaAs/Nb/Cu` was under-counted by 11-14% at 125k. The best candidate is
+**Ge/Nb/Cu**, not GaAs/Nb/Cu.
+
+### The counts are NOT Poisson -- measured Fano ~ 5
+
+Comparing all 18 candidates at 125k against their converged e7 values:
+
+```
+RMS observed deviation       5.4%
+mean Poisson prediction      2.3%
+overdispersion (Fano)        ~5x variance -> errors 2.3x larger than Poisson
+```
+
+Individual candidates deviated up to **4.9 Poisson sigma** (Si/Ta/Cu -11.6%,
+GaAs/Nb/Cu -11.2%), which is not a fluctuation -- it is the wrong error model.
+This is expected physically: `total_QPs` is a *compound* count. Each recorded
+hit contributes `round(E_dep / setTopGap)` QPs (mean ~2.7, with a tail), and the
+16 injection sites have a 9.18x spread in yield, so the variance exceeds the
+mean several-fold.
+
+**Every Poisson z-value in this project, including the ones printed by
+`stage3_report.py` and `stage3_compare_fidelity.py`, is optimistic by ~2.3x.**
+Corrected per-tier uncertainty on `total_QPs`:
+
+| tier | mean N | Poisson | corrected (x2.3) |
+|---|---:|---:|---:|
+| 125k | 2,090 | 2.2% | **5.0%** |
+| e7 | 168,974 | 0.24% | **0.56%** |
+| e8 | 1,024,839 | 0.10% | **0.23%** |
+
+The e7-vs-e8 scatter (RMS 0.9%, max 1.6%) is consistent with the corrected e7
+figure and flatly inconsistent with the naive 0.24%, which is an independent
+confirmation of the Fano estimate.
+
+### Converged ranking (e7, all 18) with corrected errors
+
+Baseline Si/Nb/Cu = 124,808 QPs (3.900e-4 per primary event).
+
+| rank | candidate | QPs/event | vs baseline |
+|---:|---|---:|---:|
+| 1 | **Ge/Nb/Cu** | 2.494e-04 | **-36.0%** |
+| 2 | GaAs/Nb/Cu | 2.686e-04 | -31.1% |
+| 3 | Ge/Ta/Cu | 2.793e-04 | -28.4% |
+| 4 | Ge/Ti/Cu | 2.947e-04 | -24.4% |
+| 5 | GaAs/Ti/Cu | 3.344e-04 | -14.3% |
+| 6 | GaAs/Ta/Cu | 3.562e-04 | -8.7% |
+| 7 | Si/Nb/Cu | 3.900e-04 | baseline |
+| 8-18 | Si/Ti/Cu … Si/Ta/Au | 4.441e-04 … 1.070e-03 | +13.9% … +174.2% |
+
+**16 of the 17 adjacent pairs are separated by more than the corrected error.**
+The single exception is `Ge/Ti/Au` vs `Si/Ta/Cu` (1.4% apart), which remains
+unresolved and does not matter -- both are well below the baseline in rank.
+
+Physics reading is unchanged from the 125k run and now rests on converged
+numbers: the **bottom film dominates** (every Cu beats every Au; Au roughly
+doubles QP damage), the **substrate is second** (Ge and GaAs both ~30-36% better
+than Si), and the **top film matters least** among the Cu combinations.
+
+### What this means for the fidelity ladder
+
+- **125,000 events per sub-run is not adequate for selection.** It gets the
+  gross ordering right (rho 0.99) but mis-ranks the leaders, which is exactly
+  the decision the campaign exists to make.
+- **1e7 per sub-run is sufficient.** 1e8 changed no ranking and no value by more
+  than 1.6%, at 10x the cost. Do not spend it again on this design.
+- The earlier F1 = 1e6 / F2 = 1e7 *per candidate* ladder was ~2 decades too
+  small. In per-candidate terms the converged tier is **3.2e8**.
+
+### Still outstanding
+
+Nothing above touches the two systematic terms:
+
+1. the 16-site spatial quadrature (60.6% site spread -> ~15% on the mean, and
+   identical across tiers so it cancels in these comparisons but not in an
+   absolute claim); the nested 16/32/64 convergence check is still not run;
+2. the interface model, still `physics_validation_passed = False`;
+3. the supplied phonon-lifetime uncertainties, not yet propagated
+   (`run_beamon_scaling.sh` supports `--lifetime-scale low|high` via
+   `stage3_run_factorial.py`).
+
+Tier agreement establishes that **counting noise is no longer the limiting
+error** -- it does not validate the ranking.
+
 ## Go/no-go summary
 
 It is safe to start optimization only when all nine checks pass. It is safe to

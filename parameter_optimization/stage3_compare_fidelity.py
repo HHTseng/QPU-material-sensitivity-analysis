@@ -42,23 +42,36 @@ if HERE not in sys.path:
 from stage3_ledger import Ledger   # noqa: E402
 
 
-def load(path):
-    """{candidate name: row} for every scored trial, keyed by material triplet."""
+def load(path, events_total=None):
+    """{candidate name: row} for every scored trial, keyed by material triplet.
+
+    `events_total` pins the tier. Without it a ledger holding more than one event
+    count -- e.g. a timing probe alongside the campaign -- would silently
+    contribute its highest-statistics row and the comparison would be against the
+    wrong baseline. A name may also legitimately repeat within one tier when the
+    code fingerprint changed between runs; those are checked for agreement rather
+    than silently collapsed.
+    """
     if not os.path.isfile(path):
         return {}
-    out = {}
+    out, seen = {}, {}
     with Ledger(path) as ledger:
         for r in ledger.observations():
+            if events_total is not None and r["events_total"] != events_total:
+                continue
             c = json.loads(r["candidate"])
             name = f"{c['substrate']}/{c['top_ground_film']}/{c['bottom_film']}"
-            # If a name appears twice (different event counts in one ledger),
-            # keep the highest-statistics row.
+            seen.setdefault(name, []).append(r["total_qps"])
             if name not in out or r["events_total"] > out[name]["events_total"]:
                 out[name] = {"total_qps": r["total_qps"],
                              "qps_per_primary": r["qps_per_primary"],
                              "events_total": r["events_total"],
                              "n_positions": r["n_positions"],
                              "n_replicas": r["n_replicas"]}
+    for name, qs in seen.items():
+        if len(qs) > 1 and len(set(qs)) > 1:
+            print(f"  NOTE {name}: {len(qs)} rows at this event count with differing "
+                  f"totals {sorted(set(qs))}; using {out[name]['total_qps']:.0f}")
     return out
 
 
@@ -107,9 +120,11 @@ def main():
     ap.add_argument("--ledger", action="append", default=[],
                     help="label=path, repeatable")
     ap.add_argument("--baseline-candidate", default="Si/Nb/Cu")
+    ap.add_argument("--baseline-events", type=int, default=4000000,
+                    help="events_total that identifies the baseline tier")
     args = ap.parse_args()
 
-    base = load(args.baseline_ledger)
+    base = load(args.baseline_ledger, events_total=args.baseline_events)
     if not base:
         sys.exit(f"no scored trials in {args.baseline_ledger}")
 

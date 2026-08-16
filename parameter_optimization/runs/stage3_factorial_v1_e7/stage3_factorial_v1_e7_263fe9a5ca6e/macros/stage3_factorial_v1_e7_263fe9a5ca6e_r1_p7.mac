@@ -1,0 +1,137 @@
+#/run/verbose 2
+#/g4cmp/verbose 3
+/gun/number 1
+# gammas:
+#/main/gun/setGunType gamma
+#/main/gun/setEnergy 1 MeV
+# muons:
+#/main/gun/setGunType mu-
+#/main/gun/setEnergy 4 GeV
+#/main/gun/setPosition 0 0 10 mm
+#/main/gun/setDirection 0 0 -1
+
+/main/gun/setGunType phonon_Caustic
+/main/gun/setPosition -3.522081 -1.5589 0.259875 mm
+/main/gun/setEnergy 0.01 eV
+/main/gun/setKinematic
+
+/g4cmp/clearance 1e-06 mm
+/g4cmp/chargeBounces 1
+/g4cmp/phononBounces 10000
+/g4cmp/minEPhonons 3.82e-05 eV
+/g4cmp/eTrappingMFP 0.3 mm
+/g4cmp/hTrappingMFP 0.3 mm
+/g4cmp/eDTrapIonizationMFP 1.79769e+308 mm
+/g4cmp/eATrapIonizationMFP 1.79769e+308 mm
+/g4cmp/hDTrapIonizationMFP 1.79769e+308 mm
+/g4cmp/hATrapIonizationMFP 1.79769e+308 mm
+/g4cmp/temperature 0.0 K
+
+/g4cmp/HitsFile /home/htseng/Sensitivity_Analysis_HT/parameter_optimization/runs/stage3_factorial_v1_e7/stage3_factorial_v1_e7_263fe9a5ca6e/hits/stage3_factorial_v1_e7_263fe9a5ca6e_r1_p7_hitsfile.txt
+
+#/g4cmp/producePhonons 1       # EM hits, so can produce many
+#/g4cmp/produceCharges 1        # Scale down charge carriers
+#/g4cmp/sampleLuke 1
+
+#--------------------------------------------------------------------#
+#Chip Dimensions
+/main/detector_param/setSubWidth 10
+/main/detector_param/setSubHeight 10
+/main/detector_param/setSubThickness 525
+
+/main/detector_param/setSubstrateG4Name G4_Ge
+/main/detector_param/setSubstrateName Ge
+
+#Absorption Conditions
+/main/detector_param/setWallAbs 0.02
+
+#Material Properties
+#-----Top Junction------#
+#/control/execute ../macros/FilmPreSets/setTop2Al.mac
+/main/detector_param/setTopSourceMat G4_Al
+/main/detector_param/setTopAbs 0.725915
+/main/detector_param/setTopVSound 3.582
+/main/detector_param/setTopGap 0.000191
+/main/detector_param/setTopQPLim 3
+/main/detector_param/setTopPhLifetime 0.242
+/main/detector_param/setTopPhLifetimeSlope 0.29
+/main/detector_param/setTopSubGapAbs 0.0
+/main/detector_param/setTopThickness 0.12 um
+
+#-----Top Film------#
+#/control/execute ../macros/FilmPreSets/setTopFilm2Nb.mac
+/main/detector_param/setTopFilmSourceMat G4_Nb
+/main/detector_param/setTopFilmAbs 0.763178
+/main/detector_param/setTopFilmVSound 2.444
+/main/detector_param/setTopFilmGap 0.0015384
+/main/detector_param/setTopFilmQPLim 3
+/main/detector_param/setTopFilmPhLifetime 0.00417
+/main/detector_param/setTopFilmPhLifetimeSlope 0.29
+/main/detector_param/setTopFilmSubGapAbs 0.0
+/main/detector_param/setTopFilmThickness 0.075 um
+
+#-----Bottom Boundary------#
+#/control/execute ../macros/FilmPreSets/setBot2Cu.mac
+/main/detector_param/setBotNormal true
+/main/detector_param/setBotSourceMat G4_Au
+/main/detector_param/setBotAbs 0.576556
+/main/detector_param/setBotVSound 3.24
+/main/detector_param/setBotGap 0.0
+/main/detector_param/setBotGapThres 0.00018
+/main/detector_param/setBotQPLim 3
+/main/detector_param/setBotPhLifetime 16.0
+/main/detector_param/setBotSubGapAbs 0.0
+/main/detector_param/setBotThickness 1.0 um
+#/control/execute ../macros/FilmPreSets/setBot2NoFilm.mac
+
+/main/detector_param/setMitigation None
+
+/main/detector_param/setTopPSpecProb 0.8
+/main/detector_param/setTopFilmPSpecProb 0.8
+/main/detector_param/setBotPSpecProb 0.8
+/main/detector_param/setWallPSpecProb 0.0
+
+/main/detector_param/setMiller 0 0 1
+/main/detector_param/setLatticeDeg 45.0
+
+/main/detector_param/update
+
+/run/initialize
+
+#/vis/open OGL
+#/vis/viewer/set/background gray
+#/vis/viewer/set/upVector 0 1 0
+#/vis/viewer/set/viewpointVector 0 -1 -1
+#/vis/drawVolume
+
+#/vis/scene/add/trajectories
+#/vis/modeling/trajectories/create/drawByCharge dmcColors
+#/vis/modeling/trajectories/dmcColors/set 1 red
+#/vis/modeling/trajectories/dmcColors/set -1 blue
+#/vis/modeling/trajectories/dmcColors/set 0 yellow
+
+# Disable processes which change particles
+#/process/inactivate phononScattering
+#/process/inactivate G4CMPLukeScattering
+#/process/inactivate G4CMPInterValleyScattering
+
+/main/sensor/setHitType Junction
+
+/main/electrode_param/setWidth 10.0
+/main/electrode_param/setHeight 10.0
+/main/electrode_param/setXLocations -2.000000, 0.000000, 2.000000, -2.000000, 0.000000, 2.000000, -2.000000, 0.000000, 2.000000, 1.000000, -1.000000, 1.000000, -1.000000, -3.000000, 1.000000, -1.000000, 3.000000
+/main/electrode_param/setYLocations -2.000000, -2.000000, -2.000000, 0.000000, 0.000000, 0.000000, 2.000000, 2.000000, 2.000000, -3.000000, -1.000000, 1.000000, 3.000000, -1.000000, -1.000000, 1.000000, 1.000000
+/main/electrode_param/setIsland 200.0 um
+/main/electrode_param/setIslandSpacing 50.0 um
+#it is crucial that the geometry is updated before running the simulation
+/main/detector_param/update
+
+/random/setSeeds 20271443 20271444
+/run/beamOn 10000000
+/control/shell touch /home/htseng/Sensitivity_Analysis_HT/parameter_optimization/runs/stage3_factorial_v1_e7/stage3_factorial_v1_e7_263fe9a5ca6e/hits/stage3_factorial_v1_e7_263fe9a5ca6e_r1_p7_hitsfile.txt.done
+
+#/vis/ogl/set/printFilename muon.pdf
+#/vis/ogl/set/printMode pixmap
+#/vis/ogl/export
+
+#/g4cmp/printConfig
