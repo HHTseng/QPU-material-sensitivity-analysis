@@ -10,6 +10,19 @@ geometry, film properties, G4CMP transport settings, silicon lattice
 constants, and the quasiparticle ODE. With 128 trajectories at 4 levels the
 full design is `128 * (53 + 1) = 6912` samples.
 
+## Detector layout
+
+![Detector layout: 17 electrodes vs. 16 Sobol phonon injection sites](detector_layout_electrodes_injection_sites.png)
+
+The 17 electrodes (blue squares) are the qubit islands modeled in every run —
+their positions come straight from the macro template's
+`setXLocations`/`setYLocations`. The 16 orange stars are the scrambled-Sobol
+phonon injection sites (`plot_detector_layout.py`, regenerated with the exact
+`scipy.stats.qmc.Sobol` call `stage1_run_simulations.py` uses) that stage 1
+launches `phonon_Caustic` particles from for the reference protocol —
+electrodes are fixed detectors present in every run, injection sites are the
+swept stimulus.
+
 ## Two-stage pipeline
 
 Running the simulation and the quasiparticle calculation together made one
