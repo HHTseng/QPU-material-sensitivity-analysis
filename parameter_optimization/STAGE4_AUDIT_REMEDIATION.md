@@ -669,6 +669,63 @@ finish → `./stage4_post_xl.sh all` → P0 propagation smoke test → corrected
 projection. N2 must land before the smoke test so the corrected campaigns are
 the first to benefit from execution-independent cache keys.
 
+## N5 — the runbook could deadlock on a trial that could never succeed
+
+**Found by reality, 2026-08-25.** `best_random` at 1e8 events/sub-run hit the
+41.7 h watchdog on all 32 sub-runs and was recorded `incomplete_scenario_set`.
+That left a campaign that was **over** — nothing running, nothing to corrupt —
+and a runbook whose `snapshot` demanded the XL trial had *succeeded*. The ledger
+would have stayed frozen and unmigrated indefinitely.
+
+The N0/N1 fixes were right to refuse to call a timeout a completed
+confirmation. The mistake was conflating that with migration safety. **What
+makes migration unsafe is a live writer, not an unsuccessful trial.** A gate
+that can never be satisfied is not fail-closed, it is stuck.
+
+Now separated:
+
+* **`no-live-writer`** — the migration-safety condition, and it no longer
+  guesses from process command lines. Matching argv is hopeless here: a shell
+  whose command line merely *mentions* `stage4_confirm.py` — an editor, a grep,
+  this script's own heredoc — looks exactly like the writer, and both earlier
+  attempts false-positived on the test runner and then on themselves. It now
+  scans `/proc/*/fd` for processes **holding the ledger, its `-wal` or its
+  `-shm` open**. An open file descriptor does not lie. Verified both ways
+  against a real writer connection.
+* **`check`** — unchanged: the scientific question, still strict.
+* **`close-incomplete <reason>`** — an explicit, recorded operator decision.
+  It refuses without a reason, refuses while a writer is live, and writes
+  `.campaign_closed` with the reason, host, trial and timestamp.
+* `snapshot` then labels the snapshot **`mode=closed_incomplete`**, and
+  `validate` certifies `complete` or `closed_incomplete` but never `recovery`.
+
+Gates T21j (an incomplete attempt still cannot be certified), T21k (closing
+requires a reason), T21l (a closed campaign migrates, and the snapshot carries
+the honest label).
+
+Two smaller defects fixed alongside, both surfaced by the gates: the
+snapshot-exists guard tested for the *directory*, which `close-incomplete`
+creates first, making the closed path unreachable; and the block edit that
+introduced `no_live_writer` had silently dropped `snapshot_recovery` entirely.
+
+## Post-XL transition — completed 2026-08-25
+
+| step | result |
+|---|---|
+| `close-incomplete` | reason recorded: best_random timed out at 41.7 h, not obtainable at this watchdog, re-queued |
+| `snapshot` | 188 MB, `mode=closed_incomplete`, checksum manifest written |
+| `validate` | checksums verified, `integrity_check ok`, live-vs-snapshot row counts equal, audit clean |
+| `migrate` | 30 → **41 columns**; **184 trials and 5920 sub_runs preserved**; status histogram unchanged |
+| `unfreeze` | freeze lifted; its reason preserved as `snapshots/pre_migration_20260825/frozen.reason.txt` |
+
+The ledger is writable again and the corrected campaigns are unblocked. The
+snapshot directory is gitignored — 188 MB, and it is a backup, not source.
+
+**Re-queued for the corrected campaigns:** `best_random` at 1e8 events/sub-run,
+with a watchdog sized from the *converged*-tier cost model rather than the
+screening one (see `STAGE4_RESULTS.md` §5.4). It runs alongside the corrected
+projection; it does not gate it.
+
 ## Best major scientific step next
 
 After N0–N3 are fixed and the XL snapshot/validation/migration has completed,

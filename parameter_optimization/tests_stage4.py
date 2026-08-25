@@ -1256,6 +1256,46 @@ def t21_post_xl_state_machine(tmpdir):
           and not os.path.isfile(os.path.join(snap4, ".validated")),
           f"check={rc_chk} snapshot={rc_snap} recovery={rc_rec} validate={rc_val}")
 
+    # ...but an explicitly CLOSED incomplete campaign can proceed. Migration
+    # safety (no live writer) and scientific completeness are different
+    # questions: best_random timed out at 41.7 h, leaving a campaign that was
+    # over with nothing running, and a runbook that demanded success would have
+    # deadlocked the ledger forever. A gate that can never be satisfied is not
+    # fail-closed, it is stuck.
+    root5 = os.path.join(tmpdir, "runbook_closed")
+    ledger5, trial5, rj5 = _fake_xl_ledger(root5, complete=False)
+    open(ledger5 + ".frozen", "w").write("test freeze")
+    snap5 = os.path.join(root5, "snapshots", "pre_migration_TEST")
+    rc_noreason, out_noreason = _run_runbook("close-incomplete", root5, ledger5,
+                                             trial5, rj5)
+    check("T21k closing a campaign REQUIRES a recorded reason",
+          rc_noreason != 0 and "needs a reason" in out_noreason,
+          out_noreason.strip().splitlines()[-1] if out_noreason else "")
+
+    import subprocess
+    env = dict(os.environ)
+    env.update({"LEDGER": ledger5, "SNAPROOT": os.path.join(root5, "snapshots"),
+                "STAMP": "TEST", "XL_TRIAL": trial5, "XL_RESULT_JSON": rj5,
+                "XL_OWNER_PID": "", "PY": sys.executable, "AUDIT_CMD": "true",
+                "SNAP_ARTIFACTS": os.path.join(root5, "runs")})
+    closed = subprocess.run(
+        ["bash", os.path.join(HERE, "stage4_post_xl.sh"), "close-incomplete",
+         "best_random timed out at 41.7 h; not obtainable at this watchdog"],
+        cwd=HERE, env=env, capture_output=True, text=True, timeout=300)
+    rc_all, out_all = _run_runbook("all", root5, ledger5, trial5, rj5)
+    receipts5 = {r: os.path.isfile(os.path.join(snap5, r))
+                 for r in (".campaign_closed", ".snapshot_complete", ".validated",
+                           ".migrated", ".unfrozen")}
+    mode = ""
+    if os.path.isfile(os.path.join(snap5, ".snapshot_complete")):
+        with open(os.path.join(snap5, ".snapshot_complete")) as handle:
+            mode = handle.read()
+    check("T21l an explicitly closed incomplete campaign migrates, and the "
+          "snapshot is labelled closed_incomplete rather than complete",
+          closed.returncode == 0 and rc_all == 0 and all(receipts5.values())
+          and "mode=closed_incomplete" in mode,
+          f"{receipts5}; mode={mode.splitlines()[0] if mode else 'none'}")
+
 
 def t22_identity_separation():
     """Catches N2: execution knobs minting new cache keys.

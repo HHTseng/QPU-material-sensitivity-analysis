@@ -65,7 +65,7 @@ has the full 1.25e5 → 1e6 → 1e7 → 1e8 ladder.
 | Baseline (`Si / Nb / Cu` property vector) | 3.843e-4 | 3.886e-4 | — | valid |
 | v2 best **real** triplet `Ge/Nb/Cu` (converged) | 2.494e-4 | — | −36% | valid |
 | **Best confirmed property vector found** | **1.158e-4** | 1.176e-4 | **−69.9%** | valid |
-| — best point found by random search | 1.359e-4 | *running (unaffected)* | −64.6% | valid |
+| — best point found by random search | 1.359e-4 | **not obtainable** | −64.6% | valid at 1e7 |
 | — best point found by CMA-ES | 1.433e-4 | 1.447e-4 | −62.7% | valid |
 | ~~with a real SiC substrate tensor and density~~ | ~~1.865e-4~~ | ~~1.895e-4~~ | ~~−51.5%~~ | **INVALID — ran as G4_Si** |
 
@@ -449,8 +449,38 @@ Two consequences visible in this campaign's own numbers:
 ### 5.4 Cost, and a real dynamic
 
 Median trial 341 s (range 80–2796 s) at 16 sub-run workers on a host that was
-~95% occupied by another user. Spearman(objective, runtime) = **+0.59**: higher
-QP yield costs more CPU, so the optimizer's preferred region is the cheaper one.
+~95% occupied by another user. Spearman(objective, runtime) = **+0.59** at the
+screening tier (n = 95, p = 4e-10; reproduced exactly on 2026-08-25): higher QP
+yield costs more CPU *at this fidelity*.
+
+> **Do not carry that forward to the converged tier.** This section previously
+> concluded "so the optimizer's preferred region is the cheaper one". That
+> inference is **withdrawn** — it is a screening-tier statement being used as a
+> budgeting rule, and the confirmation tiers do not support it:
+>
+> | tier | events/candidate | Spearman(objective, runtime) | n | p |
+> |---|---:|---:|---:|---:|
+> | screening | 4.0e6 | **+0.59** | 95 | 4e-10 |
+> | L | 3.2e8 | −0.60 | 5 | 0.28 |
+> | XL | 3.2e9 | −0.40 | 4 | 0.6 |
+>
+> The confirmation tiers are **not evidence of a reversal** — n = 4–5, p ≫ 0.05,
+> and they are range-restricted by construction (they contain the *winners*, so
+> the objective barely varies). The honest reading is that the screening
+> correlation simply does not transfer, not that it flips.
+>
+> What *is* unambiguous needs no correlation at all: at 1e8 events/sub-run the
+> two lowest-objective candidates were the two most expensive — `best_bo_gp`
+> **28.9 h** and `best_random` **>41.7 h (timed out)** — against the baseline's
+> **8.3 h** at more than three times the QP yield. §6 already said this ("the
+> low-absorption designs the search prefers are the expensive ones"); §5.4
+> contradicted it, and §6 is the one the data supports.
+>
+> **Budgeting consequence, and it is the practical point:** for the corrected
+> campaigns, assume the *good* candidates are the expensive ones at high
+> fidelity. Sizing a confirmation budget from screening-tier runtimes will
+> under-provision exactly the candidates worth confirming — which is how a 41.7 h
+> watchdog came to be too short.
 
 But the tail matters: **12 sub-runs hit the 1-hour watchdog**, all in a region
 of very low absorption where phonons approach the 10 000-bounce limit before
@@ -607,7 +637,7 @@ SiC elasticity variant.
 | candidate | 1.25e5 (screening) | 1e6 | 1e7 | 1e8 |
 |---|---:|---:|---:|---:|
 | **best of bo_gp** | 1.150e-4 | 1.170e-4 (−70.5%) | **1.158e-4 (−69.9%)** | **1.176e-4 (−69.7%)** |
-| best of random | 1.680e-4 | 1.344e-4 (−66.1%) | 1.359e-4 (−64.6%) | *running* |
+| best of random | 1.680e-4 | 1.344e-4 (−66.1%) | 1.359e-4 (−64.6%) | **timed out** |
 | best of cmaes | 1.185e-4 | 1.428e-4 (−64.0%) | 1.433e-4 (−62.7%) | 1.447e-4 (−62.8%) |
 | elasticity of SiC | — | 1.930e-4 (−51.4%) | 1.865e-4 (−51.5%) | 1.895e-4 (−51.2%) |
 | baseline | — | 3.970e-4 | 3.843e-4 | 3.886e-4 |
@@ -636,6 +666,19 @@ shrinking. The 1e7 tier resolves it: the baseline's replica error is **0.6%** at
 v2 estimate of ~5 and consistent with ordinary 1/√N scaling. The 4.9% measured at
 1e6 was an excursion of the two-replica estimator (16 degrees of freedom), not a
 breakdown of the scaling law. Errors quoted at 1e7 are 0.6–1.9%.
+
+> ### `best_random` at 1e8 could not be measured (2026-08-25)
+>
+> All **32 of 32** sub-runs hit the 41.7 h watchdog (`--timeout 150000`). The
+> trial is recorded `incomplete_scenario_set` and was **never scored** — which
+> is the evaluator behaving correctly: a partial site set is biased toward the
+> survivors and must never become a number. Its 1e7 value (1.359e-4, −64.6%)
+> stands; its 1e8 value does not exist and is not pending.
+>
+> This does not weaken the ladder. Convergence rests on the candidates that did
+> complete — every one moved ≤1.6% from 1e7 to 1e8 — and 1e7/sub-run remains the
+> converged tier for this objective. It has been re-queued for the corrected
+> campaigns with a longer watchdog; it is not a blocker.
 
 Cost, measured: per-candidate wall time scales linearly with events at a fixed
 worker shape (baseline 0.9 h at 1e7 → 8.3 h at 1e8; bo_gp 2.9 h → 28.9 h), and

@@ -29,3 +29,4 @@ stage4_trials.sqlite
 # Machine-local operational state: which ledger is closed to new writers on THIS
 # host. Created and removed by the post-XL runbook.
 *.sqlite.frozen
+snapshots/

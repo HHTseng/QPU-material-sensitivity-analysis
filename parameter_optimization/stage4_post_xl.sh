@@ -161,7 +161,12 @@ PY
 # --------------------------------------------------------------------------
 _do_snapshot() {
   local mode=$1
-  [ -e "$SNAPDIR" ] && die "$SNAPDIR already exists; refusing to overwrite a snapshot"
+  # Guard on the SNAPSHOT, not on the directory: `close-incomplete` writes its
+  # closure record into $SNAPDIR before any snapshot exists, and treating the
+  # bare directory as "already snapshotted" made the closed-incomplete path
+  # unreachable.
+  [ -f "$SNAPDIR/.snapshot_complete" ] || [ -f "$SNAPDIR/$(basename "$LEDGER")" ] \
+    && die "$SNAPDIR already holds a snapshot; refusing to overwrite it"
   mkdir -p "$SNAPDIR" || die "cannot create $SNAPDIR"
   say "snapshotting with sqlite3 .backup (consistent across the WAL)"
   LEDGER="$LEDGER" DEST="$SNAPDIR/$(basename "$LEDGER")" $PY - <<'PY' || die "backup failed"
@@ -196,16 +201,125 @@ PY
   say "snapshot written: $SNAPDIR ($(du -sh "$SNAPDIR" | cut -f1)), mode=$mode"
 }
 
+# Migration SAFETY and scientific COMPLETENESS are different questions, and the
+# first version of this runbook conflated them: `snapshot` demanded that the XL
+# trial had SUCCEEDED, when what actually makes migration unsafe is a LIVE
+# WRITER. best_random duly timed out at 41.7 h, leaving a campaign that was over
+# -- nothing running, nothing to corrupt -- but a runbook that would never let
+# the ledger be migrated. A gate that can never be satisfied is not fail-closed,
+# it is stuck.
+no_live_writer() {
+  say "checking the MIGRATION SAFETY condition (no live writer) -- which is a"
+  say "  different question from whether the confirmation succeeded"
+  LEDGER="$LEDGER" $PY - <<'PY'
+import os, sqlite3, subprocess, sys, time
+ledger = os.environ["LEDGER"]
+c = sqlite3.connect(f"file:{ledger}?mode=ro", uri=True); c.row_factory = sqlite3.Row
+running = c.execute("SELECT trial_id, run_dir FROM trials WHERE status='running'").fetchall()
+print(f"  trials in `running` state : {len(running)}")
+for r in running:
+    hits = os.path.join(r["run_dir"] or "", "hits")
+    newest = 0
+    if os.path.isdir(hits):
+        for f in os.listdir(hits):
+            try:
+                newest = max(newest, os.path.getmtime(os.path.join(hits, f)))
+            except OSError:
+                pass
+    age = f"{(time.time() - newest) / 3600:.1f} h old" if newest else "absent"
+    print(f"    {r['trial_id'][-12:]} (artifacts {age})")
+# Who actually HOLDS THE DATABASE OPEN. Matching process command lines is
+# hopeless here: a shell whose argv merely mentions "stage4_confirm.py" -- an
+# editor, a grep, this very script's own heredoc -- looks exactly like the
+# writer. An open file descriptor on the ledger does not lie.
+targets = {os.path.realpath(ledger), os.path.realpath(ledger + "-wal"),
+           os.path.realpath(ledger + "-shm")}
+holders, scanned, unreadable = [], 0, 0
+for pid in os.listdir("/proc"):
+    if not pid.isdigit() or int(pid) == os.getpid():
+        continue
+    fd_dir = f"/proc/{pid}/fd"
+    try:
+        fds = os.listdir(fd_dir)
+    except OSError:
+        unreadable += 1
+        continue
+    scanned += 1
+    for fd in fds:
+        try:
+            target = os.path.realpath(os.path.join(fd_dir, fd))
+        except OSError:
+            continue
+        if target in targets:
+            try:
+                cmd = open(f"/proc/{pid}/cmdline", "rb").read().replace(b"\0", b" ")
+                cmd = cmd.decode(errors="replace").strip()
+            except OSError:
+                cmd = "?"
+            holders.append(f"pid {pid}: {cmd[:90]}")
+            break
+print(f"  processes scanned         : {scanned}"
+      + (f" ({unreadable} not readable)" if unreadable else ""))
+print(f"  holding the ledger open   : {len(holders)}")
+for h in holders[:5]:
+    print(f"    {h}")
+if not scanned:
+    print("  /proc not readable -- UNVERIFIABLE, confirm by hand")
+    sys.exit(4)
+sys.exit(0 if not holders and not running else 5)
+PY
+  rc=$?
+  case $rc in
+    0) say "no live writer -- safe to snapshot and migrate" ;;
+    4) say "cannot verify (no process list); confirm by hand" ;;
+    *) say "a writer may still be live -- NOT safe" ;;
+  esac
+  return $rc
+}
+
 snapshot() {
-  check || die "XL is not complete; refusing to snapshot it as a completed confirmation.
-           Use 'snapshot-recovery' to preserve an incomplete attempt."
-  _do_snapshot complete
+  no_live_writer || die "a writer may still be live; refusing to snapshot a moving database"
+  if check; then
+    _do_snapshot complete
+  elif [ -f "$SNAPDIR/.campaign_closed" ]; then
+    say "XL did not succeed, but the campaign was explicitly closed:"
+    sed -n 's/^reason=/  reason: /p' "$SNAPDIR/.campaign_closed"
+    _do_snapshot closed_incomplete
+  else
+    die "The XL confirmation did NOT complete successfully.
+
+           Migration is still SAFE (no writer is live), but this snapshot must
+           not be labelled a completed confirmation. Record the decision:
+
+             ./stage4_post_xl.sh close-incomplete 'why it will not be retried'
+
+           then re-run 'snapshot'. Or use 'snapshot-recovery' to preserve the
+           attempt without certifying anything."
+  fi
 }
 
 snapshot_recovery() {
   say "RECOVERY snapshot of a possibly incomplete attempt"
+  no_live_writer || die "a writer may still be live; refusing to snapshot a moving database"
   _do_snapshot recovery
   say "NOTE: mode=recovery. 'validate' will refuse to certify it for migration."
+}
+
+close_incomplete() {
+  local reason="${1:-}"
+  [ -n "$reason" ] || die "close-incomplete needs a reason, e.g.
+           ./stage4_post_xl.sh close-incomplete 'best_random timed out at 41.7 h'"
+  no_live_writer || die "a writer may still be live; refusing to close the campaign"
+  mkdir -p "$SNAPDIR" || die "cannot create $SNAPDIR"
+  {
+    printf 'closed_at=%s\n' "$(date '+%F %T')"
+    printf 'host=%s\n' "$(hostname)"
+    printf 'trial=%s\n' "$XL_TRIAL"
+    printf 'reason=%s\n' "$reason"
+  } > "$SNAPDIR/.campaign_closed" || die "cannot write the closure record"
+  say "campaign closed as INCOMPLETE; reason recorded in $SNAPDIR/.campaign_closed:"
+  say "  $reason"
+  say "'snapshot' will now proceed, labelling the snapshot mode=closed_incomplete."
 }
 
 # --------------------------------------------------------------------------
@@ -213,8 +327,9 @@ snapshot_recovery() {
 # --------------------------------------------------------------------------
 validate() {
   need .snapshot_complete snapshot
-  grep -q '^mode=complete$' "$SNAPDIR/.snapshot_complete" \
-    || die "snapshot is mode=recovery; a recovery snapshot is never certified for migration"
+  grep -qE '^mode=(complete|closed_incomplete)$' "$SNAPDIR/.snapshot_complete" \
+    || die "snapshot is mode=recovery; a recovery snapshot is never certified for migration.
+           If the campaign is genuinely over, record it with 'close-incomplete <reason>'."
 
   say "verifying the checksum manifest"
   ( cd "$SNAPDIR" && sha256sum --quiet --check SHA256SUMS ) \
@@ -322,12 +437,14 @@ status() {
 
 case "${1:-}" in
   check)             check ;;
+  no-live-writer)    no_live_writer ;;
+  close-incomplete)  close_incomplete "${2:-}" ;;
   snapshot)          snapshot ;;
   snapshot-recovery) snapshot_recovery ;;
   validate)          validate ;;
   migrate)           migrate ;;
   unfreeze)          unfreeze ;;
   status)            status ;;
-  all)               check && snapshot && validate && migrate && unfreeze ;;
+  all)               snapshot && validate && migrate && unfreeze ;;
   *)                 sed -n '2,26p' "$0"; exit 1 ;;
 esac
