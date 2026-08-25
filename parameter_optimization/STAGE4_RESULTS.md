@@ -368,10 +368,25 @@ claim above ("catalogued triplets realize essentially none of the gain") rested
 on the defective `GaAs/Nb/Cu` row. Re-simulated with GaAs's own density *and*
 its own complete G4CMP record, at the same tier and seed bank:
 
-| candidate | corrected | vs baseline | of ideal gain | withdrawn |
-|---|---:|---:|---:|---:|
-| elasticity of SiC | 1.935e-4 | −47.3% | 70.6% | ~~−51.4%, 77%~~ |
-| `GaAs/Nb/Cu` | 2.890e-4 | −21.4% | **31.8%** | ~~−4.5%, 7%~~ |
+| candidate | S (4e6) | of ideal | **M (32e6)** | **of ideal** | ~~withdrawn M~~ |
+|---|---:|---:|---:|---:|---:|
+| ideal target | 1.210e-4 (−67.1%) | 100% | **1.170e-4 (−70.5%)** | **100%** | — |
+| elasticity of SiC | 1.935e-4 (−47.3%) | 70.6% | **1.821e-4 (−54.1%)** | **76.8%** | ~~1.930e-4, −51.4%, 64%~~ |
+| `GaAs/Nb/Cu` | 2.890e-4 (−21.4%) | 31.8% | **2.659e-4 (−33.0%)** | **46.8%** | ~~3.449e-4, −13.2%~~ |
+
+Paired and site-matched at M: SiC z = −12.3 (13/16 sites), GaAs z = −5.1 (14/16).
+
+> **The 77% headline is back — by a different route, and that is a coincidence,
+> not a vindication.** The withdrawn claim was 77% *at the S tier with the wrong
+> density*. The corrected number happens to be 76.8% *at the M tier with the
+> right one*. The old number was wrong for its stated reasons; do not read this
+> as the original claim having been correct all along.
+>
+> **Both candidates improve markedly from S to M** (SiC 70.6% → 76.8%, GaAs
+> 31.8% → 46.8%), which is the v2 screening-tier lesson repeating: the S tier
+> gets the ordering right and the magnitudes wrong. Neither is converged — the
+> project's converged tier is 1e7/sub-run (L), which has **not** been run for
+> these.
 
 `Si/Nb/Cu` still returns the baseline, so the property target is genuinely not a
 re-labelling of the v2 study. But **GaAs recovers about a third of the ideal

@@ -779,15 +779,44 @@ def _run_one(sub_run, lattice_root, timeout_s, guard, logs_dir,
             return total
 
         def _cpu_ticks(pid):
-            """utime+stime for the process and its children, in clock ticks."""
+            """CPU ticks burned by the whole PROCESS GROUP, not just `pid`.
+
+            Reading only `/proc/<pid>/stat` happens to work today, because the
+            Geant4 binary is the LAST statement of the generated command and
+            bash therefore exec-optimises itself into it -- `pid` *is* Main. That
+            is an implementation detail of bash, not a guarantee: append one
+            cleanup line after the binary and bash stays as the parent, Main
+            becomes a grandchild, and `cutime` stays at 0 until the child is
+            reaped. The CPU term would then read as permanently stuck and the
+            stall watchdog would silently lose its most important signal.
+
+            Summing over the process group is exec-independent. `_run_one`
+            launches with `start_new_session=True`, so every descendant shares
+            this group.
+            """
             try:
-                with open(f"/proc/{pid}/stat", "rb") as handle:
-                    fields = handle.read().rsplit(b")", 1)[1].split()
-                # utime, stime, cutime, cstime are fields 14-17 (1-based) i.e.
-                # indices 11-14 after the comm field is stripped.
-                return sum(int(fields[i]) for i in (11, 12, 13, 14))
-            except (OSError, IndexError, ValueError):
+                pgid = os.getpgid(pid)
+            except OSError:
                 return 0
+            total = 0
+            try:
+                entries = os.listdir("/proc")
+            except OSError:
+                return 0
+            for entry in entries:
+                if not entry.isdigit():
+                    continue
+                try:
+                    with open(f"/proc/{entry}/stat", "rb") as handle:
+                        fields = handle.read().rsplit(b")", 1)[1].split()
+                    # After the comm field: index j is stat field j+3, so
+                    # pgrp=5 -> 2, utime=14 -> 11, stime=15 -> 12.
+                    if int(fields[2]) != pgid:
+                        continue
+                    total += int(fields[11]) + int(fields[12])
+                except (OSError, IndexError, ValueError):
+                    continue
+            return total
 
         stop_watch = threading.Event()
 

@@ -1724,6 +1724,30 @@ def t25_watchdog_does_not_censor_by_quality(tmpdir):
           idle[0] == STATUS_TIMEOUT and "no CPU" in (idle[3] or ""),
           f"{idle[0]}: {idle[3]}")
 
+    # The CPU term must be exec-independent. Reading /proc/<pid>/stat alone
+    # works today only because the Geant4 binary is the LAST statement of the
+    # generated command, so bash exec-optimises itself into it. Append one line
+    # after the binary and bash stays as the parent, the workload becomes a
+    # grandchild, cutime stays 0 until reaping, and the CPU signal reads as
+    # permanently stuck -- the watchdog would silently lose its best signal.
+    # A trailing `echo` here defeats that optimisation on purpose.
+    TR.harness = types.SimpleNamespace(
+        build_run_command=lambda macro, lattice_name=None: scripts[os.path.basename(macro)],
+        CRYSTALMAPS_DIR="/nonexistent")
+    try:
+        grand = run("grandchild",
+                    "echo x > {h}; python3 -c 'import time\nt=time.time()\n"
+                    "while time.time()-t<6: pass'; touch {d}; echo done", 0, 2)
+        grand_idle = run("grandidle",
+                         "echo x > {h}; sleep 30; touch {d}; echo done", 0, 2)
+    finally:
+        TR.harness = real_harness
+    check("T25k a CPU-busy GRANDCHILD is seen as progress (the signal does not "
+          "depend on bash's exec optimisation)",
+          grand[0] == STATUS_SUCCESS, f"{grand[0]}: {grand[3]}")
+    check("T25l a grandchild that is asleep is still killed",
+          grand_idle[0] == STATUS_TIMEOUT, f"{grand_idle[0]}: {grand_idle[3]}")
+
 
 def t13_inertness_from_pilot():
     """Reports the Geant4 A/B result if the pilot has produced one."""
