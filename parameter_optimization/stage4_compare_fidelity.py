@@ -32,8 +32,26 @@ def load(path):
     with open(path) as handle:
         data = json.load(handle)
     vals = {k: v for k, v in data["results"].items() if v.get("value") is not None}
+    # Events per sub-run is READ, never assumed. It used to be `events // 32`,
+    # which is wrong by exactly 4x under the 16 x 8 = 128 protocol: the
+    # objective values were unaffected (they use total events) but every tier
+    # LABEL and every fidelity statement derived from them was.
+    per_sub = data.get("events_per_sub_run")
+    n_sub = data.get("n_sub_runs")
+    if per_sub is None and n_sub:
+        per_sub = data["events"] // n_sub
+    if per_sub is None:
+        raise SystemExit(
+            f"{os.path.basename(path)} records no `events_per_sub_run` or "
+            f"`n_sub_runs`. It predates the metadata fix, and guessing the split "
+            f"is how the tier labels came to be wrong by 4x. Re-run it, or add "
+            f"the field from the ledger:\n"
+            f"  SELECT events_per_sub_run, n_positions, n_replicas FROM trials "
+            f"WHERE trial_id = '<any trial_id in this file>';")
     return {"path": os.path.basename(path), "events": data["events"],
-            "per_sub_run": data["events"] // 32, "seed_bank": data["seed_bank"],
+            "per_sub_run": per_sub, "seed_bank": data["seed_bank"],
+            "n_positions": data.get("n_positions"), "n_replicas": data.get("n_replicas"),
+            "sim_hash": data.get("simulation_identity_hash"),
             "values": {k: v["value"] for k, v in vals.items()},
             "se": {k: (v.get("relative_se") or float("nan")) for k, v in vals.items()}}
 
@@ -127,12 +145,27 @@ def main():
           f"than the measured replica error:")
     for (v1, k1), (v2, k2) in zip(ranked, ranked[1:]):
         gap = (v2 - v1) / v1
-        err = max(fine["se"].get(k1, 0.1), fine["se"].get(k2, 0.1))
-        verdict = "resolved" if gap > err else "NOT resolved"
-        print(f"  {k1[:24]:24s} < {k2[:24]:24s}  gap {100 * gap:5.1f}% vs error "
-              f"{100 * err:4.1f}%  -> {verdict}")
+        # The error on a DIFFERENCE is not the larger of the two errors -- that
+        # understates it and calls pairs "resolved" that are not. For two
+        # independent estimates it is the quadrature sum; the trials do share
+        # sites and seeds, so a genuinely PAIRED error (stage4_objectives
+        # .paired_difference) would be tighter still, but it needs the blocks,
+        # which this file does not carry. Quadrature is the conservative choice
+        # available here, and it is labelled as such.
+        e1 = fine["se"].get(k1, float("nan"))
+        e2 = fine["se"].get(k2, float("nan"))
+        err = float(np.sqrt(np.nansum([e1 ** 2, e2 ** 2])))
+        if not np.isfinite(err) or err == 0:
+            err = 0.1
+        verdict = "resolved" if gap > 2 * err else "NOT resolved"
+        print(f"  {k1[:24]:24s} < {k2[:24]:24s}  gap {100 * gap:5.1f}% vs 2x combined "
+              f"error {100 * 2 * err:4.1f}%  -> {verdict}")
         out.setdefault("adjacent_pairs", []).append(
-            {"a": k1, "b": k2, "gap": gap, "error": err, "resolved": gap > err})
+            {"a": k1, "b": k2, "gap": gap, "combined_relative_error": err,
+             "threshold": 2 * err, "resolved": gap > 2 * err,
+             "error_model": "quadrature sum of the two replica-based relative "
+                            "errors, compared at 2 sigma; a paired error would "
+                            "be tighter but needs per-block data"})
 
     if args.out:
         os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)

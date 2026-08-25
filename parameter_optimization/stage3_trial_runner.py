@@ -81,6 +81,30 @@ _SCHEDULER_VARS = ("SLURM_JOB_ID", "PBS_JOBID", "LSB_JOBID", "SGE_JOB_ID",
                    "JOB_ID", "TMUX_PANE", "STY")
 
 
+def proc_pid_namespace_ok():
+    """Is /proc showing OUR pid namespace?
+
+    In a container whose /proc is the host's, `os.getpid()` returns a namespace
+    pid (7) while `/proc/self/stat` reports the host pid (35492). Every lookup
+    keyed on a pid we hold -- our own, or a child's -- then reads a DIFFERENT
+    process or none at all. Code that assumes the mapping is silently wrong
+    rather than loudly broken, which is the dangerous kind.
+
+    Cached: the answer cannot change within a process.
+    """
+    global _PROC_NS_OK
+    if _PROC_NS_OK is None:
+        try:
+            with open("/proc/self/stat", "rb") as handle:
+                _PROC_NS_OK = int(handle.read().split(b" ", 1)[0]) == os.getpid()
+        except (OSError, ValueError, IndexError):
+            _PROC_NS_OK = False
+    return _PROC_NS_OK
+
+
+_PROC_NS_OK = None
+
+
 def _scheduler_job_id():
     for var in _SCHEDULER_VARS:
         value = os.environ.get(var)
@@ -775,8 +799,10 @@ def _run_one(sub_run, lattice_root, timeout_s, guard, logs_dir,
                     total += os.path.getsize(path)
                 except OSError:
                     pass
-            total += _cpu_ticks(process.pid)
-            return total
+            cpu = _cpu_ticks(process.pid)
+            if cpu is None:
+                return None                      # cannot measure -> cannot judge
+            return total + cpu
 
         def _cpu_ticks(pid):
             """CPU ticks burned by the whole PROCESS GROUP, not just `pid`.
@@ -794,6 +820,13 @@ def _run_one(sub_run, lattice_root, timeout_s, guard, logs_dir,
             launches with `start_new_session=True`, so every descendant shares
             this group.
             """
+            if not proc_pid_namespace_ok():
+                # /proc is not ours: every pid lookup below would read some
+                # other process. Returning 0 would make the CPU term a constant
+                # and the stall detector would fall back to file size alone --
+                # exactly the false-kill risk this term exists to remove. The
+                # caller disables the stall watchdog entirely instead.
+                return None
             try:
                 pgid = os.getpgid(pid)
             except OSError:
@@ -819,6 +852,20 @@ def _run_one(sub_run, lattice_root, timeout_s, guard, logs_dir,
             return total
 
         stop_watch = threading.Event()
+        # A stall detector that cannot see CPU must not run. It would judge on
+        # file size alone and kill a healthy CPU-busy run that happens to be
+        # buffering -- a false positive that destroys real work, which is worse
+        # than having no stall detector at all. The absolute limit (if any) is
+        # unaffected.
+        stall_usable = stall_timeout_s and stall_timeout_s > 0 and _progress() is not None
+        if stall_timeout_s and stall_timeout_s > 0 and not stall_usable:
+            print(f"  WATCHDOG: /proc does not show this pid namespace "
+                  f"(os.getpid()={os.getpid()} disagrees with /proc/self/stat), "
+                  f"so CPU progress cannot be measured. The stall detector is "
+                  f"DISABLED for {sub_run['name']} rather than judging on file "
+                  f"size alone. Absolute limit: "
+                  + ("none" if not (timeout_s and timeout_s > 0)
+                     else f"{timeout_s:g}s"), flush=True)
 
         def _watch():
             deadline = (start + timeout_s) if (timeout_s and timeout_s > 0) else None
@@ -827,7 +874,8 @@ def _run_one(sub_run, lattice_root, timeout_s, guard, logs_dir,
             # is actually set -- keying it off the stall timeout alone meant an
             # explicit 3 s absolute limit was not noticed until the first poll
             # 60 s later, so the limit silently did nothing.
-            limits = [x for x in (stall_timeout_s, timeout_s) if x and x > 0]
+            limits = [x for x in (stall_timeout_s if stall_usable else 0,
+                                  timeout_s) if x and x > 0]
             poll = min([60.0] + [x / 4.0 for x in limits])
             poll = max(0.25, poll)
             while not stop_watch.wait(poll):
@@ -835,8 +883,10 @@ def _run_one(sub_run, lattice_root, timeout_s, guard, logs_dir,
                 if deadline is not None and now >= deadline:
                     _kill(f"exceeded the absolute wall-clock limit {timeout_s:g}s")
                     return
-                if stall_timeout_s and stall_timeout_s > 0:
+                if stall_usable:
                     current = _progress()
+                    if current is None:          # became unmeasurable mid-run
+                        return
                     if current != last_bytes:
                         last_bytes, last_change = current, now
                     elif now - last_change >= stall_timeout_s:
@@ -846,7 +896,7 @@ def _run_one(sub_run, lattice_root, timeout_s, guard, logs_dir,
                         return
 
         watcher = None
-        if (timeout_s and timeout_s > 0) or (stall_timeout_s and stall_timeout_s > 0):
+        if (timeout_s and timeout_s > 0) or stall_usable:
             watcher = threading.Thread(target=_watch,
                                        name=f"watchdog-{sub_run['name'][-12:]}",
                                        daemon=True)

@@ -226,8 +226,24 @@ def main():
                      f"{paired['n_sites_favouring_a']:6d}/{paired['n_sites']:<3d}")
         print(line)
 
+    # Identity metadata. Without it a downstream reader cannot tell how the
+    # events were split, and `stage4_compare_fidelity.py` was reduced to
+    # assuming 32 sub-runs -- wrong by 4x under the 8-replica protocol. It also
+    # makes the JSON self-describing enough to be checked against the ledger by
+    # someone who has only this file.
     out = {"fidelity": args.fidelity, "events": events, "seed_bank": args.seed_bank,
-           "objective": args.objective, "results": results,
+           "objective": args.objective,
+           "n_positions": int(contract.fixed["n_positions"]),
+           "n_replicas": int(contract.fixed["n_replicas"]),
+           "n_sub_runs": int(contract.fixed["n_positions"]) * int(contract.fixed["n_replicas"]),
+           "events_per_sub_run": contract.events_per_sub_run(args.fidelity),
+           "campaign_id": contract.campaign_id,
+           "campaign_contract_hash": contract.campaign_contract_hash(),
+           "simulation_identity_hash": contract.simulation_identity_hash(),
+           "code_fingerprint": contract.code_fingerprint(),
+           "sample_timeout_s": contract.fixed.get("sample_timeout_s"),
+           "sample_stall_timeout_s": contract.fixed.get("sample_stall_timeout_s"),
+           "results": results,
            "points": {k: {kk: (list(vv) if isinstance(vv, list) else vv)
                           for kk, vv in v.items()} for k, v in points.items()}}
     os.makedirs(os.path.dirname(args.out), exist_ok=True)

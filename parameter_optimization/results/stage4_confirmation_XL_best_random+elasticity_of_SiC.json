@@ -135,7 +135,7 @@
   }
  },
  "_invalidation_notice": {
-  "labelled_at": "2026-08-25 15:56:29",
+  "labelled_at": "2026-08-25 16:20:14",
   "registry": "stage4_invalidations.yaml",
   "invalid_rows": [
    "elasticity_of_SiC"
@@ -144,5 +144,12 @@
    "P0_substrate_carrier_dropped"
   ],
   "note": "Values are preserved deliberately: they are the evidence the defect was real. Rows marked validity='invalid' must not be quoted."
- }
+ },
+ "n_positions": 16,
+ "n_replicas": 2,
+ "n_sub_runs": 32,
+ "events_per_sub_run": 100000000,
+ "contract_hash": "b909df2903385e39311d7bd5abe10bd96240f31160db577365c71c057fd5c76d",
+ "identity_backfilled_at": "2026-08-25 16:20:14",
+ "identity_backfilled_note": "Read back from the ledger for the trials this file references. `simulation_identity_hash` and `code_fingerprint` are absent: they were not recorded when these trials ran, and are not reconstructible."
 }

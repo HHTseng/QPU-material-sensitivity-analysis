@@ -232,11 +232,30 @@ for r in running:
 # hopeless here: a shell whose argv merely mentions "stage4_confirm.py" -- an
 # editor, a grep, this very script's own heredoc -- looks exactly like the
 # writer. An open file descriptor on the ledger does not lie.
+# /proc must be showing OUR pid namespace. In a container whose /proc is the
+# host's, os.getpid() returns a namespace pid while /proc/self/stat reports the
+# host one -- so the "skip myself" test below fails and this check reports its
+# OWN read-only connection as an external writer, refusing to snapshot forever.
+try:
+    with open("/proc/self/stat", "rb") as fh:
+        ns_ok = int(fh.read().split(b" ", 1)[0]) == os.getpid()
+except (OSError, ValueError, IndexError):
+    ns_ok = False
+if not ns_ok:
+    print("  /proc does not show this pid namespace -- cannot identify writers")
+    print("  ACTIVITY UNVERIFIABLE: confirm by hand that nothing is writing to")
+    print(f"  {ledger} before snapshotting or migrating.")
+    sys.exit(4)
+# Resolve our own /proc entry rather than trusting os.getpid() alone.
+try:
+    self_pid = int(os.readlink("/proc/self"))
+except (OSError, ValueError):
+    self_pid = os.getpid()
 targets = {os.path.realpath(ledger), os.path.realpath(ledger + "-wal"),
            os.path.realpath(ledger + "-shm")}
 holders, scanned, unreadable = [], 0, 0
 for pid in os.listdir("/proc"):
-    if not pid.isdigit() or int(pid) == os.getpid():
+    if not pid.isdigit() or int(pid) in (self_pid, os.getpid()):
         continue
     fd_dir = f"/proc/{pid}/fd"
     try:

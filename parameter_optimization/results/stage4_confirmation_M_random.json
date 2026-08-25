@@ -103,5 +103,12 @@
     1
    ]
   }
- }
+ },
+ "n_positions": 16,
+ "n_replicas": 2,
+ "n_sub_runs": 32,
+ "events_per_sub_run": 1000000,
+ "contract_hash": "94a261e0ba6cdbd0d0113f067691d22b0ccecbf3fc357840ffe0763b0cebb29f",
+ "identity_backfilled_at": "2026-08-25 16:20:14",
+ "identity_backfilled_note": "Read back from the ledger for the trials this file references. `simulation_identity_hash` and `code_fingerprint` are absent: they were not recorded when these trials ran, and are not reconstructible."
 }

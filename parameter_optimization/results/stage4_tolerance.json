@@ -323,5 +323,12 @@
   "sub_decay": 0.7598,
   "sub_decayTT": 0.4432
  },
- "elapsed_s": 22120.6
+ "elapsed_s": 22120.6,
+ "n_positions": 16,
+ "n_replicas": 2,
+ "n_sub_runs": 32,
+ "events_per_sub_run": 125000,
+ "contract_hash": "b9bafbc103bc9f6c3bd0099d2dd089136657fa2740822c78df052ab62784c5a2",
+ "identity_backfilled_at": "2026-08-25 16:20:14",
+ "identity_backfilled_note": "Read back from the ledger for the trials this file references. `simulation_identity_hash` and `code_fingerprint` are absent: they were not recorded when these trials ran, and are not reconstructible."
 }

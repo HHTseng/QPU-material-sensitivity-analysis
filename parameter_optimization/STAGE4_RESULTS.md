@@ -15,8 +15,13 @@ Audit and remediation: [`STAGE4_IMPLEMENTATION_AUDIT_AND_FIX_PLAN.md`](STAGE4_IM
 > **withdrawn**, including the claim that SiC recovers 77% of the gain. The
 > defect is fixed and gated (`tests_stage4.py` T15a–T15j); the affected rows are
 > registered, with their measured error, in
-> [`stage4_invalidations.yaml`](stage4_invalidations.yaml) and the reruns have
-> not been done.
+> [`stage4_invalidations.yaml`](stage4_invalidations.yaml).
+>
+> **The corrected reruns HAVE now been done at the S and M tiers** (2026-08-25)
+> and are in §4.3, which is authoritative. They are not yet at the converged
+> tier: the L run is in flight. Where this document's prose and §4.3's table
+> disagree, **the table is right** — the prose was written before the reruns
+> landed.
 >
 > The audit also withdrew the **optimizer-efficiency ranking** of §2 (the
 > winning point came from the Sobol initialisation, not from a GP acquisition)
@@ -392,8 +397,14 @@ Paired and site-matched at M: SiC z = −12.3 (13/16 sites), GaAs z = −5.1 (14
 re-labelling of the v2 study. But **GaAs recovers about a third of the ideal
 gain, not 7%**, so "essentially none" is withdrawn too. The honest form: the
 property target is roughly three times better than the best catalogued triplet
-in recovered gain, not an order of magnitude. Both numbers are screening-tier
-and await M-tier confirmation before they are quotable.
+in recovered gain, not an order of magnitude.
+
+**M-tier confirmation has since landed** (the table above): SiC −54.1% / 76.8%
+of the ideal gain, GaAs −33.0% / 46.8%, with paired z of −12.3 and −5.1. Both
+moved further from the baseline at the higher tier. They are still **not
+quotable for fabrication**: this project's converged tier is 1e7 events per
+sub-run, and that run is in flight under the corrected 8-replica contract. Quote
+nothing from here for a material decision until it lands.
 
 **What the rerun must do differently.** Beyond the carrier fix:
 

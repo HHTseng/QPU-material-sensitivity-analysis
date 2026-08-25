@@ -943,6 +943,97 @@ number — it only lets the check distinguish **accepted and understood** from
 > file is reported as unexpected. T26a–T26d cover the reconciler: values
 > preserved, originals kept, driver counters untouched, idempotent.
 
+## External review, 2026-08-25 — five findings, all confirmed, all fixed
+
+An outside review raised three defects and two reproducibility problems. I
+checked each against the tree before touching anything; **all five were real**.
+
+### R1 — `run_stage4_xl.sh` was a live landmine (RETIRED)
+
+Confirmed on all four counts: it declared "a candidate has exactly 32 sub-runs"
+(now 128), passed `--timeout 7200/43200/150000` which would override the
+contract's unlimited setting and reinstate the very censoring finding N6
+removed, read all three point files registered as `contaminated_inputs`, and
+labelled its tiers 1e7/1e8 per sub-run when the 8-replica split makes them
+2.5e6/2.5e7 — every log line off by 4×.
+
+Retired rather than repaired: the chain it encodes is finished and partly
+invalid, so repairing it would preserve a recipe nobody should follow. It is now
+a stub that **exits 2 with the reason**, the original is kept as
+`run_stage4_xl.sh.retired` and in git history, and the header carries the
+corrected procedure. Gate T27a.
+
+### R2 — the `/proc` logic was not pid-namespace safe (FIXED)
+
+The reviewer's container has `os.getpid() = 7` while `/proc/self/stat` reports
+host pid 35492, and they reproduced failures of T21c, T25i and T25k. **On this
+machine the two agree, so the gates pass here** — which is exactly why it needed
+an outside eye. The defect is real and latent.
+
+Two consequences, both fixed:
+
+* the CPU-progress term scanned `/proc` for the process group and found nothing,
+  so it read as a constant and the stall detector fell back to file size alone —
+  killing CPU-busy silent jobs, the precise false positive it exists to prevent;
+* `no_live_writer` failed to exclude itself, so it reported its **own**
+  read-only SQLite connection as an external writer and would refuse to snapshot
+  forever.
+
+The fix is a shared probe, `proc_pid_namespace_ok()`, and **safe degradation
+rather than a guess**: when `/proc` is not ours the progress signal returns
+`None` (unmeasurable, not zero) and the stall detector **stands down entirely**,
+saying so loudly. A watchdog that cannot measure CPU must not claim a stall —
+having no stall detector is strictly better than one that kills healthy work,
+and the absolute limit is unaffected. `no_live_writer` reports
+`ACTIVITY UNVERIFIABLE` and exits 4 instead of guessing, and now resolves its own
+pid through `/proc/self` rather than trusting `os.getpid()`. Gates T27b–T27e.
+
+### R3 — `stage4_compare_fidelity.py` assumed 32 sub-runs (FIXED)
+
+`data["events"] // 32` overstated events per sub-run by exactly 4× under the
+128-block protocol. The reviewer's characterisation is right: objective values
+were unaffected (they use total events) but every tier **label** was wrong.
+
+The comparer now **reads** `events_per_sub_run`, and if a file does not record
+it, **refuses and says how to recover it from the ledger** rather than guessing —
+guessing is how the labels came to be wrong in the first place.
+
+Their second point stands too: the "resolved pair" test used
+`max(se_a, se_b)`, which understates the error on a *difference* and calls pairs
+resolved that are not. It now uses the quadrature sum at 2σ, and the JSON
+records `error_model` naming what was used and noting that a genuinely paired
+error would be tighter but needs per-block data this file does not carry.
+
+### R4 — `STAGE4_RESULTS.md` contradicted itself (FIXED)
+
+The opening said "the reruns have not been done" while §4.3 contained them, and
+the text after the M-tier table still said the rows "await M-tier confirmation".
+Both corrected, and the notice now states explicitly that **where the prose and
+§4.3's table disagree, the table is authoritative** — with the standing caveat
+that the converged (L) tier is still in flight and nothing here is quotable for
+fabrication until it lands.
+
+### R5 — Stage 4 is not reproducible from GitHub alone (PARTLY FIXED)
+
+Confirmed: `stage4_trials.sqlite`, the raw hits and the logs are absent, and the
+committed JSON omitted `n_positions`, `n_replicas`, `events_per_sub_run`, the
+contract hash and the code fingerprint.
+
+**Fixed for the metadata.** New confirmations record the full identity —
+sub-run split, campaign id, campaign contract hash, simulation identity hash,
+code fingerprint, and both watchdog settings. Historical files were backfilled
+from the ledger by `stage4_reconcile.py`, which reads the values back for the
+trials each file actually references and **skips any file whose trials disagree**
+rather than inventing a shape.
+
+**Not fixed, and it is a real limitation.** The raw hit-level data is 489 MB and
+the ledger is a live WAL database; neither belongs in git. So the committed JSON
+now supports arithmetic verification and identity checking, but **not** raw
+reconstruction. Anyone reproducing from scratch needs the ledger and run
+directories, which are on mimir and in `snapshots/`. Closing this properly means
+publishing an archive, which is a decision about where to host ~0.5 GB, not a
+code change.
+
 ## Best major scientific step next
 
 After N0–N3 are fixed and the XL snapshot/validation/migration has completed,

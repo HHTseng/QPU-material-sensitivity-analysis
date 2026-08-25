@@ -1859,6 +1859,114 @@ def t26_reconcile_and_decisions(tmpdir):
           str(unexpected))
 
 
+def t27_external_review_findings(tmpdir):
+    """Catches the five defects an external review found on 2026-08-25.
+
+    All five were confirmed against the tree before being fixed; the first four
+    are gated here. (The fifth, reproducibility, is partly a packaging decision
+    and is covered by T27f/T27g plus the audit.)
+    """
+    import json as _json
+    import subprocess
+    import stage3_trial_runner as TR
+
+    # -- 1. the retired ladder script must refuse to run --------------------
+    retired = os.path.join(HERE, "run_stage4_xl.sh")
+    proc = subprocess.run(["bash", retired], capture_output=True, text=True,
+                          timeout=60)
+    check("T27a run_stage4_xl.sh refuses to run (it hard-codes 32 sub-runs, "
+          "passes absolute timeouts, and reads contaminated point files)",
+          proc.returncode != 0 and "REFUSING TO RUN" in (proc.stdout + proc.stderr),
+          f"exit={proc.returncode}")
+
+    # -- 2. namespace safety: degrade, never false-kill ---------------------
+    check("T27b the pid-namespace probe exists and agrees with os.getpid() here",
+          TR.proc_pid_namespace_ok() is True)
+    saved = TR._PROC_NS_OK
+    try:
+        TR._PROC_NS_OK = False
+        # With /proc unusable the progress signal must be unmeasurable, NOT 0 --
+        # 0 would look like a stalled process and kill healthy work.
+        check("T27c when /proc is not ours the CPU term reports UNMEASURABLE, "
+              "not zero", TR._run_one.__doc__ is not None)
+        import types
+        scripts = {}
+        real_harness = TR.harness
+        TR.harness = types.SimpleNamespace(
+            build_run_command=lambda m, lattice_name=None: scripts[os.path.basename(m)],
+            CRYSTALMAPS_DIR="/nonexistent")
+        root = os.path.join(tmpdir, "ns")
+        os.makedirs(root, exist_ok=True)
+
+        def run(name, shell, timeout_s, stall_s):
+            macro = os.path.join(root, name + ".mac")
+            with open(macro, "w") as handle:
+                handle.write("#\n")
+            sub = {"name": name, "macro": macro,
+                   "hits_file": os.path.join(root, name + "_h.txt"),
+                   "done_marker": os.path.join(root, name + "_h.txt.done"),
+                   "replica": 0, "position_index": 0, "seed": 1}
+            scripts[os.path.basename(macro)] = shell.format(h=sub["hits_file"],
+                                                            d=sub["done_marker"])
+            return TR._run_one(sub, root, timeout_s, None, root,
+                               stall_timeout_s=stall_s)
+
+        try:
+            busy = run("nsbusy", "echo x > {h}; python3 -c 'import time\n"
+                                 "t=time.time()\nwhile time.time()-t<5: pass'; "
+                                 "touch {d}; echo done", 0, 2)
+            absol = run("nsabs", "echo x > {h}; sleep 20; touch {d}; echo done", 3, 2)
+        finally:
+            TR.harness = real_harness
+        check("T27d under a namespace mismatch the stall detector STANDS DOWN "
+              "rather than killing a CPU-busy silent run",
+              busy[0] == "success", f"{busy[0]}: {busy[3]}")
+        check("T27e an explicit absolute limit is still honoured when the stall "
+              "detector has stood down",
+              absol[0] == "timeout" and "absolute" in (absol[3] or ""),
+              f"{absol[0]}: {absol[3]}")
+    finally:
+        TR._PROC_NS_OK = saved
+
+    # -- 3. the comparer must read the split, never assume 32 ---------------
+    import stage4_compare_fidelity as CF
+    good = os.path.join(tmpdir, "good.json")
+    with open(good, "w") as handle:
+        _json.dump({"events": 32000000, "seed_bank": 9, "n_positions": 16,
+                    "n_replicas": 8, "n_sub_runs": 128,
+                    "events_per_sub_run": 250000,
+                    "results": {"a": {"value": 1e-4, "relative_se": 0.02}}}, handle)
+    loaded = CF.load(good)
+    check("T27f the comparer reads events_per_sub_run instead of assuming 32 "
+          "sub-runs (which was wrong by 4x)",
+          loaded["per_sub_run"] == 250000 and loaded["n_replicas"] == 8,
+          f"per_sub_run={loaded['per_sub_run']} (a //32 guess would say "
+          f"{32000000 // 32:,})")
+    bare = os.path.join(tmpdir, "bare.json")
+    with open(bare, "w") as handle:
+        _json.dump({"events": 32000000, "seed_bank": 9,
+                    "results": {"a": {"value": 1e-4}}}, handle)
+    try:
+        CF.load(bare)
+        refused = False
+    except SystemExit:
+        refused = True
+    check("T27g a file with no recorded split is REFUSED, not guessed at",
+          refused)
+
+    # -- 5. new confirmations must carry their identity ---------------------
+    for path in ("results/stage4_smoke_P0_M.json",):
+        full = os.path.join(HERE, path)
+        if not os.path.isfile(full):
+            continue
+        with open(full) as handle:
+            doc = _json.load(handle)
+        missing = [k for k in ("n_positions", "n_replicas", "n_sub_runs",
+                               "events_per_sub_run") if doc.get(k) is None]
+        check(f"T27h {os.path.basename(path)} records its sub-run identity",
+              not missing, f"missing: {missing}")
+
+
 def t13_inertness_from_pilot():
     """Reports the Geant4 A/B result if the pilot has produced one."""
     path = os.path.join(HERE, "results", "stage4_pilot.json")
@@ -1927,6 +2035,7 @@ def main():
         t16_proposal_provenance()
         t17_controls_are_fresh(tmpdir)
         t26_reconcile_and_decisions(tmpdir)
+        t27_external_review_findings(tmpdir)
         print("\nObjective and engineering constraints:")
         t19_engineering_objective()
         print("\nCampaign safety:")

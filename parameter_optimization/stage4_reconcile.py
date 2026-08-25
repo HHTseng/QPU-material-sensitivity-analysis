@@ -165,6 +165,72 @@ def backfill_manifests(runs_root, ledger_path, dry_run):
     return changed
 
 
+def backfill_identity(results_dir, ledger_path, dry_run):
+    """Add the sub-run split and trial identity to result files that lack it.
+
+    A result JSON that records only `events` is not self-describing: a reader
+    cannot tell whether that total was split over 32 sub-runs or 128, and
+    `stage4_compare_fidelity.py` was reduced to assuming 32 -- wrong by 4x under
+    the 8-replica protocol. Every value here is READ BACK FROM THE LEDGER for
+    the trials the file actually references, never assumed, and the file is left
+    alone if its trials disagree with each other.
+    """
+    if not os.path.isfile(ledger_path):
+        return []
+    conn = sqlite3.connect(f"file:{ledger_path}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    changed = []
+    for name in sorted(os.listdir(results_dir)):
+        if not name.endswith(".json"):
+            continue
+        path = os.path.join(results_dir, name)
+        try:
+            with open(path) as handle:
+                doc = json.load(handle)
+        except (ValueError, OSError):
+            continue
+        if not isinstance(doc, dict) or "results" not in doc:
+            continue
+        if doc.get("events_per_sub_run") is not None:
+            continue
+        tids = [r.get("trial_id") for r in doc["results"].values()
+                if isinstance(r, dict) and r.get("trial_id")]
+        if not tids:
+            continue
+        marks = ",".join("?" * len(tids))
+        rows = conn.execute(
+            f"SELECT DISTINCT n_positions, n_replicas, events_per_sub_run, "
+            f"events_total, contract_hash FROM trials WHERE trial_id IN ({marks})",
+            tuple(tids)).fetchall()
+        shapes = {(r["n_positions"], r["n_replicas"], r["events_per_sub_run"])
+                  for r in rows}
+        if len(shapes) != 1:
+            changed.append((name, f"SKIPPED: {len(shapes)} different sub-run "
+                                  f"shapes among its trials {sorted(shapes)}"))
+            continue
+        npos, nrep, per_sub = shapes.pop()
+        doc["n_positions"], doc["n_replicas"] = npos, nrep
+        doc["n_sub_runs"] = npos * nrep
+        doc["events_per_sub_run"] = per_sub
+        doc["contract_hash"] = rows[0]["contract_hash"]
+        doc["identity_backfilled_at"] = time.strftime("%F %T")
+        doc["identity_backfilled_note"] = (
+            "Read back from the ledger for the trials this file references. "
+            "`simulation_identity_hash` and `code_fingerprint` are absent: they "
+            "were not recorded when these trials ran, and are not reconstructible.")
+        changed.append((name, f"{npos}x{nrep}={npos * nrep} sub-runs, "
+                              f"{per_sub:,} events each"))
+        if not dry_run:
+            if not os.path.exists(path + ".preidentity"):
+                shutil.copy2(path, path + ".preidentity")
+            tmp = path + ".tmp"
+            with open(tmp, "w") as handle:
+                json.dump(doc, handle, indent=1, default=str)
+            os.replace(tmp, path)
+    conn.close()
+    return changed
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -195,7 +261,16 @@ def main():
     if not filled:
         print("   nothing to backfill")
 
-    print(f"\n{len(labelled)} result file(s), {len(filled)} manifest(s)"
+    print("\n3. Backfilling sub-run identity into result files "
+          f"({'dry run' if args.dry_run else 'applying'}):")
+    ident = backfill_identity(args.results, args.ledger, args.dry_run)
+    for name, detail in ident:
+        print(f"   {name}: {detail}")
+    if not ident:
+        print("   nothing to backfill")
+
+    print(f"\n{len(labelled)} result file(s), {len(filled)} manifest(s), "
+          f"{len(ident)} identity backfill(s)"
           + (" would change" if args.dry_run else " updated")
           + ". Originals kept as *.prelabel / *.prebackfill.")
     return 0
