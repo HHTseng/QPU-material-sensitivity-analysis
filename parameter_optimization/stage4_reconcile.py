@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+"""Make recorded artifacts agree with the ledger and the invalidation registry.
+
+    python stage4_reconcile.py --dry-run     # show what would change
+    python stage4_reconcile.py               # apply
+
+Two jobs, both of which the audit reports as warnings until they are done:
+
+1. **Label invalidated results.** Result JSONs still carry rows that a known
+   finding invalidated. The values are NOT changed and NOT deleted -- they are
+   the evidence the defect was real, and a reader who finds a bare number in a
+   file has no way to know it is withdrawn. Each affected result gains
+   `validity`, `invalidated_by` and `invalidation_reason`, and the file gains a
+   top-level `_invalidation_notice`.
+
+2. **Backfill `ledger_status_counts` into historical manifests.** Campaign
+   manifests written before the P7 fix report the driver's in-process counters,
+   which are blind to trials abandoned when the process was killed -- so they
+   said "0 failures" while the ledger held 5, 6 and 4 non-success rows. The
+   original `n_failed` / `n_rejected` are LEFT ALONE: they are a true record of
+   what the driver observed. What is added is the ledger's authoritative view,
+   exactly as new manifests now carry it.
+
+Both operations are additive and idempotent: re-running changes nothing, and no
+recorded value is ever overwritten.
+"""
+
+import argparse
+import copy
+import json
+import os
+import shutil
+import sqlite3
+import sys
+import time
+
+import yaml
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+NOTICE_KEY = "_invalidation_notice"
+
+
+def invalid_map(registry_path):
+    """{trial_id: {finding, reason, label}} for every invalidated trial."""
+    if not os.path.isfile(registry_path):
+        return {}, {}
+    with open(registry_path) as handle:
+        reg = yaml.safe_load(handle) or {}
+    out, findings = {}, {}
+    for key, finding in (reg.get("findings") or {}).items():
+        findings[key] = finding.get("title") or key
+        for row in finding.get("trials") or []:
+            if row.get("verdict") != "invalid":
+                continue
+            out[row["trial_id"]] = {
+                "finding": key,
+                "label": row.get("label"),
+                "reason": (f"simulated as {row.get('simulated_carrier')} instead of "
+                           f"{row.get('intended_carrier')}"),
+            }
+    return out, findings
+
+
+def label_results(results_dir, bad, findings, dry_run):
+    changed = []
+    for name in sorted(os.listdir(results_dir)):
+        if not name.endswith(".json"):
+            continue
+        path = os.path.join(results_dir, name)
+        try:
+            with open(path) as handle:
+                doc = json.load(handle)
+        except (ValueError, OSError):
+            continue
+        if not isinstance(doc, dict):
+            continue
+        before = copy.deepcopy(doc)
+        hits = []
+        for label, rec in (doc.get("results") or {}).items():
+            if not isinstance(rec, dict):
+                continue
+            tid = rec.get("trial_id")
+            if tid in bad:
+                rec["validity"] = "invalid"
+                rec["invalidated_by"] = bad[tid]["finding"]
+                rec["invalidation_reason"] = bad[tid]["reason"]
+                hits.append(label)
+            elif rec.get("value") is not None:
+                rec.setdefault("validity", "valid")
+        # The projection stores its verification results one level down.
+        ver = (doc.get("verification") or {}).get("results")
+        if isinstance(ver, dict):
+            for label, rec in ver.items():
+                if isinstance(rec, dict) and rec.get("trial_id") in bad:
+                    tid = rec["trial_id"]
+                    rec["validity"] = "invalid"
+                    rec["invalidated_by"] = bad[tid]["finding"]
+                    rec["invalidation_reason"] = bad[tid]["reason"]
+                    hits.append(label)
+        if hits:
+            doc[NOTICE_KEY] = {
+                "labelled_at": time.strftime("%F %T"),
+                "registry": "stage4_invalidations.yaml",
+                "invalid_rows": sorted(set(hits)),
+                "findings": sorted({bad[r["trial_id"]]["finding"]
+                                    for r in list((doc.get("results") or {}).values())
+                                    + list((ver or {}).values())
+                                    if isinstance(r, dict) and r.get("trial_id") in bad}),
+                "note": "Values are preserved deliberately: they are the evidence "
+                        "the defect was real. Rows marked validity='invalid' must "
+                        "not be quoted.",
+            }
+        if doc != before:
+            changed.append((name, sorted(set(hits))))
+            if not dry_run:
+                if not os.path.exists(path + ".prelabel"):
+                    shutil.copy2(path, path + ".prelabel")
+                tmp = path + ".tmp"
+                with open(tmp, "w") as handle:
+                    json.dump(doc, handle, indent=1, default=str)
+                os.replace(tmp, path)
+    return changed
+
+
+def backfill_manifests(runs_root, ledger_path, dry_run):
+    if not os.path.isfile(ledger_path):
+        return []
+    conn = sqlite3.connect(f"file:{ledger_path}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    changed = []
+    for campaign in sorted(os.listdir(runs_root)):
+        cdir = os.path.join(runs_root, campaign)
+        if not os.path.isdir(cdir):
+            continue
+        for name in sorted(os.listdir(cdir)):
+            if not (name.startswith("campaign_") and name.endswith(".json")):
+                continue
+            path = os.path.join(cdir, name)
+            with open(path) as handle:
+                man = json.load(handle)
+            if "ledger_status_counts" in man:
+                continue                                  # already authoritative
+            cid = man.get("campaign_id", campaign)
+            counts = {r["status"]: r["n"] for r in conn.execute(
+                "SELECT status, count(*) n FROM trials WHERE campaign_id=? "
+                "GROUP BY status", (cid,))}
+            if not counts:
+                continue
+            man["ledger_status_counts"] = counts
+            man["ledger_status_counts_backfilled_at"] = time.strftime("%F %T")
+            man["ledger_status_counts_note"] = (
+                "Backfilled by stage4_reconcile.py. `n_failed` and `n_rejected` "
+                "above are the DRIVER's in-process counters and are left as "
+                "recorded; they cannot see trials abandoned when the process was "
+                "killed. These counts are the ledger's authoritative view.")
+            changed.append((f"{campaign}/{name}", counts))
+            if not dry_run:
+                if not os.path.exists(path + ".prebackfill"):
+                    shutil.copy2(path, path + ".prebackfill")
+                tmp = path + ".tmp"
+                with open(tmp, "w") as handle:
+                    json.dump(man, handle, indent=1, default=str)
+                os.replace(tmp, path)
+    conn.close()
+    return changed
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--results", default=os.path.join(HERE, "results"))
+    ap.add_argument("--runs-root", default=os.path.join(HERE, "runs"))
+    ap.add_argument("--ledger", default=os.path.join(HERE, "stage4_trials.sqlite"))
+    ap.add_argument("--registry",
+                    default=os.path.join(HERE, "stage4_invalidations.yaml"))
+    ap.add_argument("--dry-run", action="store_true")
+    args = ap.parse_args()
+
+    bad, findings = invalid_map(args.registry)
+    print(f"Registry: {len(bad)} invalidated trial(s) across {len(findings)} finding(s)")
+
+    print("\n1. Labelling invalidated rows in result files "
+          f"({'dry run' if args.dry_run else 'applying'}):")
+    labelled = label_results(args.results, bad, findings, args.dry_run)
+    for name, hits in labelled:
+        print(f"   {name}: marked {hits}")
+    if not labelled:
+        print("   nothing to label")
+
+    print("\n2. Backfilling ledger_status_counts into historical manifests "
+          f"({'dry run' if args.dry_run else 'applying'}):")
+    filled = backfill_manifests(args.runs_root, args.ledger, args.dry_run)
+    for name, counts in filled:
+        print(f"   {name}: {counts}")
+    if not filled:
+        print("   nothing to backfill")
+
+    print(f"\n{len(labelled)} result file(s), {len(filled)} manifest(s)"
+          + (" would change" if args.dry_run else " updated")
+          + ". Originals kept as *.prelabel / *.prebackfill.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

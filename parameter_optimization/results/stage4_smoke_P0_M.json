@@ -39,7 +39,8 @@
     ],
     "n_sites_favouring_a": 13,
     "n_sites": 16
-   }
+   },
+   "validity": "valid"
   },
   "GaAs/Nb/Cu": {
    "status": "success",
@@ -76,7 +77,8 @@
     ],
     "n_sites_favouring_a": 14,
     "n_sites": 16
-   }
+   },
+   "validity": "valid"
   },
   "baseline": {
    "status": "success",
@@ -86,7 +88,8 @@
    "trial_id": "stage4_property_v1_smokeP0M_7c547e32d9b6",
    "relative_se": 0.04899207908795984,
    "wall_s": 541.2,
-   "cached": false
+   "cached": false,
+   "validity": "valid"
   },
   "ideal_target": {
    "status": "success",
@@ -123,7 +126,8 @@
     ],
     "n_sites_favouring_a": 16,
     "n_sites": 16
-   }
+   },
+   "validity": "valid"
   }
  },
  "points": {

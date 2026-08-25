@@ -1,0 +1,148 @@
+{
+ "fidelity": "L",
+ "events": 3200000000,
+ "seed_bank": 9,
+ "objective": "total_qps_per_primary",
+ "results": {
+  "elasticity_of_SiC": {
+   "status": "success",
+   "value": 0.000189506875,
+   "se": 7.351735020558073e-07,
+   "total_qps": 606422.0,
+   "trial_id": "stage4_property_v1_confirmXL_9c78bf1319ba",
+   "relative_se": 0.0038794028029632555,
+   "wall_s": 33723.1,
+   "cached": false,
+   "paired": {
+    "delta_per_primary": -0.000199056875,
+    "delta_total_qps": -636982.0,
+    "se_delta_total_qps": 2849.131095614942,
+    "z_paired": -223.57061806680997,
+    "relative": -0.5122888457814194,
+    "site_deltas": [
+     -2032.0,
+     -6352.0,
+     -2606.0,
+     842.0,
+     -13860.0,
+     -5728.0,
+     492.0,
+     -12132.0,
+     -2830.0,
+     -2996.0,
+     -3292.0,
+     -510294.0,
+     -20980.0,
+     -35378.0,
+     -10474.0,
+     -9362.0
+    ],
+    "n_sites_favouring_a": 14,
+    "n_sites": 16
+   },
+   "validity": "invalid",
+   "invalidated_by": "P0_substrate_carrier_dropped",
+   "invalidation_reason": "simulated as G4_Si instead of G4_CALCIUM_FLUORIDE"
+  },
+  "baseline": {
+   "status": "success",
+   "value": 0.00038856375,
+   "se": 4.155455751178203e-07,
+   "total_qps": 1243404.0,
+   "trial_id": "stage4_property_v1_confirmXL_4601462a11f3",
+   "relative_se": 0.0010694398927275648,
+   "wall_s": 0.1,
+   "cached": true,
+   "validity": "valid"
+  },
+  "best_random": {
+   "status": "incomplete_scenario_set",
+   "reason": "32/32 sub-run(s) incomplete (first: r0p0); failures=[('stage4_property_v1_confirmXL_603969004eaa_r0_p0', 'timeout', 'exceeded 150000s'), ('stage4_property_v1_confirmXL_603969004eaa_r0_p1', 'timeout', 'exceeded 150000s'), ('stage4_property_v1_confirmXL_603969004eaa_r0_p2', 'timeout', 'exceeded 150000s')]"
+  }
+ },
+ "points": {
+  "best_random": {
+   "topfilm_vsound": 1.673436252677323,
+   "topfilm_gap": 7.382316932048928e-05,
+   "topfilm_ph_lifetime": 0.004265677469044161,
+   "topfilm_density": 19850.351528260366,
+   "bot_vsound": 4.7689108765251,
+   "bot_gap_thres": 0.0003538133334702196,
+   "bot_ph_lifetime": 0.6279680868888861,
+   "bot_density": 15628.769053053458,
+   "sub_c11": 209.17268615748247,
+   "sub_c12": 104.10498713883734,
+   "sub_c44": 143.10968487835447,
+   "sub_scat": 1.3818552402444411e-43,
+   "sub_decay": 1.7352956341981795e-55,
+   "sub_decayTT": 0.6303623609118583,
+   "temperature": 0.03914040705924086,
+   "lattice_deg": 47.9993557684277,
+   "sub_lattice_a": 5.431,
+   "miller": [
+    1,
+    1,
+    3
+   ]
+  },
+  "elasticity_of_SiC": {
+   "topfilm_vsound": 2.56,
+   "topfilm_gap": 0.00054,
+   "topfilm_ph_lifetime": 0.0032391345908296698,
+   "topfilm_density": 7310.0,
+   "bot_vsound": 3.65,
+   "bot_gap_thres": 0.000219769477378577,
+   "bot_ph_lifetime": 2.657830536907085,
+   "bot_density": 10490.0,
+   "sub_c11": 384.0,
+   "sub_c12": 127.0,
+   "sub_c44": 200.0,
+   "sub_scat": 1.4612400804627297e-43,
+   "sub_decay": 6.5588631961413265e-56,
+   "sub_decayTT": 0.9432507706806064,
+   "temperature": 0.056437374930828815,
+   "lattice_deg": 63.81921119056642,
+   "sub_lattice_a": 3.07873852111218,
+   "miller": [
+    2,
+    2,
+    3
+   ]
+  },
+  "baseline": {
+   "topfilm_vsound": 2.444,
+   "topfilm_gap": 0.0015384,
+   "topfilm_ph_lifetime": 0.00417,
+   "topfilm_density": 8570.0,
+   "bot_vsound": 2.608,
+   "bot_gap_thres": 0.00018,
+   "bot_ph_lifetime": 5.1,
+   "bot_density": 8960.0,
+   "sub_c11": 165.6,
+   "sub_c12": 63.9,
+   "sub_c44": 79.5,
+   "sub_scat": 2.43e-42,
+   "sub_decay": 7.41e-56,
+   "sub_decayTT": 0.74,
+   "temperature": 0.0,
+   "lattice_deg": 45.0,
+   "sub_lattice_a": 5.431,
+   "miller": [
+    0,
+    0,
+    1
+   ]
+  }
+ },
+ "_invalidation_notice": {
+  "labelled_at": "2026-08-25 15:56:29",
+  "registry": "stage4_invalidations.yaml",
+  "invalid_rows": [
+   "elasticity_of_SiC"
+  ],
+  "findings": [
+   "P0_substrate_carrier_dropped"
+  ],
+  "note": "Values are preserved deliberately: they are the evidence the defect was real. Rows marked validity='invalid' must not be quoted."
+ }
+}

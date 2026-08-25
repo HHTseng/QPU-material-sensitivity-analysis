@@ -15,6 +15,55 @@
 
 schema: stage4_invalidations_v1
 
+# ---------------------------------------------------------------------------
+# Recorded decisions. These are NOT defects: they are states someone chose, with
+# the reason, so the audit can tell "accepted and understood" apart from "new
+# and unexplained". A decision recorded here silences nothing -- the audit still
+# prints the numbers; it only changes a nagging warning into a precise one.
+# ---------------------------------------------------------------------------
+decisions:
+
+  optimizer_provenance_unrecoverable:
+    decided: 2026-08-24
+    title: Pre-audit optimizer rows can never be attributed to a proposal source
+    campaigns:
+      - stage4_property_v1_bo
+      - stage4_property_v1_cmaes
+      - stage4_property_v1_rand
+    rationale: >
+      The `proposal_source`, `optimizer_generation` and
+      `used_in_optimizer_update` columns did not exist when these campaigns ran,
+      so the information was never captured. It cannot be reconstructed:
+      inferring "the first 20 bo_gp trials were Sobol" from n_init would be a
+      guess dressed as a record, and the whole point of finding P1 was that such
+      a guess had already been published as fact. The rows stay NULL.
+    consequence: >
+      The optimizer-efficiency ranking stays withdrawn permanently for these
+      campaigns. Only a rerun under the current code can support one.
+    expected_null_rows: 95
+
+  cache_cold_accepted:
+    decided: 2026-08-24
+    title: Keep the cache cold; do not re-baseline the historical trials
+    rationale: >
+      Four files in CODE_IDENTITY_FILES were changed by the audit remediation,
+      so the code fingerprint moved and no recorded trial is cache-reachable.
+      That is the fingerprint working as designed. Re-baselining would weaken
+      the one mechanism that stops a cache returning results from code that no
+      longer exists, to save compute the project would rather just spend.
+    verified_before_accepting: >
+      All 163 trials re-resolved to a byte-identical `derived` and regenerated a
+      byte-identical lattice config, so a re-run would reproduce the same
+      simulation; only the fingerprint differs.
+    # The audit compares the SET of changed identity files against this list.
+    # Anything NEW entering the set is unexplained and must warn.
+    accepted_changed_identity_files:
+      - parameter_optimization/stage3_contract.py
+      - parameter_optimization/stage3_ledger.py
+      - parameter_optimization/stage3_trial_runner.py
+      - parameter_optimization/stage4_objectives.py
+      - parameter_optimization/stage4_space.py
+
 findings:
   P0_substrate_carrier_dropped:
     title: Projected substrate carrier lost before evaluation

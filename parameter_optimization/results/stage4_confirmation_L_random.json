@@ -1,0 +1,107 @@
+{
+ "fidelity": "L",
+ "events": 320000000,
+ "seed_bank": 9,
+ "objective": "total_qps_per_primary",
+ "results": {
+  "baseline": {
+   "status": "success",
+   "value": 0.00038425625,
+   "se": 2.1289944075783757e-06,
+   "total_qps": 122962.0,
+   "trial_id": "stage4_property_v1_confirmL_c80ee0f28384",
+   "relative_se": 0.00554055895662953,
+   "wall_s": 0.1,
+   "cached": true,
+   "validity": "valid"
+  },
+  "best_random": {
+   "status": "success",
+   "value": 0.00013588125,
+   "se": 2.4544522683279055e-06,
+   "total_qps": 43482.0,
+   "trial_id": "stage4_property_v1_confirmL_2c84152c0ceb",
+   "relative_se": 0.018063215258381164,
+   "wall_s": 20892.7,
+   "cached": false,
+   "paired": {
+    "delta_per_primary": -0.000248375,
+    "delta_total_qps": -79480.0,
+    "se_delta_total_qps": 980.3713582107547,
+    "z_paired": -81.07131989765233,
+    "relative": -0.6463785559766432,
+    "site_deltas": [
+     -846.0,
+     -1638.0,
+     -2830.0,
+     -1016.0,
+     -2622.0,
+     -2284.0,
+     -830.0,
+     -1760.0,
+     -1416.0,
+     -864.0,
+     -1270.0,
+     -49250.0,
+     -3390.0,
+     -4946.0,
+     -2874.0,
+     -1644.0
+    ],
+    "n_sites_favouring_a": 16,
+    "n_sites": 16
+   },
+   "validity": "valid"
+  }
+ },
+ "points": {
+  "best_random": {
+   "topfilm_vsound": 1.673436252677323,
+   "topfilm_gap": 7.382316932048928e-05,
+   "topfilm_ph_lifetime": 0.004265677469044161,
+   "topfilm_density": 19850.351528260366,
+   "bot_vsound": 4.7689108765251,
+   "bot_gap_thres": 0.0003538133334702196,
+   "bot_ph_lifetime": 0.6279680868888861,
+   "bot_density": 15628.769053053458,
+   "sub_c11": 209.17268615748247,
+   "sub_c12": 104.10498713883734,
+   "sub_c44": 143.10968487835447,
+   "sub_scat": 1.3818552402444411e-43,
+   "sub_decay": 1.7352956341981795e-55,
+   "sub_decayTT": 0.6303623609118583,
+   "temperature": 0.03914040705924086,
+   "lattice_deg": 47.9993557684277,
+   "sub_lattice_a": 5.431,
+   "miller": [
+    1,
+    1,
+    3
+   ]
+  },
+  "baseline": {
+   "topfilm_vsound": 2.444,
+   "topfilm_gap": 0.0015384,
+   "topfilm_ph_lifetime": 0.00417,
+   "topfilm_density": 8570.0,
+   "bot_vsound": 2.608,
+   "bot_gap_thres": 0.00018,
+   "bot_ph_lifetime": 5.1,
+   "bot_density": 8960.0,
+   "sub_c11": 165.6,
+   "sub_c12": 63.9,
+   "sub_c44": 79.5,
+   "sub_scat": 2.43e-42,
+   "sub_decay": 7.41e-56,
+   "sub_decayTT": 0.74,
+   "temperature": 0.0,
+   "lattice_deg": 45.0,
+   "sub_lattice_a": 5.431,
+   "miller": [
+    0,
+    0,
+    1
+   ]
+  }
+ }
+}

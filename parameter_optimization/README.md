@@ -68,7 +68,8 @@ Al junctions, per primary event) with two different notions of "candidate".
 | `stage4_pilot.py` | determinism, noise, throughput and the inertness A/Bs; run before a campaign |
 | `stage4_probe_g4_density.py` | measures a NIST material's Geant4 density so it can be used as a density carrier |
 | `stage4_audit.py` | consistency audit: energy protocol, invalidated results, ledger vs manifests, liveness, code identity, doc headlines |
-| `stage4_invalidations.yaml` | register of invalidated results and contaminated inputs, with evidence; read by `stage4_audit.py` |
+| `stage4_invalidations.yaml` | register of invalidated results, contaminated inputs and **recorded decisions**; read by `stage4_audit.py` |
+| `stage4_reconcile.py` | labels invalidated rows in result files and backfills the ledger's counts into historical manifests — additive, idempotent, never overwrites a value |
 | `stage4_assemble_xl.py` | merges confirmation JSONs into the combined 1e8 table — **no simulation, no ledger** |
 | `stage4_post_xl.sh` | fail-closed runbook: check → snapshot → validate → migrate → unfreeze, with receipts |
 | `tests_stage4.py` | the exit-gate suite; run before any campaign |

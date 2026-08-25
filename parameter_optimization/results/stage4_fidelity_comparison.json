@@ -1,0 +1,89 @@
+{
+ "tiers": [
+  {
+   "path": "stage4_confirmation_S.json",
+   "events": 4000000,
+   "per_sub_run": 125000,
+   "seed_bank": 9
+  },
+  {
+   "path": "stage4_confirmation_M.json",
+   "events": 32000000,
+   "per_sub_run": 1000000,
+   "seed_bank": 9
+  }
+ ],
+ "pairs": [
+  {
+   "low": 125000,
+   "high": 1000000,
+   "n": 7,
+   "spearman": 1.0,
+   "kendall": 1.0,
+   "top1_kept": true,
+   "order_low": [
+    "top1_bo_gp",
+    "top2_cmaes",
+    "top3_bo_gp",
+    "elasticity_of_SiC",
+    "elasticity_of_Be2C",
+    "GaAs/Nb/Cu",
+    "Si/Nb/Cu"
+   ],
+   "order_high": [
+    "top1_bo_gp",
+    "top2_cmaes",
+    "top3_bo_gp",
+    "elasticity_of_SiC",
+    "elasticity_of_Be2C",
+    "GaAs/Nb/Cu",
+    "Si/Nb/Cu"
+   ],
+   "rms_value_shift": 0.06738424032837463
+  }
+ ],
+ "adjacent_pairs": [
+  {
+   "a": "top1_bo_gp",
+   "b": "top2_cmaes",
+   "gap": 0.2200854700854701,
+   "error": 0.04641806753309482,
+   "resolved": true
+  },
+  {
+   "a": "top2_cmaes",
+   "b": "top3_bo_gp",
+   "gap": 0.24562171628721535,
+   "error": 0.04641806753309482,
+   "resolved": true
+  },
+  {
+   "a": "top3_bo_gp",
+   "b": "elasticity_of_SiC",
+   "gap": 0.08541300527240779,
+   "error": 0.042924005139643485,
+   "resolved": true
+  },
+  {
+   "a": "elasticity_of_SiC",
+   "b": "elasticity_of_Be2C",
+   "gap": 0.09974093264248708,
+   "error": 0.042006176285678765,
+   "resolved": true
+  },
+  {
+   "a": "elasticity_of_Be2C",
+   "b": "GaAs/Nb/Cu",
+   "gap": 0.6251472320376912,
+   "error": 0.026013030418560398,
+   "resolved": true
+  },
+  {
+   "a": "GaAs/Nb/Cu",
+   "b": "Si/Nb/Cu",
+   "gap": 0.07881862656278321,
+   "error": 0.020030554780273564,
+   "resolved": true
+  }
+ ]
+}

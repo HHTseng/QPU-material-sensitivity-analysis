@@ -135,22 +135,52 @@ def check_invalidations(ledger_path, registry_path, results_dir):
         record("every invalidated trial still exists in the ledger as evidence",
                not missing, "; ".join(missing) or f"{len(invalid)} row(s) retained")
 
-    # Any result file still carrying an invalidated trial id is quoting it.
-    quoting = []
+    # A result file may CONTAIN an invalidated trial -- that is the evidence and
+    # deleting it would be worse. What it must not do is contain one WITHOUT
+    # saying so, because a bare number gives the reader no way to know it is
+    # withdrawn. `stage4_reconcile.py` adds the labels.
+    unlabelled, labelled = [], []
     if os.path.isdir(results_dir):
         for name in sorted(os.listdir(results_dir)):
             if not name.endswith(".json"):
                 continue
-            text = open(os.path.join(results_dir, name), errors="replace").read()
+            path = os.path.join(results_dir, name)
+            text = open(path, errors="replace").read()
             hits = [t for t in invalid if t in text]
-            if hits:
-                quoting.append(f"{name} ({len(hits)} invalidated trial id(s))")
-    record("result files that still quote an invalidated trial are labelled",
-           not quoting,
-           "; ".join(quoting) + "  -- regenerate these or mark them invalid"
-           if quoting else "no result file quotes an invalidated trial",
-           severity="warn")
+            if not hits:
+                continue
+            try:
+                doc = json.loads(text)
+            except ValueError:
+                doc = {}
+            marked = set()
+            for section in (doc.get("results") or {}, 
+                            (doc.get("verification") or {}).get("results") or {}):
+                for rec in section.values():
+                    if isinstance(rec, dict) and rec.get("validity") == "invalid" \
+                            and rec.get("trial_id") in invalid:
+                        marked.add(rec["trial_id"])
+            missing = [t for t in hits if t not in marked]
+            if missing:
+                unlabelled.append(f"{name} ({len(missing)} unlabelled)")
+            else:
+                labelled.append(f"{name} ({len(marked)})")
+    record("every invalidated trial quoted in a result file is labelled invalid",
+           not unlabelled,
+           "; ".join(unlabelled) + "  -- run stage4_reconcile.py"
+           if unlabelled else
+           (f"{len(labelled)} file(s) carry labelled invalid rows: "
+            + ", ".join(labelled) if labelled
+            else "no result file quotes an invalidated trial"))
     return invalid
+
+
+def recorded_decisions(registry_path):
+    """Deliberate, documented states -- not defects. See the registry."""
+    if not os.path.isfile(registry_path):
+        return {}
+    with open(registry_path) as handle:
+        return (yaml.safe_load(handle) or {}).get("decisions") or {}
 
 
 def check_freeze(ledger_path):
@@ -167,7 +197,7 @@ def check_freeze(ledger_path):
            f"after snapshotting", severity="warn")
 
 
-def check_ledger_status(ledger_path):
+def check_ledger_status(ledger_path, registry_path=None):
     """Catches: a `running` row with no process, and unaccounted partial cost."""
     if not os.path.isfile(ledger_path):
         record("ledger present", False, f"{ledger_path} not found")
@@ -226,6 +256,7 @@ def check_ledger_status(ledger_path):
                 led_bad = sum(r["n"] for r in rows
                               if r["status"] not in ("success", "success_zero_qp"))
                 counts = man.get("ledger_status_counts")
+                # backfilled manifests carry the authoritative view
                 if counts is not None:
                     man_bad = sum(v for k, v in counts.items()
                                   if k not in ("success", "success_zero_qp")
@@ -276,14 +307,36 @@ def check_ledger_status(ledger_path):
         prov = conn.execute(
             "SELECT count(*) n FROM trials WHERE proposal_source IS NOT NULL"
         ).fetchone()["n"]
-        record("optimizer trials record which proposal source produced them (P1)",
-               prov == opt,
-               f"{prov} of {opt} optimizer rows carry a proposal_source",
-               severity="warn")
+        # An unattributed row is only a problem if it was written by code that
+        # COULD have recorded it. The pre-audit campaigns provably could not, and
+        # the registry says so -- guessing their sources from n_init would be the
+        # very error P1 was raised about. What must still fail is a NEW campaign
+        # that silently stops recording.
+        decision = recorded_decisions(registry_path).get(
+            "optimizer_provenance_unrecoverable") or {}
+        historical = set(decision.get("campaigns") or [])
+        unexplained = 0
+        if historical:
+            marks = ",".join("?" * len(historical))
+            unexplained = conn.execute(
+                f"SELECT count(*) n FROM trials WHERE optimizer IS NOT NULL AND "
+                f"proposal_source IS NULL AND campaign_id NOT IN ({marks})",
+                tuple(historical)).fetchone()["n"]
+        else:
+            unexplained = opt - prov
+        accounted = opt - prov - unexplained
+        record("every optimizer trial that COULD record its proposal source did",
+               unexplained == 0,
+               f"{prov} of {opt} rows carry one; {accounted} are pre-audit rows "
+               f"whose columns did not exist (recorded decision "
+               f"`optimizer_provenance_unrecoverable`, so their ranking stays "
+               f"withdrawn); {unexplained} unexplained"
+               + ("" if unexplained == 0 else " -- a current campaign is not "
+                                              "recording provenance"))
     conn.close()
 
 
-def check_code_identity(contract_path, ledger_path):
+def check_code_identity(contract_path, ledger_path, registry_path=None):
     """Reports whether the current code can still reuse the ledger's trials.
 
     Four of the files this audit's own fixes touched -- `stage3_ledger.py`,
@@ -323,12 +376,27 @@ def check_code_identity(contract_path, ledger_path):
         new_files = json.loads(now).get("files", {})
         changed = sorted(k for k in set(old_files) | set(new_files)
                          if old_files.get(k) != new_files.get(k))
-    record("the current code can still cache-reuse every recorded trial",
-           False,
-           f"{reachable} of {total} success trial(s) reachable; changed identity "
-           f"file(s): {', '.join(os.path.basename(c) for c in changed)}. Re-run "
-           f"or re-baseline is a budget decision -- see STAGE4_AUDIT_REMEDIATION.md",
-           severity="warn")
+    # A cold cache is only a finding if it is UNEXPLAINED. The decision to keep
+    # it cold is recorded, together with which identity files were expected to
+    # change; the numbers are still printed, but a NEW file entering that set is
+    # what actually warrants attention.
+    decision = recorded_decisions(registry_path).get("cache_cold_accepted") or {}
+    accepted = set(decision.get("accepted_changed_identity_files") or [])
+    unexpected = sorted(set(changed) - accepted) if accepted else sorted(changed)
+    if accepted and not unexpected:
+        record("the cold cache is the accepted, recorded one (no NEW identity "
+               "file changed)",
+               True,
+               f"{reachable} of {total} success trial(s) reachable, as decided on "
+               f"{decision.get('decided')}: {', '.join(sorted(os.path.basename(c) for c in changed))}")
+    else:
+        record("the cold cache is the accepted, recorded one (no NEW identity "
+               "file changed)",
+               False,
+               f"{reachable} of {total} reachable; UNEXPECTED identity change in "
+               f"{', '.join(os.path.basename(c) for c in unexpected)} -- not covered "
+               f"by any recorded decision",
+               severity="warn")
 
 
 # A trial is judged alive on EVIDENCE, in this order. Timestamps on the trial
@@ -555,8 +623,8 @@ def main():
     check_invalidations(args.ledger, args.registry, args.results)
     print("\nLedger and campaign status:")
     check_freeze(args.ledger)
-    check_ledger_status(args.ledger)
-    check_code_identity(args.contract, args.ledger)
+    check_ledger_status(args.ledger, args.registry)
+    check_code_identity(args.contract, args.ledger, args.registry)
     print("\nDocumentation:")
     check_headlines([os.path.join(HERE, "STAGE4_RESULTS.md"),
                      os.path.join(HERE, "README.md")], args.registry, args.ledger)

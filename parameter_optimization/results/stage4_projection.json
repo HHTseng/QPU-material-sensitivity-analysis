@@ -1,0 +1,2066 @@
+{
+ "target_point": {
+  "topfilm_vsound": 2.518143026623875,
+  "topfilm_gap": 8.160871424093119e-05,
+  "topfilm_ph_lifetime": 0.0032391345908296698,
+  "topfilm_density": 9032.032333314419,
+  "bot_vsound": 3.3138976749032736,
+  "bot_gap_thres": 0.000219769477378577,
+  "bot_ph_lifetime": 2.657830536907085,
+  "bot_density": 5069.628160446882,
+  "sub_c11": 399.56976383924484,
+  "sub_c12": 156.41490975394845,
+  "sub_c44": 179.55148161388934,
+  "sub_scat": 1.4612400804627297e-43,
+  "sub_decay": 6.5588631961413265e-56,
+  "sub_decayTT": 0.9432507706806064,
+  "temperature": 0.056437374930828815,
+  "lattice_deg": 63.81921119056642,
+  "sub_lattice_a": 5.431,
+  "miller": [
+   2,
+   2,
+   3
+  ]
+ },
+ "target_features": {
+  "sub_vsound_m_s": 13858.479239,
+  "sub_vtrans_m_s": 8152.833257,
+  "sub_anisotropy": 1.476849,
+  "sub_impedance": 23427486.535,
+  "sub_scat": 1.4612400804627297e-43,
+  "sub_decay": 6.5588631961413265e-56,
+  "sub_decayTT": 0.9432507706806064,
+  "topfilm_vsound_m_s": 2518.143026623875,
+  "topfilm_gap_eV": 8.160871424093119e-05,
+  "topfilm_ph_lifetime_ns": 0.0032391345908296698,
+  "topfilm_impedance": 22743949.236377068,
+  "bot_vsound_m_s": 3313.8976749032736,
+  "bot_ph_lifetime_ns": 2.657830536907085,
+  "bot_impedance": 16800228.97352908
+ },
+ "film_speed_convention": "catalog_or_longitudinal",
+ "weights": null,
+ "layers": {
+  "substrate": {
+   "scales": {
+    "sub_vsound_m_s": 1800.5793094021205,
+    "sub_vtrans_m_s": 1166.6631466924237,
+    "sub_anisotropy": 0.5931561912225706,
+    "sub_impedance": 10087281.473401573,
+    "sub_scat": 1.0184797948086028,
+    "sub_decay": 0.3505970841735613,
+    "sub_decayTT": 0.014826000000000013
+   },
+   "ranking": [
+    {
+     "rank": 1,
+     "id": "Be3N2 (mp-18337)",
+     "distance": 0.3839640366706944,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -0.4563,
+      "sub_vtrans_m_s": 0.0911,
+      "sub_anisotropy": -0.5088,
+      "sub_impedance": 0.3382
+     },
+     "verified": false,
+     "source": "Materials Project mp-18337 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 13036.895586711531,
+      "sub_vtrans_m_s": 8259.118455689615,
+      "sub_anisotropy": 1.175074183976261,
+      "sub_impedance": 26838969.90931797,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 2,
+     "id": "SiC (mp-8062)",
+     "distance": 0.678581448439368,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -0.9215,
+      "sub_vtrans_m_s": -0.3999,
+      "sub_anisotropy": 0.6721,
+      "sub_impedance": 0.6173
+     },
+     "verified": false,
+     "source": "Materials Project mp-8062 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 12199.217084289876,
+      "sub_vtrans_m_s": 7686.2371477512415,
+      "sub_anisotropy": 1.8754863813229572,
+      "sub_impedance": 29654540.93518741,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 3,
+     "id": "BP (mp-1479)",
+     "distance": 0.7927616583883533,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -1.4102,
+      "sub_vtrans_m_s": -0.6607,
+      "sub_anisotropy": -0.1662,
+      "sub_impedance": 0.2472
+     },
+     "verified": false,
+     "source": "Materials Project mp-1479 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 11319.355205441643,
+      "sub_vtrans_m_s": 7381.982704863202,
+      "sub_anisotropy": 1.3782771535580525,
+      "sub_impedance": 25921332.645597193,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 4,
+     "id": "Be2C (mp-1569)",
+     "distance": 0.9352118816911322,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": 0.3048,
+      "sub_vtrans_m_s": 1.2737,
+      "sub_anisotropy": -1.2665,
+      "sub_impedance": 0.4233
+     },
+     "verified": false,
+     "source": "Materials Project mp-1569 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 14407.343280955898,
+      "sub_vtrans_m_s": 9638.857071048938,
+      "sub_anisotropy": 0.7256317689530686,
+      "sub_impedance": 27697615.691627722,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 5,
+     "id": "LiH (mp-23703)",
+     "distance": 1.2556113935428976,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -1.7167,
+      "sub_vtrans_m_s": -0.7842,
+      "sub_anisotropy": -0.2103,
+      "sub_impedance": -1.6431
+     },
+     "verified": false,
+     "source": "Materials Project mp-23703 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 10767.364980636768,
+      "sub_vtrans_m_s": 7237.9611809857215,
+      "sub_anisotropy": 1.352112676056338,
+      "sub_impedance": 6852673.243136817,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 6,
+     "id": "Li3AlN2 (mp-13944)",
+     "distance": 1.4794880478839185,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -2.1672,
+      "sub_vtrans_m_s": -1.4613,
+      "sub_anisotropy": -1.2925,
+      "sub_impedance": -0.5029
+     },
+     "verified": false,
+     "source": "Materials Project mp-13944 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 9956.288593429219,
+      "sub_vtrans_m_s": 6447.994801149428,
+      "sub_anisotropy": 0.710204081632653,
+      "sub_impedance": 18354207.771801922,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 7,
+     "id": "MgO (mp-1265)",
+     "distance": 1.6321678117926,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -2.5233,
+      "sub_vtrans_m_s": -2.0616,
+      "sub_anisotropy": 0.094,
+      "sub_impedance": 0.173
+     },
+     "verified": false,
+     "source": "Materials Project mp-1265 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 9315.082492707837,
+      "sub_vtrans_m_s": 5747.673589451669,
+      "sub_anisotropy": 1.5326086956521738,
+      "sub_impedance": 25173012.906900376,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 8,
+     "id": "Li2O (mp-1960)",
+     "distance": 1.7860232421673337,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -2.4853,
+      "sub_vtrans_m_s": -1.9207,
+      "sub_anisotropy": -1.4161,
+      "sub_impedance": -0.9424
+     },
+     "verified": false,
+     "source": "Materials Project mp-1960 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 9383.439201816922,
+      "sub_vtrans_m_s": 5912.006073428257,
+      "sub_anisotropy": 0.6368715083798883,
+      "sub_impedance": 13921295.503336934,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 9,
+     "id": "Mg3N2 (mp-1559)",
+     "distance": 1.8701767840064645,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -2.7759,
+      "sub_vtrans_m_s": -2.4144,
+      "sub_anisotropy": -0.3824,
+      "sub_impedance": -0.5558
+     },
+     "verified": false,
+     "source": "Materials Project mp-1559 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 8860.240010351828,
+      "sub_vtrans_m_s": 5336.010712836515,
+      "sub_anisotropy": 1.25,
+      "sub_impedance": 17821367.161959272,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 10,
+     "id": "Be4TeO7 (mp-27608)",
+     "distance": 1.8713808311359266,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -2.7163,
+      "sub_vtrans_m_s": -2.5265,
+      "sub_anisotropy": 0.3302,
+      "sub_impedance": 0.3711
+     },
+     "verified": false,
+     "source": "Materials Project mp-27608 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 8967.480581074924,
+      "sub_vtrans_m_s": 5205.3105290752455,
+      "sub_anisotropy": 1.6727272727272726,
+      "sub_impedance": 27170561.244746204,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 11,
+     "id": "SiO2 (mp-8352)",
+     "distance": 1.8798928475510317,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -1.7249,
+      "sub_vtrans_m_s": -2.3753,
+      "sub_anisotropy": 2.1609,
+      "sub_impedance": -0.9213
+     },
+     "verified": false,
+     "source": "Materials Project mp-8352 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 10752.579323609834,
+      "sub_vtrans_m_s": 5381.643076953695,
+      "sub_anisotropy": 2.7586206896551726,
+      "sub_impedance": 14134018.243804423,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 12,
+     "id": "MgAl2O4 (mp-3536)",
+     "distance": 1.8800112259112853,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -2.362,
+      "sub_vtrans_m_s": -2.3932,
+      "sub_anisotropy": 1.6806,
+      "sub_impedance": 0.0837
+     },
+     "verified": false,
+     "source": "Materials Project mp-3536 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 9605.459124683148,
+      "sub_vtrans_m_s": 5360.799997001541,
+      "sub_anisotropy": 2.473684210526316,
+      "sub_impedance": 24271429.580396485,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 13,
+     "id": "Ca3Al2(SiO4)3 (mp-6008)",
+     "distance": 1.8820340704796361,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -2.6879,
+      "sub_vtrans_m_s": -2.4566,
+      "sub_anisotropy": -0.9512,
+      "sub_impedance": -0.063
+     },
+     "verified": false,
+     "source": "Materials Project mp-6008 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 9018.730448961674,
+      "sub_vtrans_m_s": 5286.857545858391,
+      "sub_anisotropy": 0.912621359223301,
+      "sub_impedance": 22791718.095818017,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 14,
+     "id": "BeS (mp-422)",
+     "distance": 1.88206117617645,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -2.7683,
+      "sub_vtrans_m_s": -2.3917,
+      "sub_anisotropy": 0.3953,
+      "sub_impedance": -0.7929
+     },
+     "verified": false,
+     "source": "Materials Project mp-422 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 8873.969399125346,
+      "sub_vtrans_m_s": 5362.505754517781,
+      "sub_anisotropy": 1.711340206185567,
+      "sub_impedance": 15429574.283075077,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 15,
+     "id": "Mg3Al2(SiO4)3 (mp-6073)",
+     "distance": 1.998027824566846,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -2.7754,
+      "sub_vtrans_m_s": -2.7427,
+      "sub_anisotropy": -0.8431,
+      "sub_impedance": -0.1789
+     },
+     "verified": false,
+     "source": "Materials Project mp-6073 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 8861.062007564691,
+      "sub_vtrans_m_s": 4953.009167091867,
+      "sub_anisotropy": 0.9767441860465116,
+      "sub_impedance": 21623115.009398025,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 16,
+     "id": "MgO2 (mp-2589)",
+     "distance": 2.0033720190600994,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -2.9348,
+      "sub_vtrans_m_s": -2.6171,
+      "sub_anisotropy": -0.7236,
+      "sub_impedance": -0.2617
+     },
+     "verified": false,
+     "source": "Materials Project mp-2589 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 8574.225973425848,
+      "sub_vtrans_m_s": 5099.588057717587,
+      "sub_anisotropy": 1.0476190476190477,
+      "sub_impedance": 20787462.012934167,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 17,
+     "id": "Li7VN4 (mp-4604)",
+     "distance": 2.017065103231203,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -2.8291,
+      "sub_vtrans_m_s": -2.2874,
+      "sub_anisotropy": -1.5732,
+      "sub_impedance": -0.7506
+     },
+     "verified": false,
+     "source": "Materials Project mp-4604 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 8764.537245407293,
+      "sub_vtrans_m_s": 5484.183276002167,
+      "sub_anisotropy": 0.5436893203883495,
+      "sub_impedance": 15856285.436991438,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 18,
+     "id": "LiAlSi (mp-3161)",
+     "distance": 2.0594109809565717,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -3.0874,
+      "sub_vtrans_m_s": -2.4641,
+      "sub_anisotropy": -0.4463,
+      "sub_impedance": -1.0779
+     },
+     "verified": false,
+     "source": "Materials Project mp-3161 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 8299.458990082723,
+      "sub_vtrans_m_s": 5278.055708894648,
+      "sub_anisotropy": 1.2121212121212122,
+      "sub_impedance": 12553928.345231744,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 19,
+     "id": "Mg3NF3 (mp-7604)",
+     "distance": 2.090206390905964,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -3.1361,
+      "sub_vtrans_m_s": -2.6837,
+      "sub_anisotropy": -0.5437,
+      "sub_impedance": -0.3782
+     },
+     "verified": false,
+     "source": "Materials Project mp-7604 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 8211.67412410049,
+      "sub_vtrans_m_s": 5021.899350064039,
+      "sub_anisotropy": 1.1543624161073827,
+      "sub_impedance": 19612278.42155588,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 20,
+     "id": "AlF3 (mp-8039)",
+     "distance": 2.0968285943024325,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -2.7389,
+      "sub_vtrans_m_s": -2.6021,
+      "sub_anisotropy": -1.773,
+      "sub_impedance": -0.4133
+     },
+     "verified": false,
+     "source": "Materials Project mp-8039 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 8926.812309679704,
+      "sub_vtrans_m_s": 5117.10015811526,
+      "sub_anisotropy": 0.4251968503937008,
+      "sub_impedance": 19258420.778778218,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 21,
+     "id": "NaNbO3 (mp-3136)",
+     "distance": 2.1573568172328024,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -2.8071,
+      "sub_vtrans_m_s": -2.7462,
+      "sub_anisotropy": -1.7644,
+      "sub_impedance": 0.2872
+     },
+     "verified": false,
+     "source": "Materials Project mp-3136 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 8804.126857950958,
+      "sub_vtrans_m_s": 4948.940711594548,
+      "sub_anisotropy": 0.4303030303030303,
+      "sub_impedance": 26324675.892368138,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 22,
+     "id": "Zn4B6O13 (mp-4812)",
+     "distance": 2.1666388012044497,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -3.0368,
+      "sub_vtrans_m_s": -3.046,
+      "sub_anisotropy": -0.504,
+      "sub_impedance": 0.1521
+     },
+     "verified": false,
+     "source": "Materials Project mp-4812 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 8390.439705520237,
+      "sub_vtrans_m_s": 4599.224008477295,
+      "sub_anisotropy": 1.177914110429448,
+      "sub_impedance": 24962059.540750872,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 23,
+     "id": "Ce(FeP3)4 (mp-16272)",
+     "distance": 2.1730623182559974,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -3.1784,
+      "sub_vtrans_m_s": -2.6635,
+      "sub_anisotropy": -0.9978,
+      "sub_impedance": 0.8349
+     },
+     "verified": false,
+     "source": "Materials Project mp-16272 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 8135.561489952499,
+      "sub_vtrans_m_s": 5045.4422658722315,
+      "sub_anisotropy": 0.8850174216027874,
+      "sub_impedance": 31849188.488750476,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 24,
+     "id": "Y3Al5O12 (mp-3050)",
+     "distance": 2.1746752365258035,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -3.1307,
+      "sub_vtrans_m_s": -2.9067,
+      "sub_anisotropy": -0.7371,
+      "sub_impedance": 0.3513
+     },
+     "verified": false,
+     "source": "Materials Project mp-3050 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 8221.429375648153,
+      "sub_vtrans_m_s": 4761.708427023773,
+      "sub_anisotropy": 1.0396039603960396,
+      "sub_impedance": 26971401.104147777,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 25,
+     "id": "KNbO3 (mp-935811)",
+     "distance": 2.1901134061178644,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -2.999,
+      "sub_vtrans_m_s": -2.7663,
+      "sub_anisotropy": -1.5312,
+      "sub_impedance": 0.4423
+     },
+     "verified": false,
+     "source": "Materials Project mp-935811 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 8458.623375093559,
+      "sub_vtrans_m_s": 4925.463521707434,
+      "sub_anisotropy": 0.5686274509803921,
+      "sub_impedance": 27889072.424688403,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 26,
+     "id": "FeS2 (mp-226)",
+     "distance": 2.1994684981441606,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -3.1858,
+      "sub_vtrans_m_s": -2.5459,
+      "sub_anisotropy": -1.4559,
+      "sub_impedance": 0.7747
+     },
+     "verified": false,
+     "source": "Materials Project mp-226 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 8122.219955337969,
+      "sub_vtrans_m_s": 5182.644003887311,
+      "sub_anisotropy": 0.6132596685082873,
+      "sub_impedance": 31242246.172615003,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 27,
+     "id": "Li3GaN2 (mp-3887)",
+     "distance": 2.2748158414228095,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -3.3734,
+      "sub_vtrans_m_s": -2.754,
+      "sub_anisotropy": -1.2979,
+      "sub_impedance": -0.2241
+     },
+     "verified": false,
+     "source": "Materials Project mp-3887 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 7784.379906461852,
+      "sub_vtrans_m_s": 4939.865896405834,
+      "sub_anisotropy": 0.7069767441860465,
+      "sub_impedance": 21167172.963059533,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 28,
+     "id": "CaO (mp-2605)",
+     "distance": 2.2783341404073782,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -3.3583,
+      "sub_vtrans_m_s": -2.9561,
+      "sub_anisotropy": -0.7577,
+      "sub_impedance": -0.4145
+     },
+     "verified": false,
+     "source": "Materials Project mp-2605 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 7811.509101916992,
+      "sub_vtrans_m_s": 4704.0149125960115,
+      "sub_anisotropy": 1.0273972602739727,
+      "sub_impedance": 19246185.405634407,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 29,
+     "id": "SrTiO3 (mp-5229)",
+     "distance": 2.2979587549912974,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -3.3206,
+      "sub_vtrans_m_s": -3.0276,
+      "sub_anisotropy": -0.7883,
+      "sub_impedance": 0.5552
+     },
+     "verified": false,
+     "source": "Materials Project mp-5229 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 7879.4603956084575,
+      "sub_vtrans_m_s": 4620.656248470116,
+      "sub_anisotropy": 1.0092592592592593,
+      "sub_impedance": 29028337.386452425,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 30,
+     "id": "AlP (mp-1550)",
+     "distance": 2.32588613178929,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -3.2595,
+      "sub_vtrans_m_s": -3.0928,
+      "sub_anisotropy": 0.6745,
+      "sub_impedance": -0.9972
+     },
+     "verified": false,
+     "source": "Materials Project mp-1550 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 7989.4748770574715,
+      "sub_vtrans_m_s": 4544.6231039820295,
+      "sub_anisotropy": 1.876923076923077,
+      "sub_impedance": 13368040.527993785,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 31,
+     "id": "Y2Ti2O7 (mp-5373)",
+     "distance": 2.3387667418662144,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -3.2525,
+      "sub_vtrans_m_s": -3.1646,
+      "sub_anisotropy": -1.0381,
+      "sub_impedance": 0.456
+     },
+     "verified": false,
+     "source": "Materials Project mp-5373 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 8002.049836599371,
+      "sub_vtrans_m_s": 4460.777132304106,
+      "sub_anisotropy": 0.8611111111111112,
+      "sub_impedance": 28027248.665730685,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 32,
+     "id": "Mg2Si (mp-1367)",
+     "distance": 2.36487632050585,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -3.4736,
+      "sub_vtrans_m_s": -2.8678,
+      "sub_anisotropy": -0.822,
+      "sub_impedance": -1.1849
+     },
+     "verified": false,
+     "source": "Materials Project mp-1367 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 7603.907162994504,
+      "sub_vtrans_m_s": 4807.020809167315,
+      "sub_anisotropy": 0.989247311827957,
+      "sub_impedance": 11474828.24382753,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 33,
+     "id": "FeSi (mp-871)",
+     "distance": 2.371581235846142,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -3.3939,
+      "sub_vtrans_m_s": -2.9897,
+      "sub_anisotropy": -0.4211,
+      "sub_impedance": 1.3651
+     },
+     "verified": false,
+     "source": "Materials Project mp-871 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 7747.549895310478,
+      "sub_vtrans_m_s": 4664.8148293807235,
+      "sub_anisotropy": 1.2270916334661355,
+      "sub_impedance": 37197314.265728004,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 34,
+     "id": "Li7NbN4 (mp-14827)",
+     "distance": 2.379484432220972,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -3.3347,
+      "sub_vtrans_m_s": -2.8881,
+      "sub_anisotropy": -1.6425,
+      "sub_impedance": -0.6994
+     },
+     "verified": false,
+     "source": "Materials Project mp-14827 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 7854.103969381082,
+      "sub_vtrans_m_s": 4783.44653229815,
+      "sub_anisotropy": 0.5026178010471204,
+      "sub_impedance": 16372796.608185736,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 35,
+     "id": "Mg2FeH6 (mp-23804)",
+     "distance": 2.4092278624308388,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -3.5573,
+      "sub_vtrans_m_s": -3.0116,
+      "sub_anisotropy": -0.9712,
+      "sub_impedance": -0.7413
+     },
+     "verified": false,
+     "source": "Materials Project mp-23804 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 7453.210310699096,
+      "sub_vtrans_m_s": 4639.259246068219,
+      "sub_anisotropy": 0.9007633587786259,
+      "sub_impedance": 15949321.249836728,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 36,
+     "id": "ZrP2O7 (mp-5024)",
+     "distance": 2.4109067839935974,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -3.0563,
+      "sub_vtrans_m_s": -3.3512,
+      "sub_anisotropy": -1.4783,
+      "sub_impedance": -0.702
+     },
+     "verified": false,
+     "source": "Materials Project mp-5024 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 8355.366885979713,
+      "sub_vtrans_m_s": 4243.057599366493,
+      "sub_anisotropy": 0.6,
+      "sub_impedance": 16346561.438399404,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 37,
+     "id": "YN (mp-2114)",
+     "distance": 2.4270905462923906,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -3.5765,
+      "sub_vtrans_m_s": -3.084,
+      "sub_anisotropy": -0.725,
+      "sub_impedance": 0.8573
+     },
+     "verified": false,
+     "source": "Materials Project mp-2114 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 7418.729525762501,
+      "sub_vtrans_m_s": 4554.809401200197,
+      "sub_anisotropy": 1.0468085106382978,
+      "sub_impedance": 32075175.636387352,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 38,
+     "id": "LaAlO3 (mp-5304)",
+     "distance": 2.4420329956460622,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -3.5116,
+      "sub_vtrans_m_s": -3.1562,
+      "sub_anisotropy": -0.0019,
+      "sub_impedance": 1.2496
+     },
+     "verified": false,
+     "source": "Materials Project mp-5304 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 7535.592346079538,
+      "sub_vtrans_m_s": 4470.642224558409,
+      "sub_anisotropy": 1.4757281553398058,
+      "sub_impedance": 36032309.48582373,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 39,
+     "id": "PrAlO3 (mp-8218)",
+     "distance": 2.4492697023925856,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -3.5141,
+      "sub_vtrans_m_s": -3.1257,
+      "sub_anisotropy": -0.0836,
+      "sub_impedance": 1.3674
+     },
+     "verified": false,
+     "source": "Materials Project mp-8218 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 7530.985098124601,
+      "sub_vtrans_m_s": 4506.24839762906,
+      "sub_anisotropy": 1.4272727272727272,
+      "sub_impedance": 37220852.39177673,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    },
+    {
+     "rank": 40,
+     "id": "MgS (mp-1315)",
+     "distance": 2.4730440191376504,
+     "matched": 4,
+     "total": 7,
+     "unmatched_features": [
+      "sub_scat",
+      "sub_decay",
+      "sub_decayTT"
+     ],
+     "z": {
+      "sub_vsound_m_s": -3.6101,
+      "sub_vtrans_m_s": -3.1996,
+      "sub_anisotropy": -0.6127,
+      "sub_impedance": -0.9044
+     },
+     "verified": false,
+     "source": "Materials Project mp-1315 (DFT elasticity, experimentally observed)",
+     "features": {
+      "sub_vsound_m_s": 7358.146458635622,
+      "sub_vtrans_m_s": 4419.981491055124,
+      "sub_anisotropy": 1.1134020618556701,
+      "sub_impedance": 14305016.86720919,
+      "sub_scat": null,
+      "sub_decay": null,
+      "sub_decayTT": null
+     }
+    }
+   ],
+   "simulable_ranking": [
+    {
+     "rank": 371,
+     "id": "Si",
+     "distance": 5.4676259712185304,
+     "matched": 7,
+     "total": 7,
+     "unmatched_features": [],
+     "z": {
+      "sub_vsound_m_s": -2.689,
+      "sub_vtrans_m_s": -2.3857,
+      "sub_anisotropy": 0.146,
+      "sub_impedance": -0.8014,
+      "sub_scat": 2.7602,
+      "sub_decay": 0.348,
+      "sub_decayTT": -13.7091
+     }
+    },
+    {
+     "rank": 372,
+     "id": "GaAs",
+     "distance": 5.754491916136591,
+     "matched": 7,
+     "total": 7,
+     "unmatched_features": [],
+     "z": {
+      "sub_vsound_m_s": -4.7989,
+      "sub_vtrans_m_s": -4.4251,
+      "sub_anisotropy": 0.6366,
+      "sub_impedance": -0.3576,
+      "sub_scat": 3.8294,
+      "sub_decay": 7.0539,
+      "sub_decayTT": -11.146
+     }
+    },
+    {
+     "rank": 374,
+     "id": "CaF2",
+     "distance": 6.043616340281924,
+     "matched": 7,
+     "total": 7,
+     "unmatched_features": [],
+     "z": {
+      "sub_vsound_m_s": -3.9187,
+      "sub_vtrans_m_s": -3.881,
+      "sub_anisotropy": -1.4661,
+      "sub_impedance": -0.8458,
+      "sub_scat": 3.4347,
+      "sub_decay": 6.3794,
+      "sub_decayTT": -13.0346
+     }
+    },
+    {
+     "rank": 376,
+     "id": "Ge",
+     "distance": 6.995128262421005,
+     "matched": 7,
+     "total": 7,
+     "unmatched_features": [],
+     "z": {
+      "sub_vsound_m_s": -4.7701,
+      "sub_vtrans_m_s": -4.2158,
+      "sub_anisotropy": 0.2652,
+      "sub_impedance": -0.2577,
+      "sub_scat": 5.4258,
+      "sub_decay": 9.1913,
+      "sub_decayTT": -13.7091
+     }
+    },
+    {
+     "rank": 378,
+     "id": "LiF",
+     "distance": 7.3834704581446,
+     "matched": 7,
+     "total": 7,
+     "unmatched_features": [],
+     "z": {
+      "sub_vsound_m_s": -3.6553,
+      "sub_vtrans_m_s": -3.2551,
+      "sub_anisotropy": 0.7447,
+      "sub_impedance": -0.9278,
+      "sub_scat": 2.0426,
+      "sub_decay": 6.0654,
+      "sub_decayTT": -17.756
+     }
+    }
+   ]
+  },
+  "top_film": {
+   "scales": {
+    "topfilm_vsound_m_s": 1601.2079999999999,
+    "topfilm_gap_eV": 1.5465184192047714,
+    "topfilm_ph_lifetime_ns": 2.1523653278742274,
+    "topfilm_impedance": 8570614.08
+   },
+   "ranking": [
+    {
+     "rank": 1,
+     "id": "In",
+     "distance": 0.7560354290846473,
+     "matched": 3,
+     "total": 4,
+     "unmatched_features": [
+      "topfilm_ph_lifetime_ns"
+     ],
+     "z": {
+      "topfilm_vsound_m_s": 0.0261,
+      "topfilm_gap_eV": 1.2219,
+      "topfilm_impedance": -0.4703
+     },
+     "verified": false,
+     "source": "standard reference; VERIFY before fabrication",
+     "features": {
+      "topfilm_vsound_m_s": 2560.0,
+      "topfilm_gap_eV": 0.00054,
+      "topfilm_ph_lifetime_ns": null,
+      "topfilm_impedance": 18713600.0
+     }
+    },
+    {
+     "rank": 2,
+     "id": "Sn",
+     "distance": 0.7902717604801511,
+     "matched": 3,
+     "total": 4,
+     "unmatched_features": [
+      "topfilm_ph_lifetime_ns"
+     ],
+     "z": {
+      "topfilm_vsound_m_s": 0.5008,
+      "topfilm_gap_eV": 1.2625,
+      "topfilm_impedance": 0.1702
+     },
+     "verified": false,
+     "source": "standard reference; VERIFY before fabrication",
+     "features": {
+      "topfilm_vsound_m_s": 3320.0,
+      "topfilm_gap_eV": 0.000575,
+      "topfilm_ph_lifetime_ns": null,
+      "topfilm_impedance": 24202800.0
+     }
+    },
+    {
+     "rank": 3,
+     "id": "Zn",
+     "distance": 0.8026281617270395,
+     "matched": 3,
+     "total": 4,
+     "unmatched_features": [
+      "topfilm_ph_lifetime_ns"
+     ],
+     "z": {
+      "topfilm_vsound_m_s": 1.0566,
+      "topfilm_gap_eV": 0.2961,
+      "topfilm_impedance": 0.8536
+     },
+     "verified": false,
+     "source": "standard reference; VERIFY before fabrication",
+     "features": {
+      "topfilm_vsound_m_s": 4210.0,
+      "topfilm_gap_eV": 0.000129,
+      "topfilm_ph_lifetime_ns": null,
+      "topfilm_impedance": 30059400.0
+     }
+    },
+    {
+     "rank": 4,
+     "id": "Nb",
+     "distance": 0.9572739623264341,
+     "matched": 4,
+     "total": 4,
+     "unmatched_features": [],
+     "z": {
+      "topfilm_vsound_m_s": -0.0463,
+      "topfilm_gap_eV": 1.8988,
+      "topfilm_ph_lifetime_ns": 0.1174,
+      "topfilm_impedance": -0.2099
+     },
+     "verified": true,
+     "source": "project catalog (material_catalog.yaml)",
+     "features": {
+      "topfilm_vsound_m_s": 2444.0,
+      "topfilm_gap_eV": 0.0015384,
+      "topfilm_ph_lifetime_ns": 0.00417,
+      "topfilm_impedance": 20945080.0
+     }
+    },
+    {
+     "rank": 5,
+     "id": "Pb",
+     "distance": 1.0647288650862785,
+     "matched": 3,
+     "total": 4,
+     "unmatched_features": [
+      "topfilm_ph_lifetime_ns"
+     ],
+     "z": {
+      "topfilm_vsound_m_s": -0.2237,
+      "topfilm_gap_eV": 1.8191,
+      "topfilm_impedance": 0.2042
+     },
+     "verified": true,
+     "source": "project catalog (disabled there: no sourced phonon lifetime)",
+     "features": {
+      "topfilm_vsound_m_s": 2160.0,
+      "topfilm_gap_eV": 0.00136,
+      "topfilm_ph_lifetime_ns": null,
+      "topfilm_impedance": 24494400.0
+     }
+    },
+    {
+     "rank": 6,
+     "id": "Ti",
+     "distance": 1.2601884609449836,
+     "matched": 4,
+     "total": 4,
+     "unmatched_features": [],
+     "z": {
+      "topfilm_vsound_m_s": 1.0129,
+      "topfilm_gap_eV": -0.1882,
+      "topfilm_ph_lifetime_ns": 2.2536,
+      "topfilm_impedance": -0.4607
+     },
+     "verified": true,
+     "source": "project catalog",
+     "features": {
+      "topfilm_vsound_m_s": 4140.0,
+      "topfilm_gap_eV": 6.1e-05,
+      "topfilm_ph_lifetime_ns": 0.414,
+      "topfilm_impedance": 18795600.0
+     }
+    },
+    {
+     "rank": 7,
+     "id": "Al",
+     "distance": 1.3311708006693934,
+     "matched": 4,
+     "total": 4,
+     "unmatched_features": [],
+     "z": {
+      "topfilm_vsound_m_s": 0.6644,
+      "topfilm_gap_eV": 0.5498,
+      "topfilm_ph_lifetime_ns": 2.0041,
+      "topfilm_impedance": -1.5257
+     },
+     "verified": true,
+     "source": "project catalog, junction values (setTopVSound / setTopGap / setTopPhLifetime)",
+     "features": {
+      "topfilm_vsound_m_s": 3582.0,
+      "topfilm_gap_eV": 0.000191,
+      "topfilm_ph_lifetime_ns": 0.242,
+      "topfilm_impedance": 9667818.0
+     }
+    },
+    {
+     "rank": 8,
+     "id": "TiN",
+     "distance": 1.5159703570439587,
+     "matched": 1,
+     "total": 4,
+     "unmatched_features": [
+      "topfilm_vsound_m_s",
+      "topfilm_ph_lifetime_ns",
+      "topfilm_impedance"
+     ],
+     "z": {
+      "topfilm_gap_eV": 1.516
+     },
+     "verified": false,
+     "source": "standard reference for Tc/density; speeds NOT entered",
+     "features": {
+      "topfilm_vsound_m_s": null,
+      "topfilm_gap_eV": 0.000851,
+      "topfilm_ph_lifetime_ns": null,
+      "topfilm_impedance": null
+     }
+    },
+    {
+     "rank": 9,
+     "id": "V",
+     "distance": 1.7990228204932488,
+     "matched": 3,
+     "total": 4,
+     "unmatched_features": [
+      "topfilm_ph_lifetime_ns"
+     ],
+     "z": {
+      "topfilm_vsound_m_s": 2.1889,
+      "topfilm_gap_eV": 1.4928,
+      "topfilm_impedance": 1.6401
+     },
+     "verified": false,
+     "source": "standard reference; VERIFY before fabrication",
+     "features": {
+      "topfilm_vsound_m_s": 6023.0,
+      "topfilm_gap_eV": 0.000821,
+      "topfilm_ph_lifetime_ns": null,
+      "topfilm_impedance": 36800530.0
+     }
+    },
+    {
+     "rank": 10,
+     "id": "NbN",
+     "distance": 2.238143841411828,
+     "matched": 1,
+     "total": 4,
+     "unmatched_features": [
+      "topfilm_vsound_m_s",
+      "topfilm_ph_lifetime_ns",
+      "topfilm_impedance"
+     ],
+     "z": {
+      "topfilm_gap_eV": 2.2381
+     },
+     "verified": false,
+     "source": "standard reference for Tc/gap/density; speeds NOT entered",
+     "features": {
+      "topfilm_vsound_m_s": null,
+      "topfilm_gap_eV": 0.0026,
+      "topfilm_ph_lifetime_ns": null,
+      "topfilm_impedance": null
+     }
+    },
+    {
+     "rank": 11,
+     "id": "Nb3Sn",
+     "distance": 2.411607010853174,
+     "matched": 1,
+     "total": 4,
+     "unmatched_features": [
+      "topfilm_vsound_m_s",
+      "topfilm_ph_lifetime_ns",
+      "topfilm_impedance"
+     ],
+     "z": {
+      "topfilm_gap_eV": 2.4116
+     },
+     "verified": false,
+     "source": "standard reference for Tc/gap/density; speeds NOT entered",
+     "features": {
+      "topfilm_vsound_m_s": null,
+      "topfilm_gap_eV": 0.0034,
+      "topfilm_ph_lifetime_ns": null,
+      "topfilm_impedance": null
+     }
+    },
+    {
+     "rank": 12,
+     "id": "Ta",
+     "distance": 2.8827139710570098,
+     "matched": 4,
+     "total": 4,
+     "unmatched_features": [],
+     "z": {
+      "topfilm_vsound_m_s": 1.0248,
+      "topfilm_gap_eV": 1.3897,
+      "topfilm_ph_lifetime_ns": 0.9046,
+      "topfilm_impedance": 5.4259
+     },
+     "verified": true,
+     "source": "project catalog; used in state-of-the-art transmons",
+     "features": {
+      "topfilm_vsound_m_s": 4159.0,
+      "topfilm_gap_eV": 0.0007,
+      "topfilm_ph_lifetime_ns": 0.0227,
+      "topfilm_impedance": 69247350.0
+     }
+    },
+    {
+     "rank": 13,
+     "id": "Mo",
+     "distance": 3.117800132766166,
+     "matched": 3,
+     "total": 4,
+     "unmatched_features": [
+      "topfilm_ph_lifetime_ns"
+     ],
+     "z": {
+      "topfilm_vsound_m_s": 2.3556,
+      "topfilm_gap_eV": 0.349,
+      "topfilm_impedance": 4.8468
+     },
+     "verified": false,
+     "source": "standard reference; VERIFY before fabrication",
+     "features": {
+      "topfilm_vsound_m_s": 6290.0,
+      "topfilm_gap_eV": 0.00014,
+      "topfilm_ph_lifetime_ns": null,
+      "topfilm_impedance": 64283800.0
+     }
+    },
+    {
+     "rank": 14,
+     "id": "W",
+     "distance": 5.507668155504538,
+     "matched": 3,
+     "total": 4,
+     "unmatched_features": [
+      "topfilm_ph_lifetime_ns"
+     ],
+     "z": {
+      "topfilm_vsound_m_s": 1.6874,
+      "topfilm_gap_eV": -2.3078,
+      "topfilm_impedance": 9.1011
+     },
+     "verified": false,
+     "source": "standard reference; VERIFY before fabrication",
+     "features": {
+      "topfilm_vsound_m_s": 5220.0,
+      "topfilm_gap_eV": 2.3e-06,
+      "topfilm_ph_lifetime_ns": null,
+      "topfilm_impedance": 100746000.0
+     }
+    }
+   ],
+   "simulable_ranking": [
+    {
+     "rank": 4,
+     "id": "Nb",
+     "distance": 0.9572739623264341,
+     "matched": 4,
+     "total": 4,
+     "unmatched_features": [],
+     "z": {
+      "topfilm_vsound_m_s": -0.0463,
+      "topfilm_gap_eV": 1.8988,
+      "topfilm_ph_lifetime_ns": 0.1174,
+      "topfilm_impedance": -0.2099
+     }
+    },
+    {
+     "rank": 6,
+     "id": "Ti",
+     "distance": 1.2601884609449836,
+     "matched": 4,
+     "total": 4,
+     "unmatched_features": [],
+     "z": {
+      "topfilm_vsound_m_s": 1.0129,
+      "topfilm_gap_eV": -0.1882,
+      "topfilm_ph_lifetime_ns": 2.2536,
+      "topfilm_impedance": -0.4607
+     }
+    },
+    {
+     "rank": 7,
+     "id": "Al",
+     "distance": 1.3311708006693934,
+     "matched": 4,
+     "total": 4,
+     "unmatched_features": [],
+     "z": {
+      "topfilm_vsound_m_s": 0.6644,
+      "topfilm_gap_eV": 0.5498,
+      "topfilm_ph_lifetime_ns": 2.0041,
+      "topfilm_impedance": -1.5257
+     }
+    },
+    {
+     "rank": 12,
+     "id": "Ta",
+     "distance": 2.8827139710570098,
+     "matched": 4,
+     "total": 4,
+     "unmatched_features": [],
+     "z": {
+      "topfilm_vsound_m_s": 1.0248,
+      "topfilm_gap_eV": 1.3897,
+      "topfilm_ph_lifetime_ns": 0.9046,
+      "topfilm_impedance": 5.4259
+     }
+    }
+   ]
+  },
+  "bottom_film": {
+   "scales": {
+    "bot_vsound_m_s": 1467.774,
+    "bot_ph_lifetime_ns": 0.8475640076942931,
+    "bot_impedance": 34584239.55
+   },
+   "ranking": [
+    {
+     "rank": 1,
+     "id": "Ag",
+     "distance": 0.46823498948257464,
+     "matched": 2,
+     "total": 3,
+     "unmatched_features": [
+      "bot_ph_lifetime_ns"
+     ],
+     "z": {
+      "bot_vsound_m_s": 0.229,
+      "bot_impedance": 0.6213
+     },
+     "verified": false,
+     "source": "standard reference; VERIFY before fabrication",
+     "features": {
+      "bot_vsound_m_s": 3650.0,
+      "bot_ph_lifetime_ns": null,
+      "bot_impedance": 38288500.0
+     }
+    },
+    {
+     "rank": 2,
+     "id": "Cu",
+     "distance": 0.5349866634488016,
+     "matched": 3,
+     "total": 3,
+     "unmatched_features": [],
+     "z": {
+      "bot_vsound_m_s": -0.4809,
+      "bot_ph_lifetime_ns": 0.7689,
+      "bot_impedance": 0.1899
+     },
+     "verified": true,
+     "source": "project catalog (harness baseline)",
+     "features": {
+      "bot_vsound_m_s": 2608.0,
+      "bot_ph_lifetime_ns": 5.1,
+      "bot_impedance": 23367680.0
+     }
+    },
+    {
+     "rank": 3,
+     "id": "Pd",
+     "distance": 1.0509806238081483,
+     "matched": 2,
+     "total": 3,
+     "unmatched_features": [
+      "bot_ph_lifetime_ns"
+     ],
+     "z": {
+      "bot_vsound_m_s": 0.9444,
+      "bot_impedance": 1.1477
+     },
+     "verified": false,
+     "source": "standard reference; VERIFY before fabrication",
+     "features": {
+      "bot_vsound_m_s": 4700.0,
+      "bot_ph_lifetime_ns": null,
+      "bot_impedance": 56494000.0
+     }
+    },
+    {
+     "rank": 4,
+     "id": "Pt",
+     "distance": 1.4275681473588888,
+     "matched": 2,
+     "total": 3,
+     "unmatched_features": [
+      "bot_ph_lifetime_ns"
+     ],
+     "z": {
+      "bot_vsound_m_s": 0.4402,
+      "bot_impedance": 1.9703
+     },
+     "verified": false,
+     "source": "standard reference; VERIFY before fabrication",
+     "features": {
+      "bot_vsound_m_s": 3960.0,
+      "bot_ph_lifetime_ns": null,
+      "bot_impedance": 84942000.0
+     }
+    },
+    {
+     "rank": 5,
+     "id": "Au",
+     "distance": 1.44183966149007,
+     "matched": 3,
+     "total": 3,
+     "unmatched_features": [],
+     "z": {
+      "bot_vsound_m_s": -0.0503,
+      "bot_ph_lifetime_ns": 2.1179,
+      "bot_impedance": 1.3223
+     },
+     "verified": true,
+     "source": "project catalog",
+     "features": {
+      "bot_vsound_m_s": 3240.0,
+      "bot_ph_lifetime_ns": 16.0,
+      "bot_impedance": 62532000.0
+     }
+    },
+    {
+     "rank": 6,
+     "id": "Al_normal",
+     "distance": 1.4964177270628605,
+     "matched": 2,
+     "total": 3,
+     "unmatched_features": [
+      "bot_ph_lifetime_ns"
+     ],
+     "z": {
+      "bot_vsound_m_s": 2.1162,
+      "bot_impedance": 0.0152
+     },
+     "verified": false,
+     "source": "standard reference; VERIFY before fabrication",
+     "features": {
+      "bot_vsound_m_s": 6420.0,
+      "bot_ph_lifetime_ns": null,
+      "bot_impedance": 17327580.0
+     }
+    },
+    {
+     "rank": 7,
+     "id": "Mo_normal",
+     "distance": 1.7315260369756083,
+     "matched": 2,
+     "total": 3,
+     "unmatched_features": [
+      "bot_ph_lifetime_ns"
+     ],
+     "z": {
+      "bot_vsound_m_s": 2.0276,
+      "bot_impedance": 1.373
+     },
+     "verified": false,
+     "source": "standard reference; VERIFY before fabrication",
+     "features": {
+      "bot_vsound_m_s": 6290.0,
+      "bot_ph_lifetime_ns": null,
+      "bot_impedance": 64283800.0
+     }
+    },
+    {
+     "rank": 8,
+     "id": "W_normal",
+     "distance": 1.9465559068239975,
+     "matched": 2,
+     "total": 3,
+     "unmatched_features": [
+      "bot_ph_lifetime_ns"
+     ],
+     "z": {
+      "bot_vsound_m_s": 1.2986,
+      "bot_impedance": 2.4273
+     },
+     "verified": false,
+     "source": "standard reference; VERIFY before fabrication",
+     "features": {
+      "bot_vsound_m_s": 5220.0,
+      "bot_ph_lifetime_ns": null,
+      "bot_impedance": 100746000.0
+     }
+    }
+   ],
+   "simulable_ranking": [
+    {
+     "rank": 2,
+     "id": "Cu",
+     "distance": 0.5349866634488016,
+     "matched": 3,
+     "total": 3,
+     "unmatched_features": [],
+     "z": {
+      "bot_vsound_m_s": -0.4809,
+      "bot_ph_lifetime_ns": 0.7689,
+      "bot_impedance": 0.1899
+     }
+    },
+    {
+     "rank": 5,
+     "id": "Au",
+     "distance": 1.44183966149007,
+     "matched": 3,
+     "total": 3,
+     "unmatched_features": [],
+     "z": {
+      "bot_vsound_m_s": -0.0503,
+      "bot_ph_lifetime_ns": 2.1179,
+      "bot_impedance": 1.3223
+     }
+    }
+   ]
+  }
+ },
+ "shortlist": [
+  {
+   "triplet": "Si/Nb/Cu",
+   "distance_sum": 6.959886596993766,
+   "parts": [
+    "Si",
+    "Nb",
+    "Cu"
+   ]
+  },
+  {
+   "triplet": "GaAs/Nb/Cu",
+   "distance_sum": 7.246752541911827,
+   "parts": [
+    "GaAs",
+    "Nb",
+    "Cu"
+   ]
+  },
+  {
+   "triplet": "Si/Ti/Cu",
+   "distance_sum": 7.262801095612316,
+   "parts": [
+    "Si",
+    "Ti",
+    "Cu"
+   ]
+  },
+  {
+   "triplet": "GaAs/Ti/Cu",
+   "distance_sum": 7.549667040530377,
+   "parts": [
+    "GaAs",
+    "Ti",
+    "Cu"
+   ]
+  },
+  {
+   "triplet": "Si/Nb/Au",
+   "distance_sum": 7.8667395950350345,
+   "parts": [
+    "Si",
+    "Nb",
+    "Au"
+   ]
+  },
+  {
+   "triplet": "GaAs/Nb/Au",
+   "distance_sum": 8.153605539953096,
+   "parts": [
+    "GaAs",
+    "Nb",
+    "Au"
+   ]
+  },
+  {
+   "triplet": "Si/Ti/Au",
+   "distance_sum": 8.169654093653584,
+   "parts": [
+    "Si",
+    "Ti",
+    "Au"
+   ]
+  },
+  {
+   "triplet": "GaAs/Ti/Au",
+   "distance_sum": 8.456520038571645,
+   "parts": [
+    "GaAs",
+    "Ti",
+    "Au"
+   ]
+  }
+ ],
+ "verification": {
+  "results": {
+   "ideal_target": {
+    "status": "success",
+    "value": 0.000121,
+    "se": 1.5033296378372909e-05,
+    "total_qps": 484.0,
+    "trial_id": "stage4_property_v1_projS_096a97165c36"
+   },
+   "elasticity_of_SiC": {
+    "status": "success",
+    "value": 0.0001785,
+    "se": 2.0377683872314834e-05,
+    "total_qps": 714.0,
+    "trial_id": "stage4_property_v1_projS_cd555c187d5c",
+    "realized_fraction": 0.7667342799188641,
+    "validity": "invalid",
+    "invalidated_by": "P0_substrate_carrier_dropped",
+    "invalidation_reason": "simulated as G4_Si instead of G4_CALCIUM_FLUORIDE"
+   },
+   "elasticity_of_Be2C": {
+    "status": "success",
+    "value": 0.0002095,
+    "se": 2.0266968199511245e-05,
+    "total_qps": 838.0,
+    "trial_id": "stage4_property_v1_projS_b53a427195de",
+    "realized_fraction": 0.640973630831643,
+    "validity": "invalid",
+    "invalidated_by": "P0_substrate_carrier_dropped",
+    "invalidation_reason": "simulated as G4_Si instead of G4_BORON_CARBIDE"
+   },
+   "Si/Nb/Cu": {
+    "status": "success",
+    "value": 0.000373,
+    "se": 1.3057564857200595e-05,
+    "total_qps": 1492.0,
+    "trial_id": "stage4_property_v1_projS_6020c91f24e9",
+    "realized_fraction": -0.022312373225152234
+   },
+   "GaAs/Nb/Cu": {
+    "status": "success",
+    "value": 0.000351,
+    "se": 2.842534080710379e-05,
+    "total_qps": 1404.0,
+    "trial_id": "stage4_property_v1_projS_6380e09ba015",
+    "realized_fraction": 0.06693711967545626,
+    "validity": "invalid",
+    "invalidated_by": "P0_substrate_carrier_dropped",
+    "invalidation_reason": "simulated as G4_Si instead of G4_GALLIUM_ARSENIDE"
+   }
+  },
+  "notes": {
+   "elasticity_of_Be3N2": [
+    "substrate Be3N2 (mp-18337): no Geant4 density carrier within 3% of 2724 kg/m3 (nearest is 3.3% away)"
+   ],
+   "elasticity_of_SiC": [
+    "density realised by G4_CALCIUM_FLUORIDE (3180 vs 3227 kg/m3, +1.4%)",
+    "scat/decay/decayTT are the DESIGN TARGET's, not this material's (they are unmeasured for it)",
+    "top film In lifetime unsourced -- target's kept",
+    "bottom film Ag lifetime unsourced -- target's kept",
+    "sub_c44=241 clipped into the searched box [5, 200]"
+   ],
+   "elasticity_of_BP": [
+    "substrate BP (mp-1479): no Geant4 density carrier within 3% of 2981 kg/m3 (nearest is 6.7% away)"
+   ],
+   "elasticity_of_Be2C": [
+    "density realised by G4_BORON_CARBIDE (2520 vs 2467 kg/m3, +2.2%)",
+    "scat/decay/decayTT are the DESIGN TARGET's, not this material's (they are unmeasured for it)",
+    "top film In lifetime unsourced -- target's kept",
+    "bottom film Ag lifetime unsourced -- target's kept",
+    "sub_c11=570 clipped into the searched box [20, 450]",
+    "sub_c44=201 clipped into the searched box [5, 200]"
+   ]
+  },
+  "events": 4000000,
+  "seed_bank": 9,
+  "baseline": {
+   "status": "success",
+   "value": 0.0003675,
+   "se": 2.062159062730128e-05,
+   "total_qps": 1470.0,
+   "trial_id": "stage4_property_v1_projS_ab1bc5160ab6"
+  }
+ },
+ "_invalidation_notice": {
+  "labelled_at": "2026-08-25 15:56:29",
+  "registry": "stage4_invalidations.yaml",
+  "invalid_rows": [
+   "GaAs/Nb/Cu",
+   "elasticity_of_Be2C",
+   "elasticity_of_SiC"
+  ],
+  "findings": [
+   "P0_substrate_carrier_dropped"
+  ],
+  "note": "Values are preserved deliberately: they are the evidence the defect was real. Rows marked validity='invalid' must not be quoted."
+ }
+}

@@ -890,6 +890,59 @@ Both are **screening-tier** numbers and neither is quotable yet — the v2 study
 showed this tier gets the broad ordering right and still flips the top-1. They
 have been promoted to the M tier; nothing should be claimed until that lands.
 
+## The four open bugs — closed 2026-08-25
+
+The audit went from 11/15 with 4 warnings to **15/15 with none**. Two were real
+defects fixed by changing artifacts; two were not defects at all, and the remedy
+was to record the decision precisely enough that the check can tell an accepted
+state from a new one.
+
+### 1 & 2 — artifacts disagreed with the ledger (`stage4_reconcile.py`)
+
+**Invalidated rows are now labelled, not deleted.** Five result files contained
+trials a finding had invalidated, with nothing in the file saying so — a reader
+finding a bare number had no way to know it was withdrawn. Each affected result
+now carries `validity: "invalid"`, `invalidated_by` and `invalidation_reason`,
+and the file carries a top-level `_invalidation_notice`. **The values are kept
+deliberately**: they are the evidence the defect was real, and deleting them
+would make it unreproducible.
+
+**Manifests gained the ledger's view without losing their own.** Three campaign
+manifests reported `n_failed: 0` while the ledger held 5, 6 and 4 non-success
+rows. `n_failed` and `n_rejected` are **left untouched** — they are a true
+record of what the driver observed, and the driver genuinely cannot see trials
+abandoned when its process is killed. What is added is `ledger_status_counts`,
+the authoritative view, exactly as new manifests now carry it.
+
+Both operations are additive and idempotent; originals are kept as `*.prelabel`
+and `*.prebackfill`. The audit no longer asks "does this file mention an
+invalidated trial" (it should, that is the evidence) but "does it say so".
+
+### 3 & 4 — not defects, so recording beat fixing
+
+A new `decisions:` section in `stage4_invalidations.yaml` holds states someone
+*chose*, with the reason. It silences nothing — the audit still prints every
+number — it only lets the check distinguish **accepted and understood** from
+**new and unexplained**.
+
+* **`optimizer_provenance_unrecoverable`** — the 95 pre-audit optimizer rows
+  have no `proposal_source` because the columns did not exist. They stay NULL.
+  Reconstructing them from `n_init` would be a guess dressed as a record, which
+  is precisely the error P1 was raised about. The check now asks "did every
+  trial that *could* record its source do so", naming the three campaigns that
+  could not; a **new** campaign that stops recording still fails.
+* **`cache_cold_accepted`** — the cold cache is your decision, verified before
+  acceptance (all 163 trials re-resolve to a byte-identical `derived`). The
+  decision records **which identity files were expected to change**, so the
+  check passes for that exact set and warns the moment a *new* one enters it.
+
+> **The risk of this pattern is that recording a decision becomes a way to mute
+> an alarm**, so T26 exists to prove the checks still bite: T26f asserts the
+> provenance decision names exactly the three historical campaigns and no more,
+> T26g that the cache decision enumerates its five files, and T26h that a sixth
+> file is reported as unexpected. T26a–T26d cover the reconciler: values
+> preserved, originals kept, driver counters untouched, idempotent.
+
 ## Best major scientific step next
 
 After N0–N3 are fixed and the XL snapshot/validation/migration has completed,

@@ -30,3 +30,12 @@ stage4_trials.sqlite
 # host. Created and removed by the post-XL runbook.
 *.sqlite.frozen
 snapshots/
+
+# Result JSONs live under the globally-ignored results/ tree. The ones that
+# carry provenance -- validity labels from stage4_reconcile.py, the corrected
+# projection, the smoke tests -- are tracked deliberately via `git add -f`,
+# because they are the record of what was withdrawn and why. Git cannot
+# un-ignore files inside an ignored directory, so new ones must be force-added
+# the same way; that is intentional friction, not an oversight.
+*.prelabel
+*.prebackfill

@@ -1749,6 +1749,116 @@ def t25_watchdog_does_not_censor_by_quality(tmpdir):
           grand_idle[0] == STATUS_TIMEOUT, f"{grand_idle[0]}: {grand_idle[3]}")
 
 
+def t26_reconcile_and_decisions(tmpdir):
+    """Catches: a reconciliation that destroys evidence, and decision-aware
+    audit checks that have been made toothless.
+
+    Two of the audit's warnings were converted to passes by recording the
+    underlying decision. That is only legitimate if the check still FAILS for
+    the case it was built to catch -- otherwise recording a decision is just a
+    way to silence an alarm.
+    """
+    import json as _json
+    import shutil
+    import subprocess
+    import yaml as _yaml
+    import stage4_audit as A
+
+    root = os.path.join(tmpdir, "reconcile")
+    os.makedirs(os.path.join(root, "results"), exist_ok=True)
+    os.makedirs(os.path.join(root, "runs", "camp"), exist_ok=True)
+    registry = os.path.join(root, "reg.yaml")
+    with open(registry, "w") as handle:
+        _yaml.safe_dump({"findings": {"F1": {"title": "t", "trials": [
+            {"trial_id": "bad1", "verdict": "invalid",
+             "intended_carrier": "G4_X", "simulated_carrier": "G4_Si"},
+            {"trial_id": "ok1", "verdict": "valid"}]}}}, handle)
+    res = os.path.join(root, "results", "r.json")
+    with open(res, "w") as handle:
+        _json.dump({"results": {"bad": {"trial_id": "bad1", "value": 1.0},
+                                "good": {"trial_id": "ok1", "value": 2.0}}}, handle)
+
+    from stage3_ledger import Ledger, STATUS_SUCCESS, STATUS_INCOMPLETE_SET
+    ledger = os.path.join(root, "l.sqlite")
+    with Ledger(ledger) as led:
+        for i, status in enumerate([STATUS_SUCCESS] * 3 + [STATUS_INCOMPLETE_SET] * 2):
+            led.plan_trial(trial_id=f"t{i}", campaign_id="camp", cache_key=f"k{i}",
+                           contract_hash="h", code_fingerprint={}, candidate={},
+                           derived={}, fidelity="S", events_total=1,
+                           events_per_sub_run=1, n_positions=1, n_replicas=1,
+                           scenario={}, seed_bank_id=0, run_dir="d",
+                           planned_sub_runs=[])
+            led.set_trial_result(f"t{i}", status)
+    man = os.path.join(root, "runs", "camp", "campaign_x.json")
+    with open(man, "w") as handle:
+        _json.dump({"campaign_id": "camp", "n_failed": 0, "n_rejected": 0}, handle)
+
+    proc = subprocess.run(
+        [sys.executable, os.path.join(HERE, "stage4_reconcile.py"),
+         "--results", os.path.join(root, "results"),
+         "--runs-root", os.path.join(root, "runs"),
+         "--ledger", ledger, "--registry", registry],
+        capture_output=True, text=True, timeout=120)
+    with open(res) as handle:
+        after = _json.load(handle)
+    check("T26a reconcile labels the invalid row and PRESERVES its value",
+          after["results"]["bad"].get("validity") == "invalid"
+          and after["results"]["bad"]["value"] == 1.0
+          and after["results"]["good"].get("validity") == "valid",
+          _json.dumps(after["results"], sort_keys=True)[:110])
+    check("T26b the original file is kept alongside, not overwritten blind",
+          os.path.isfile(res + ".prelabel"), proc.stdout[-80:])
+    with open(man) as handle:
+        man_after = _json.load(handle)
+    check("T26c manifest gains the ledger's authoritative counts and keeps the "
+          "driver's own numbers untouched",
+          man_after["ledger_status_counts"] == {"success": 3,
+                                                "incomplete_scenario_set": 2}
+          and man_after["n_failed"] == 0, str(man_after.get("ledger_status_counts")))
+    before = _json.dumps(after, sort_keys=True)
+    subprocess.run([sys.executable, os.path.join(HERE, "stage4_reconcile.py"),
+                    "--results", os.path.join(root, "results"),
+                    "--runs-root", os.path.join(root, "runs"),
+                    "--ledger", ledger, "--registry", registry],
+                   capture_output=True, text=True, timeout=120)
+    with open(res) as handle:
+        check("T26d reconcile is idempotent", _json.dumps(_json.load(handle),
+              sort_keys=True) == before)
+
+    # -- the decision-aware checks must still bite --------------------------
+    empty = os.path.join(root, "empty.yaml")
+    with open(empty, "w") as handle:
+        _yaml.safe_dump({"findings": {}}, handle)
+    check("T26e a registry with no decisions accepts nothing",
+          A.recorded_decisions(empty) == {}
+          and set(A.recorded_decisions(registry)) == set())
+
+    real_registry = os.path.join(HERE, "stage4_invalidations.yaml")
+    dec = A.recorded_decisions(real_registry)
+    prov = dec.get("optimizer_provenance_unrecoverable") or {}
+    cache = dec.get("cache_cold_accepted") or {}
+    check("T26f the provenance decision names EXACTLY the pre-audit campaigns, "
+          "so a new campaign is not covered by it",
+          set(prov.get("campaigns") or []) == {
+              "stage4_property_v1_bo", "stage4_property_v1_cmaes",
+              "stage4_property_v1_rand"},
+          str(prov.get("campaigns")))
+    check("T26g the cache decision lists the accepted identity files, so a NEW "
+          "one still surfaces",
+          len(cache.get("accepted_changed_identity_files") or []) == 5
+          and all(f.startswith("parameter_optimization/")
+                  for f in cache["accepted_changed_identity_files"]),
+          str(len(cache.get("accepted_changed_identity_files") or [])))
+
+    # A file outside the accepted set must be reported as unexpected.
+    accepted = set(cache.get("accepted_changed_identity_files") or [])
+    pretend_changed = sorted(accepted | {"stage1_run_simulations.py"})
+    unexpected = sorted(set(pretend_changed) - accepted)
+    check("T26h an identity file outside the recorded decision is flagged "
+          "unexpected", unexpected == ["stage1_run_simulations.py"],
+          str(unexpected))
+
+
 def t13_inertness_from_pilot():
     """Reports the Geant4 A/B result if the pilot has produced one."""
     path = os.path.join(HERE, "results", "stage4_pilot.json")
@@ -1816,6 +1926,7 @@ def main():
         t10_llm_guard_rails()
         t16_proposal_provenance()
         t17_controls_are_fresh(tmpdir)
+        t26_reconcile_and_decisions(tmpdir)
         print("\nObjective and engineering constraints:")
         t19_engineering_objective()
         print("\nCampaign safety:")
