@@ -82,7 +82,28 @@ fixed:
   position_seed: 20260727
   position_half_span_mm: 4.0
   position_weights: uniform
-  n_replicas: 2
+  # CHANGED 2026-08-25: 2 -> 8. Two independent reasons, both measured.
+  #
+  # 1. FAILURE GRANULARITY. At the 1e8 tier with 2 replicas a sub-run carries
+  #    1e8 events and runs for tens of hours, so a single kill discards the
+  #    whole trial -- best_random lost ~1300 core-hours that way. At 8 replicas
+  #    the same total is split into 128 sub-runs of 2.5e7 events, so any one
+  #    loss costs a quarter as much and the trial can resume the rest.
+  # 2. THE ERROR BAR. Every uncertainty in this project is replica-based:
+  #    `replica_se_total` estimates the stochastic error from the spread BETWEEN
+  #    REPLICAS AT THE SAME SITE. With 2 replicas that is 16 degrees of freedom,
+  #    and STAGE4_RESULTS.md 5b already caught it misbehaving -- a point's own
+  #    screening trial reported 20% error where the independent held-out
+  #    estimate was 12.4%. 8 replicas gives 112 dof for the same total events.
+  #
+  # Every fidelity tier still divides evenly into 16 x 8 = 128 sub-runs
+  # (S 31250, M 250000, L 2500000, XL 25000000 events each), and the seed
+  # function stays collision-free (replica stride 10007 > 15 x 101).
+  #
+  # This IS a change of simulation identity -- different seeds, different block
+  # structure -- so it starts fresh trials rather than reusing any. It belongs
+  # at the head of the corrected campaigns, which is where it is.
+  n_replicas: 8
   seed_base: 20260728
   seed_bank_id: 0
   explicit_seeds: true

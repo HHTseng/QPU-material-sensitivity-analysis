@@ -766,6 +766,22 @@ acted on: the mechanism itself was the problem, not its setting.
 Both are classified execution-only, so changing either cannot change a cache key
 (T25g/T25h).
 
+> **A second bug in this fix, found by watching a live run.** The stall signal
+> was file size alone. Sampling the *active* M-tier trial showed 46 of 77 files
+> growing in 90 s, so the premise held — but output cadence is a property of
+> Geant4's buffering that this code does not control, and a run that buffered
+> for longer than the window would have been killed while working perfectly.
+> The signal now also includes the process group's **accumulated CPU time**: a
+> sub-run is stalled only if it is *both* silent *and* burning no CPU. Verified
+> directly — a CPU-busy but completely silent process survives a stall window it
+> would previously have failed (T25i), while a genuinely sleeping one is still
+> killed (T25j).
+>
+> (My first look at this appeared to show zero growth over 60 s, which would
+> have been alarming. It was the wrong directory — a trial that had already
+> finished. Worth recording because the check nearly produced a false alarm in
+> the opposite direction.)
+
 > **A bug in this fix, caught by its own gate.** The poll interval was derived
 > from the stall timeout alone, so with `stall=0` it polled every 60 s and an
 > explicit 3 s absolute limit was not noticed until long after the job had
@@ -778,14 +794,44 @@ reason; unlimited really is unlimited; an explicit absolute limit fires; both
 together race correctly; the shipped contract has no wall-clock limit and does
 have a stall detector.
 
-**A third change is recommended but not made, because it is a campaign-design
-decision.** At 1e8 events/sub-run a single kill discards the whole 41.7 h. The
-same total events split over more replicas (`n_replicas` 2 → 8, so 32 → 128
-sub-runs of 2.5e7 each) would lose at most a quarter of that to any one kill,
-**and** would improve the replica-based error estimate, which is what every
-uncertainty in this project rests on. It changes the simulation identity (the
-seeds and block structure genuinely differ), so it belongs at the start of the
-corrected campaigns rather than as a retrofit.
+**`n_replicas` 2 → 8 — applied 2026-08-25.** Two independent reasons:
+
+1. **Failure granularity.** At the 1e8 tier a sub-run carried 1e8 events and ran
+   for tens of hours, so one kill discarded the whole trial — `best_random` lost
+   ~1300 core-hours that way. At 8 replicas the same total splits into 128
+   sub-runs of 2.5e7, so any one loss costs a quarter as much and `evaluate()`
+   resumes the rest.
+2. **The error bar.** Every uncertainty here is replica-based: `replica_se_total`
+   estimates the stochastic error from the spread between replicas *at the same
+   site*, which with 2 replicas is **16 degrees of freedom**. §5b already caught
+   that estimator misbehaving — a point's own screening trial reported 20% error
+   where the independent held-out estimate was 12.4%. 8 replicas gives **112
+   dof** for the same total events. Measured on synthetic blocks: relative SE
+   estimate 1.97% → 1.27% at identical underlying noise.
+
+   This also feeds the optimizer: `ObjectiveValue.surrogate_sigma()` is the GP's
+   per-point noise term, so a badly estimated SE degrades the surrogate directly.
+
+**Checked before applying, not after:**
+
+| check | result |
+|---|---|
+| every tier divides evenly into 16 × 8 = 128 | S 31250, M 250000, L 2500000, XL 25000000 ✓ |
+| seed collisions on the new (replica, position) grid | 128 distinct seeds, 0 collisions (replica stride 10007 > 15 × 101) |
+| peak memory | unchanged — governed by `max_workers` concurrency, not sub-run count |
+| hard-coded sub-run counts anywhere | none; the runbook computes `n_positions × n_replicas` from the row |
+| paired comparison against a 2-replica trial | refuses loudly (`cannot pair trials with different site sets or budgets`) |
+| all 7 registered objectives at 8 replicas | all score correctly |
+| edge cases | 1 replica → SE `None` (not a crash); identical trials → `z_paired` `None` (not 0/0) |
+| the job running at the time | unaffected — it had already loaded its contract; its rows still read `n_replicas=2` |
+| cache | simulation identity differs, so no accidental reuse across the change |
+
+**Wall-clock cost: none, measured.** The worry was that 128 sub-runs means 8
+worker waves instead of 2, so per-run Geant4 startup would be paid 4× more
+often. Fitting `t = a + b·E` to the fastest (least contended) sub-run at each
+tier — 9.3 s at 1.25e5 events, 88.0 s at 1e6 — gives **a ≈ −1.9 s, i.e. zero
+within noise**. Startup is free; the work scales with events, so the same total
+events cost the same wall clock however they are split.
 
 ## P0 propagation smoke test — 2026-08-25
 

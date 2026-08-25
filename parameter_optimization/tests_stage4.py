@@ -1702,6 +1702,28 @@ def t25_watchdog_does_not_censor_by_quality(tmpdir):
     check("T25h the stall watchdog is declared execution-only by name",
           "sample_stall_timeout_s" in Contract.EXECUTION_ONLY_FIXED_KEYS)
 
+    # The stall signal must include CPU time, not just bytes written. Output
+    # cadence is a property of Geant4's buffering that this code does not
+    # control; a process burning CPU is not hung whatever it has written. A
+    # file-size-only detector would kill a healthy long run -- the exact false
+    # positive this whole watchdog rework exists to remove.
+    TR.harness = types.SimpleNamespace(
+        build_run_command=lambda macro, lattice_name=None: scripts[os.path.basename(macro)],
+        CRYSTALMAPS_DIR="/nonexistent")
+    try:
+        busy = run("cpubusy",
+                   'echo x > {h}; end=$((SECONDS+6)); '
+                   'while [ $SECONDS -lt $end ]; do :; done; touch {d}', 0, 2)
+        idle = run("asleep", 'echo x > {h}; sleep 30; touch {d}', 0, 2)
+    finally:
+        TR.harness = real_harness
+    check("T25i a CPU-busy but SILENT sub-run is not killed (file size alone "
+          "would have killed it)",
+          busy[0] == STATUS_SUCCESS, f"{busy[0]}: {busy[3]}")
+    check("T25j a sub-run that is silent AND consuming no CPU is still killed",
+          idle[0] == STATUS_TIMEOUT and "no CPU" in (idle[3] or ""),
+          f"{idle[0]}: {idle[3]}")
+
 
 def t13_inertness_from_pilot():
     """Reports the Geant4 A/B result if the pilot has produced one."""

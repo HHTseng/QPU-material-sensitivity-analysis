@@ -754,14 +754,40 @@ def _run_one(sub_run, lattice_root, timeout_s, guard, logs_dir,
                     process.kill()
 
         def _progress():
-            """Bytes written so far, across the log and the hits file."""
+            """A signal that advances whenever the sub-run is doing ANYTHING.
+
+            Two independent components, deliberately:
+
+            * bytes written to the log and the hits file -- measured on a live
+              trial, both grow continuously (46 of 77 files grew in 90 s);
+            * the process group's accumulated CPU time.
+
+            The CPU term is what makes a false kill essentially impossible. A
+            process burning CPU is not hung even if it has written nothing for
+            hours, and output cadence is a property of Geant4's buffering that
+            this code does not control. Only a run that is BOTH silent AND
+            consuming no CPU is stalled -- which is the actual failure being
+            guarded against.
+            """
             total = 0
             for path in (log_file, sub_run["hits_file"]):
                 try:
                     total += os.path.getsize(path)
                 except OSError:
                     pass
+            total += _cpu_ticks(process.pid)
             return total
+
+        def _cpu_ticks(pid):
+            """utime+stime for the process and its children, in clock ticks."""
+            try:
+                with open(f"/proc/{pid}/stat", "rb") as handle:
+                    fields = handle.read().rsplit(b")", 1)[1].split()
+                # utime, stime, cutime, cstime are fields 14-17 (1-based) i.e.
+                # indices 11-14 after the comm field is stripped.
+                return sum(int(fields[i]) for i in (11, 12, 13, 14))
+            except (OSError, IndexError, ValueError):
+                return 0
 
         stop_watch = threading.Event()
 
@@ -785,8 +811,9 @@ def _run_one(sub_run, lattice_root, timeout_s, guard, logs_dir,
                     if current != last_bytes:
                         last_bytes, last_change = current, now
                     elif now - last_change >= stall_timeout_s:
-                        _kill(f"no output for {stall_timeout_s:g}s "
-                              f"({current:,} bytes written, process appears hung)")
+                        _kill(f"no output AND no CPU for {stall_timeout_s:g}s "
+                              f"(progress counter stuck at {current:,}); the "
+                              f"process is genuinely stalled, not merely slow")
                         return
 
         watcher = None
