@@ -1,0 +1,195 @@
+# Machine-readable register of results invalidated by a known audit finding.
+#
+# Written 2026-08-24 from STAGE4_IMPLEMENTATION_AUDIT_AND_FIX_PLAN.md. The rows
+# below are NOT deleted -- they are the debugging evidence for the defect, and
+# deleting them would make the defect unreproducible. They are marked so that
+# `stage4_audit.py` fails loudly if any of them is still being quoted, and so a
+# reader of the ledger cannot mistake them for physics.
+#
+# Verdicts:
+#   invalid  -- the simulated crystal is not the one the row is labelled with.
+#   valid    -- checked against the same finding and found unaffected. Recorded
+#               so "not listed" never has to mean "not checked".
+#
+# Schema is stable; add findings, never rewrite a verdict silently.
+
+schema: stage4_invalidations_v1
+
+findings:
+  P0_substrate_carrier_dropped:
+    title: Projected substrate carrier lost before evaluation
+    audit: STAGE4_IMPLEMENTATION_AUDIT_AND_FIX_PLAN.md#p0
+    detected: 2026-08-24
+    fixed_by: >
+      Versioned `_realization` envelope in stage4_space.py, preserved by
+      Space.complete / candidate_payload / stage4_confirm.collect_points and
+      hashed into the cache key. Gates T15a-T15j in tests_stage4.py.
+    mechanism: >
+      stage4_project_material.py attached point["substrate_carrier"]; every
+      normaliser downstream emitted only the variable table, so stage4_space
+      .resolve() fell back to G4_Si. Geant4 takes the substrate density from the
+      G4Material, so every derived speed and impedance in the affected rows is
+      the Si-density one under another material's name.
+
+    trials:
+      - trial_id: stage4_property_v1_projS_cd555c187d5c
+        label: elasticity_of_SiC
+        fidelity: S
+        events_total: 4000000
+        reported_qps_per_primary: 1.785e-4
+        intended_carrier: G4_CALCIUM_FLUORIDE
+        intended_density_kg_m3: 3180.0
+        simulated_carrier: G4_Si
+        simulated_density_kg_m3: 2330.0
+        density_error_pct: -26.7
+        sound_speed_error_pct: +16.8
+        impedance_error_pct: -14.4
+        verdict: invalid
+        also_affected_by:
+          - "sub_c44 = 241 GPa (SiC's measured value) was clipped to the box
+             ceiling 200 GPa; the fix keeps measured constants unclipped."
+      - trial_id: stage4_property_v1_confirmM_338745b73829
+        label: elasticity_of_SiC
+        fidelity: M
+        events_total: 32000000
+        reported_qps_per_primary: 1.930e-4
+        intended_carrier: G4_CALCIUM_FLUORIDE
+        simulated_carrier: G4_Si
+        verdict: invalid
+      - trial_id: stage4_property_v1_confirmL_954b0d4e047f
+        label: elasticity_of_SiC
+        fidelity: L
+        events_total: 320000000
+        reported_qps_per_primary: 1.8645e-4
+        intended_carrier: G4_CALCIUM_FLUORIDE
+        simulated_carrier: G4_Si
+        verdict: invalid
+      - trial_id: stage4_property_v1_confirmL_f0f6a8dff4f4
+        label: elasticity_of_SiC
+        fidelity: L
+        events_total: 320000000
+        reported_qps_per_primary: null
+        status: incomplete_scenario_set
+        intended_carrier: G4_CALCIUM_FLUORIDE
+        simulated_carrier: G4_Si
+        verdict: invalid
+        note: >
+          Never scored -- abandoned when the ladder was relaunched at 64 workers.
+          Listed anyway: it carries the same defect, and an unlisted row invites
+          someone to resume it. Found by the mechanical sweep, not by hand,
+          which is why the sweep exists.
+      - trial_id: stage4_property_v1_confirmXL_9c78bf1319ba
+        label: elasticity_of_SiC
+        fidelity: XL
+        events_total: 3200000000
+        reported_qps_per_primary: 1.895069e-4
+        intended_carrier: G4_CALCIUM_FLUORIDE
+        simulated_carrier: G4_Si
+        verdict: invalid
+      - trial_id: stage4_property_v1_projS_b53a427195de
+        label: elasticity_of_Be2C
+        fidelity: S
+        events_total: 4000000
+        reported_qps_per_primary: 2.095e-4
+        intended_carrier: G4_BORON_CARBIDE
+        intended_density_kg_m3: 2520.0
+        simulated_carrier: G4_Si
+        simulated_density_kg_m3: 2330.0
+        density_error_pct: -7.5
+        sound_speed_error_pct: +4.0
+        impedance_error_pct: -3.8
+        verdict: invalid
+        also_affected_by:
+          - "sub_c11 = 570 GPa and sub_c44 = 201 GPa (Be2C's measured values)
+             were clipped to the box ceilings 450 / 200 GPa."
+      - trial_id: stage4_property_v1_confirmM_03034c6dd9ad
+        label: elasticity_of_Be2C
+        fidelity: M
+        events_total: 32000000
+        reported_qps_per_primary: 2.1225e-4
+        intended_carrier: G4_BORON_CARBIDE
+        simulated_carrier: G4_Si
+        verdict: invalid
+      - trial_id: stage4_property_v1_projS_6380e09ba015
+        label: GaAs/Nb/Cu (projected triplet)
+        fidelity: S
+        events_total: 4000000
+        reported_qps_per_primary: 3.510e-4
+        intended_carrier: G4_GALLIUM_ARSENIDE
+        intended_density_kg_m3: 5310.0
+        simulated_carrier: G4_Si
+        simulated_density_kg_m3: 2330.0
+        density_error_pct: -56.1
+        sound_speed_error_pct: +51.0
+        impedance_error_pct: -33.8
+        verdict: invalid
+        also_affected_by:
+          - "GaAs has a COMPLETE G4CMP record; the run used Si's dyn, DOS and
+             Debye with GaAs's tensor. The fix routes it through native_g4cmp."
+      - trial_id: stage4_property_v1_confirmM_806a9cad48db
+        label: GaAs/Nb/Cu (projected triplet)
+        fidelity: M
+        events_total: 32000000
+        reported_qps_per_primary: 3.4494e-4
+        intended_carrier: G4_GALLIUM_ARSENIDE
+        simulated_carrier: G4_Si
+        verdict: invalid
+      - trial_id: stage4_property_v1_projS_6020c91f24e9
+        label: Si/Nb/Cu (projected triplet)
+        fidelity: S
+        events_total: 4000000
+        reported_qps_per_primary: 3.730e-4
+        intended_carrier: G4_Si
+        simulated_carrier: G4_Si
+        density_error_pct: 0.0
+        verdict: valid
+        note: >
+          Checked, not assumed. Si's intended carrier IS G4_Si, and the pseudo
+          path's base record is Si, so every overridden field was written back
+          at its own value. The row is physically self-consistent. It is still
+          not a "native record" run in the new sense -- it is Si simulated as
+          itself -- and it remains a fair projected-triplet comparison.
+      - trial_id: stage4_property_v1_confirmM_577b4c410978
+        label: Si/Nb/Cu (projected triplet)
+        fidelity: M
+        events_total: 32000000
+        reported_qps_per_primary: 3.72125e-4
+        intended_carrier: G4_Si
+        simulated_carrier: G4_Si
+        verdict: valid
+        note: same reasoning as the S-tier Si/Nb/Cu row.
+
+    contaminated_inputs:
+      # The defect reached the POINT FILES too, not only the results: these were
+      # written from a projection whose carrier had already been dropped, so
+      # re-running from them would reproduce the same error. Regenerate them
+      # from stage4_project_material.py before any rerun.
+      - results/stage4_confirm_points.json
+      - results/stage4_confirm_points_L.json
+      - results/stage4_points_fair.json
+      - results/_xl_pair.json
+
+    derived_claims_withdrawn:
+      - "SiC recovers 77% of the ideal gain (STAGE4_RESULTS.md sec 0, 4.3)."
+      - "elasticity of SiC = -51.4% / -51.5% / -51.2% vs baseline."
+      - "elasticity of Be2C = -43.0%, 64% of the ideal gain."
+      - "GaAs/Nb/Cu projected = -4.5%, 7% of the ideal gain."
+      - "Nearest real substrates recover most of the property-space gain."
+
+    # Phrases that must not appear in a document unless the sentence around them
+    # says they are withdrawn. `stage4_audit.py` searches for these and checks
+    # for a withdrawal marker nearby, so the withdrawal notices themselves are
+    # not flagged as violations.
+    withdrawn_phrases:
+      - "77% of the ideal gain"
+      - "77% of the gain"
+      - "recovers 77%"
+      - "SiC recovers"
+
+    not_invalidated:
+      - "The 92 scored search trials: they are pseudo-material candidates whose
+         intended carrier IS G4_Si, so the defect could not reach them."
+      - "The baseline and ideal-target rows at every fidelity, for the same
+         reason."
+      - "The fidelity ladder for best_bo_gp / best_cmaes / best_random."
+      - "The local tolerance scan around the best point found."

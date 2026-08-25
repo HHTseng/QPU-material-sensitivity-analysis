@@ -34,9 +34,11 @@ import json
 import os
 import shlex
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -61,6 +63,31 @@ from stage3_ledger import (                                          # noqa: E40
 )
 from sensitivity_utils import replace_line, find_macro_value, format_config_entry  # noqa: E402
 from sensitivity_memguard import MemoryGuard                          # noqa: E402
+
+# How often a running trial says it is still alive. Small enough that a stale
+# trial is obvious within minutes, large enough to be free next to a 29-hour
+# Geant4 job.
+HEARTBEAT_SECONDS = float(os.environ.get("STAGE4_HEARTBEAT_SECONDS", 120))
+
+# A transient SQLite lock must not end the heartbeat: a silent stop turns a live
+# 29-hour job into a stale-heartbeat false positive, which is exactly the reading
+# that gets real work killed.
+HEARTBEAT_MAX_FAILURES = int(os.environ.get("STAGE4_HEARTBEAT_MAX_FAILURES", 6))
+HEARTBEAT_MAX_BACKOFF = float(os.environ.get("STAGE4_HEARTBEAT_MAX_BACKOFF", 900))
+
+# Environment variables the common batch schedulers set. Recorded so a trial can
+# be traced back to the job that ran it even after the process is gone.
+_SCHEDULER_VARS = ("SLURM_JOB_ID", "PBS_JOBID", "LSB_JOBID", "SGE_JOB_ID",
+                   "JOB_ID", "TMUX_PANE", "STY")
+
+
+def _scheduler_job_id():
+    for var in _SCHEDULER_VARS:
+        value = os.environ.get(var)
+        if value:
+            return f"{var}={value}"
+    return None
+
 import stage1_run_simulations as harness                              # noqa: E402
 from stage2_compute_QPs import calculate_QPs                          # noqa: E402
 from interface_transmission import (                                  # noqa: E402
@@ -184,6 +211,7 @@ class TrialResult:
     failure_reason: str = None
     run_dir: str = None
     cached: bool = False
+    blocks: list = field(default_factory=list)      # per (position, replica)
 
     @property
     def is_observation(self):
@@ -432,15 +460,22 @@ def _write_lattice_config(contract, resolved, derived, dest_dir):
     single sanctioned exception and is recorded in the cache key.
     """
     lattice = derived["lattice_map_name"]
-    src = os.path.join(harness.G4CMP_SOURCE_CRYSTALMAPS, lattice, "config.txt")
+    # A Stage 4 pseudo-material writes a DIFFERENT record than it reads: it
+    # starts from a real base record (Si) and overrides the scanned fields. The
+    # destination name is the one the macro selects with setSubstrateName.
+    base = derived.get("base_lattice_map", lattice)
+    src = os.path.join(harness.G4CMP_SOURCE_CRYSTALMAPS, base, "config.txt")
     if not os.path.isfile(src):
-        raise ContractError(f"No G4CMP lattice map for {lattice!r}: {src}")
+        raise ContractError(f"No G4CMP lattice map for {base!r}: {src}")
     with open(src) as handle:
         lines = handle.readlines()
 
     # Guard: the Si-only overrides must never reach this path.
     forced = {prefix.strip() for prefix, _ in getattr(harness, "FIXED_CONFIG_COMMANDS", ())}
-    if forced and lattice != "Si":
+    # Judged on the SOURCE record: a Stage 4 pseudo-material is built on Si, so
+    # it legitimately carries Si's Debye (measured inert for this gun type). What
+    # must never happen is Si's values landing on a DIFFERENT material's record.
+    if forced and base != "Si":
         # Nothing applies them here; this asserts that a future edit cannot.
         for prefix in forced:
             for line in lines:
@@ -455,6 +490,23 @@ def _write_lattice_config(contract, resolved, derived, dest_dir):
         lines = replace_line(lines, "Debye ",
                              format_config_entry("Debye ", derived["debye_override_THz"], " THz"),
                              append_if_missing=True)
+
+    # Stage 4: scanned lattice fields. Everything NOT listed here keeps the base
+    # record's value -- which is the definition of the pseudo-material, so it is
+    # stamped into the file rather than left to be inferred.
+    overrides = derived.get("config_overrides") or {}
+    if overrides:
+        for key, spec in sorted(overrides.items()):
+            value, unit = (spec if isinstance(spec, (list, tuple)) else (spec, ""))
+            lines = replace_line(lines, key, format_config_entry(key, value, unit),
+                                 append_if_missing=True)
+        header = [
+            f"# GENERATED pseudo-material: base record {base!r} with the scanned\n",
+            f"# fields overridden ({', '.join(sorted(k.strip() for k in overrides))}).\n",
+            "# Unlisted fields -- dyn, LDOS/STDOS/FTDOS, Debye, the charge-carrier\n",
+            f"# block -- remain {base}'s. This is not a from-scratch crystal.\n",
+        ]
+        lines = header + lines
 
     out = os.path.join(dest_dir, lattice, "config.txt")
     os.makedirs(os.path.dirname(out), exist_ok=True)
@@ -547,7 +599,11 @@ def _write_sub_run_macro(contract, resolved, derived, template, macro_path,
         ("/g4cmp/clearance ", f"{f['clearance_mm']} mm"),
         ("/g4cmp/eTrappingMFP ", f"{f['eTrappingMFP_mm']} mm"),
         ("/g4cmp/hTrappingMFP ", f"{f['hTrappingMFP_mm']} mm"),
-        ("/g4cmp/temperature ", f"{f['temperature_K']} K"),
+        # Stage 4 declares temperature a DECISION variable and supplies it per
+        # candidate through macro_overrides, so it is deliberately absent from
+        # that campaign's `fixed` block -- a value must never be both.
+        *((("/g4cmp/temperature ", f"{f['temperature_K']} K"),)
+          if "temperature_K" in f else ()),
         ("/main/electrode_param/setWidth ", f["electrode_width_um"]),
         ("/main/electrode_param/setHeight ", f["electrode_height_um"]),
         ("/main/electrode_param/setIsland ", f"{f['electrode_island_um']} um"),
@@ -568,6 +624,13 @@ def _write_sub_run_macro(contract, resolved, derived, template, macro_path,
     lines = replace_line(lines, "/main/electrode_param/setYLocations ",
                          "/main/electrode_param/setYLocations "
                          + ", ".join(f"{v:.6f}" for v in f["electrode_y_mm"]), required=True)
+    # Stage 4: per-candidate commands (orientation, temperature) that the fixed
+    # block above wrote from the contract default. Applied last so the candidate
+    # wins, and re-checked below by the unit-hygiene gate.
+    for command, value in sorted((derived.get("macro_overrides") or {}).items()):
+        lines = replace_line(lines, command, f"{command}{value}",
+                             allow_commented=True, required=True)
+
     lines = replace_line(lines, "/g4cmp/HitsFile", "/g4cmp/HitsFile " + hits_file, required=True)
     if site is not None:
         lines = replace_line(lines, "/main/gun/setPosition ",
@@ -579,9 +642,50 @@ def _write_sub_run_macro(contract, resolved, derived, template, macro_path,
             f"/control/shell touch {shlex.quote(done_marker)}"
     lines = replace_line(lines, "/run/beamOn ", block, required=True)
 
+    bad = validate_macro_lines(lines)
+    if bad:
+        raise ContractError(
+            f"generated macro would abort: {bad[:3]}. A malformed command makes "
+            f"Geant4 emit a warning, skip /run/beamOn and EXIT 0 -- 3,200 "
+            f"'successful' sub-runs with no hits file were produced that way once. "
+            f"The macro is refused here instead.")
+
     with open(macro_path, "w") as handle:
         handle.writelines(lines)
     return macro_path
+
+
+_NUMERIC_START = ("+", "-", ".", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9")
+
+
+def validate_macro_lines(lines):
+    """Unit-hygiene gate (G9). Returns a list of offending lines.
+
+    The failure this prevents: `/g4cmp/clearance 1e-06e-6 mm`, produced when a
+    default expressed in one unit meets bounds expressed in another. Geant4
+    treats it as a G4Exception WARNING, skips the run, and exits 0 -- which
+    downstream is indistinguishable from a weak physical response.
+
+    Rule: any argument token that STARTS like a number must PARSE as one.
+    """
+    offenders = []
+    for raw in lines:
+        line = raw.strip()
+        if not line or line.startswith("#") or not line.startswith("/"):
+            continue
+        tokens = line.split()
+        if tokens[0] in ("/control/shell", "/control/execute"):
+            continue                      # a shell path is not a G4 argument list
+        for tok in tokens[1:]:
+            tok = tok.rstrip(",")
+            if not tok or not tok.startswith(_NUMERIC_START):
+                continue
+            try:
+                float(tok)
+            except ValueError:
+                offenders.append(line)
+                break
+    return offenders
 
 
 # --------------------------------------------------------------------------
@@ -668,39 +772,98 @@ def _run_one(sub_run, lattice_root, timeout_s, guard, logs_dir,
     return STATUS_SUCCESS, rc, runtime, None
 
 
-def _score(contract, sub_runs, events_per_sub_run):
-    """Pool the completed sub-runs and compute the objective.
-
-    Strict: every planned sub-run must be usable. Callers check completeness
-    before reaching here; this re-checks rather than trusting.
-    """
-    frames = []
-    for sr in sub_runs:
-        path = sr["hits_file"]
-        if not os.path.exists(path) or os.path.getsize(path) == 0:
-            raise ContractError(f"scoring an incomplete set: {os.path.basename(path)}")
-        frames.append(pd.read_csv(path).reset_index(drop=True))
-    rec = pd.concat(frames, ignore_index=True) if len(frames) > 1 else frames[0]
-
+def _score_one(contract, hits_path):
+    """Score a single sub-run's hits file. Returns (per_electrode, n_hits)."""
+    if not os.path.exists(hits_path) or os.path.getsize(hits_path) == 0:
+        raise ContractError(f"scoring an incomplete set: {os.path.basename(hits_path)}")
+    rec = pd.read_csv(hits_path).reset_index(drop=True)
     f = contract.fixed
     qx = np.array(f["electrode_x_mm"], dtype=float)
     qy = np.array(f["electrode_y_mm"], dtype=float)
     chip_z = (float(f["setSubThickness_um"]) * 1e-6) / 2.0
     _, qp_nos = calculate_QPs(rec, float(f["setTopGap"]), qx, qy, chip_z)
-    per_electrode = qp_nos.sum(axis=1)
+    return qp_nos.sum(axis=1), len(rec)
+
+
+def _score(contract, sub_runs, events_per_sub_run):
+    """Score every completed sub-run separately, then pool.
+
+    Per-sub-run scoring is EXACTLY equivalent to pooling the frames first --
+    `calculate_QPs` rounds `E_dep/gap` and picks the nearest electrode per hit,
+    with no cross-file term -- and it yields the (position, replica) blocks that
+    every uncertainty statement here depends on. The counts are not Poisson
+    (measured Fano ~ 5), so an interval has to come from the observed block
+    spread, and the block-resolved objectives (p90 over sites, worst electrode)
+    cannot be recovered from a pooled sum.
+
+    Strict: every planned sub-run must be usable. Callers check completeness
+    before reaching here; this re-checks rather than trusting.
+
+    Returns (total, per_primary, per_electrode, n_hits, blocks).
+    """
+    blocks, n_hits_total = [], 0
+    per_electrode = np.zeros(len(contract.fixed["electrode_x_mm"]), dtype=float)
+    for sr in sub_runs:
+        block_pe, n_hits = _score_one(contract, sr["hits_file"])
+        per_electrode += block_pe
+        n_hits_total += n_hits
+        blocks.append({
+            "replica": sr["replica"],
+            "position": sr["position_index"],
+            "total_qps": float(block_pe.sum()),
+            "per_electrode_qps": [float(v) for v in block_pe],
+            "n_hits": int(n_hits),
+            "events": int(events_per_sub_run),
+        })
     total = float(per_electrode.sum())
     n_sim = events_per_sub_run * len(sub_runs)
-    return total, total / n_sim, [float(v) for v in per_electrode], len(rec)
+    return total, total / n_sim, [float(v) for v in per_electrode], n_hits_total, blocks
+
+
+def _blocks_from_ledger(ledger, trial_id, events_per_sub_run):
+    """Rebuild the (position, replica) blocks of a cached trial.
+
+    A cache hit must be usable by a block-resolved objective, otherwise the
+    objective would silently change meaning between a fresh and a cached
+    evaluation. Returns [] for trials recorded before per-sub-run scoring
+    existed -- the objective then reports that it cannot be computed rather
+    than substituting a pooled value.
+    """
+    blocks = []
+    for row in ledger.sub_runs(trial_id):
+        if row["total_qps"] is None:
+            return []
+        blocks.append({
+            "replica": row["replica"], "position": row["position"],
+            "total_qps": float(row["total_qps"]),
+            "per_electrode_qps": json.loads(row["per_electrode_qps"] or "[]"),
+            "n_hits": row["n_hits"], "events": int(events_per_sub_run),
+        })
+    return blocks
 
 
 def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
-             runs_root=None, force=False, verbose=True, debye_override_THz=None):
+             runs_root=None, force=False, verbose=True, debye_override_THz=None,
+             resolver=None, control_replica_id=None):
     """Evaluate one candidate. Returns a TrialResult; never raises on a physics
-    failure (that is a status), only on a contract/programming error."""
+    failure (that is a status), only on a contract/programming error.
+
+    `resolver(contract, candidate) -> (resolved, derived)` lets a different kind
+    of candidate reuse this evaluator unchanged. Stage 4 passes
+    `stage4_space.resolve`, which returns the same shapes plus two extra keys in
+    `derived` -- `config_overrides` and `macro_overrides`. Because `derived` is
+    already inside the cache key, those overrides enter the trial identity for
+    free. Default is the Stage 3 catalog resolver, so the v2 path is unchanged.
+    """
     fidelity = fidelity or contract.decision["fidelity"]["value"]
     seed_bank_id = (contract.fixed["seed_bank_id"] if seed_bank_id is None else seed_bank_id)
-    resolved, derived = resolve_candidate(contract, candidate,
-                                         debye_override_THz=debye_override_THz)
+    if resolver is None:
+        resolved, derived = resolve_candidate(contract, candidate,
+                                             debye_override_THz=debye_override_THz)
+    else:
+        resolved, derived = resolver(contract, candidate)
+        if debye_override_THz is not None:
+            derived["debye_override_THz"] = debye_override_THz
 
     events_total = int(contract.decision["fidelity"]["events_total_per_candidate"][fidelity])
     events_per_sub_run = contract.events_per_sub_run(fidelity)
@@ -713,17 +876,25 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
     scenario = build_scenario(contract, template_z)
 
     code_fp = contract.code_fingerprint()
+    # Finding N2: the cache key is built from the SIMULATION identity, not the
+    # campaign's. Resource limits, the watchdog, the campaign name, the search
+    # box and the objective cannot change a completed trial's result, and
+    # including them meant that relaunching the ladder at a different worker
+    # count abandoned in-flight trials that should have resumed.
+    sim_hash = contract.simulation_identity_hash()
     cache_key = compute_cache_key(
-        contract.contract_hash(), code_fp, candidate, derived, fidelity,
-        events_total, scenario, seed_bank_id)
+        sim_hash, code_fp, candidate, derived, fidelity,
+        events_total, scenario, seed_bank_id,
+        control_replica_id=control_replica_id)
 
     runs_root = runs_root or os.path.join(HERE, "runs", contract.campaign_id)
     ledger_owned = ledger is None
     ledger = ledger or Ledger(os.path.join(HERE, "stage3_trials.sqlite"))
     try:
         existing = ledger.find_by_cache_key(cache_key)
-        if existing is not None and not force:
-            if existing["status"] in (STATUS_SUCCESS, STATUS_SUCCESS_ZERO):
+        if existing is not None:
+            if (existing["status"] in (STATUS_SUCCESS, STATUS_SUCCESS_ZERO)
+                    and not force):
                 if verbose:
                     print(f"  cache hit: {existing['trial_id']} "
                           f"total_QPs={existing['total_qps']:.0f}")
@@ -736,11 +907,14 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
                     qps_per_primary=existing["qps_per_primary"],
                     per_electrode_qps=json.loads(existing["per_electrode_qps"] or "[]"),
                     runtime_s=existing["runtime_s"], run_dir=existing["run_dir"],
-                    cached=True)
-            # Re-run IN PLACE. Minting a new trial_id under the same cache key
-            # would hit the UNIQUE constraint and the ledger write would be
-            # silently ignored -- a no-op write is worse than an error, because
-            # the run appears to have been recorded.
+                    cached=True,
+                    blocks=_blocks_from_ledger(ledger, existing["trial_id"],
+                                               existing["events_per_sub_run"]))
+            # Re-run IN PLACE, forced or not. Minting a new trial_id under the
+            # same cache key would hit the UNIQUE constraint, `INSERT OR IGNORE`
+            # would swallow the trial row, and `set_trial_result` would update
+            # nothing -- the run would execute, produce files, and never be
+            # recorded. (That is exactly what --force did before 2026-08-21.)
             trial_id = existing["trial_id"]
             run_dir = existing["run_dir"]
             if force:
@@ -779,11 +953,15 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
         # completeness is judged against intent, not against the filesystem.
         ledger.plan_trial(
             trial_id=trial_id, campaign_id=contract.campaign_id, cache_key=cache_key,
-            contract_hash=contract.contract_hash(), code_fingerprint=code_fp,
+            contract_hash=contract.campaign_contract_hash(),
+            simulation_identity_hash=sim_hash, code_fingerprint=code_fp,
             candidate=candidate, derived=derived, fidelity=fidelity,
             events_total=events_total, events_per_sub_run=events_per_sub_run,
             n_positions=n_positions, n_replicas=n_replicas, scenario=scenario,
             seed_bank_id=seed_bank_id, run_dir=run_dir, planned_sub_runs=planned)
+        if control_replica_id is not None:
+            ledger.set_optimizer_record(trial_id,
+                                        control_replica_id=str(control_replica_id))
 
         for sr in planned:
             _write_sub_run_macro(contract, resolved, derived, template, sr["macro"],
@@ -799,6 +977,84 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
             print(f"  trial {trial_id}: {len(todo)}/{len(planned)} sub-run(s) to run"
                   + (f" ({len(done_keys)} reused)" if done_keys else ""))
         ledger.set_trial_result(trial_id, STATUS_RUNNING)
+        # Liveness: record WHO is working on this trial, then beat while the
+        # Geant4 workers run. Without this a `running` row is indistinguishable
+        # from an abandoned one -- the trial row is not touched during the work
+        # and sub-run rows are only written at completion, so a healthy 29-hour
+        # trial and a dead one look identical. Process visibility is not a
+        # substitute: a PID namespace can hide a genuine host process.
+        lease_uuid = uuid.uuid4().hex
+        try:
+            acquired = ledger.claim_trial(
+                trial_id, lease_uuid, hostname=socket.gethostname(),
+                owner_pid=os.getpid(), owner_ppid=os.getppid(),
+                scheduler_job_id=_scheduler_job_id())
+        except Exception as exc:                                  # noqa: BLE001
+            acquired = None
+            if verbose:
+                print(f"  (liveness not recorded: {exc})")
+        if acquired is False:
+            # Finding N3: another evaluator is live on this exact trial. Running
+            # anyway means two processes writing one run directory and one
+            # cache key -- the failure mode the lease exists to prevent.
+            raise ContractError(
+                f"{trial_id} is leased by a live evaluator (heartbeat within "
+                f"{ledger.LEASE_EXPIRY_SECONDS:.0f}s). Refusing to run it twice. "
+                f"If that owner is genuinely dead, recover it explicitly with "
+                f"claim_trial(..., takeover=True) once the lease has expired.")
+        stop_heartbeat = threading.Event()
+        lease_lost = threading.Event()
+
+        def _beat():
+            """Heartbeat with bounded backoff and visible diagnostics.
+
+            Finding N3: this used to `return` on the first exception, so one
+            transient SQLite lock silently ended the heartbeat and turned a live
+            job into a stale-heartbeat false positive. Transient failures are
+            now retried; only losing the lease, or exhausting the retries, stops
+            it -- and both say so.
+            """
+            hb, consecutive = None, 0
+            try:
+                hb = Ledger(ledger.path, allow_frozen=True)   # own connection:
+                while not stop_heartbeat.wait(HEARTBEAT_SECONDS):  # sqlite objects
+                    try:                                           # are per-thread
+                        if not hb.heartbeat(trial_id, lease_uuid):
+                            lease_lost.set()
+                            print(f"  HEARTBEAT: lease {lease_uuid[:8]} on "
+                                  f"{trial_id} was taken away; this evaluator no "
+                                  f"longer owns it", flush=True)
+                            return
+                        consecutive = 0
+                    except Exception as exc:                  # noqa: BLE001
+                        consecutive += 1
+                        if consecutive >= HEARTBEAT_MAX_FAILURES:
+                            print(f"  HEARTBEAT: giving up after {consecutive} "
+                                  f"consecutive failures on {trial_id}: {exc}. "
+                                  f"The trial is STILL RUNNING -- treat a stale "
+                                  f"heartbeat as unverifiable, not as death.",
+                                  flush=True)
+                            return
+                        backoff = min(HEARTBEAT_SECONDS * (2 ** consecutive),
+                                      HEARTBEAT_MAX_BACKOFF)
+                        print(f"  HEARTBEAT: transient failure {consecutive}/"
+                              f"{HEARTBEAT_MAX_FAILURES} on {trial_id} ({exc}); "
+                              f"retrying in {backoff:.0f}s", flush=True)
+                        if stop_heartbeat.wait(backoff):
+                            return
+            except Exception as exc:                          # noqa: BLE001
+                print(f"  HEARTBEAT: could not start for {trial_id}: {exc}",
+                      flush=True)
+            finally:
+                if hb is not None:
+                    try:
+                        hb.close()
+                    except Exception:                             # noqa: BLE001
+                        pass
+
+        beater = threading.Thread(target=_beat, name=f"heartbeat-{trial_id[-8:]}",
+                                  daemon=True)
+        beater.start()
 
         timeout_s = float(contract.fixed.get("sample_timeout_s") or 0)
         workers = int(contract.fixed.get("max_workers", 32))
@@ -830,6 +1086,7 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
                         failures.append((sr["name"], status, reason))
         finally:
             guard.stop()
+            stop_heartbeat.set()
         runtime_total = time.monotonic() - start
         peak_rss_gb = guard.peak_total_bytes / 1024 ** 3
 
@@ -842,7 +1099,7 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
             reason = (f"{len(missing)}/{len(expected)} sub-run(s) incomplete "
                       f"(first: r{missing[0][0]}p{missing[0][1]}); "
                       f"failures={failures[:3]}")
-            ledger.set_trial_result(trial_id, STATUS_INCOMPLETE_SET,
+            ledger.set_trial_result(trial_id, STATUS_INCOMPLETE_SET, lease_uuid=lease_uuid,
                                     runtime_s=runtime_total, peak_rss_gb=peak_rss_gb,
                                     failure_reason=reason)
             if verbose:
@@ -858,12 +1115,28 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
                                runtime_s=runtime_total, peak_rss_gb=peak_rss_gb,
                                failure_reason=reason, run_dir=run_dir)
 
-        total, per_primary, per_electrode, n_hits = _score(contract, planned, events_per_sub_run)
+        total, per_primary, per_electrode, n_hits, blocks = _score(
+            contract, planned, events_per_sub_run)
         status = STATUS_SUCCESS if total > 0 else STATUS_SUCCESS_ZERO
-        ledger.set_trial_result(trial_id, status, total_qps=total,
-                                qps_per_primary=per_primary,
-                                per_electrode_qps=per_electrode,
-                                runtime_s=runtime_total, peak_rss_gb=peak_rss_gb)
+        for block in blocks:
+            ledger.set_sub_run_score(trial_id, block["replica"], block["position"],
+                                     block["total_qps"], block["per_electrode_qps"],
+                                     block["n_hits"])
+        wrote = ledger.set_trial_result(trial_id, status, total_qps=total,
+                                        qps_per_primary=per_primary,
+                                        per_electrode_qps=per_electrode,
+                                        runtime_s=runtime_total,
+                                        peak_rss_gb=peak_rss_gb,
+                                        lease_uuid=lease_uuid)
+        if not wrote:
+            # The lease was taken over while this trial ran. Refusing to write
+            # is the point: the new owner's result stands, and this one is
+            # reported rather than silently discarded (finding N3).
+            raise ContractError(
+                f"{trial_id}: the lease was taken over while this evaluator was "
+                f"running, so its result was NOT written. Another owner is "
+                f"authoritative for this trial. Re-run only after establishing "
+                f"which owner actually completed it.")
         if verbose:
             print(f"  {status}: total_QPs={total:.0f} "
                   f"({per_primary:.3e}/event, {n_hits} surface hits, "
@@ -875,7 +1148,7 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
                            n_positions=n_positions, n_replicas=n_replicas,
                            total_qps=total, qps_per_primary=per_primary,
                            per_electrode_qps=per_electrode, runtime_s=runtime_total,
-                           peak_rss_gb=peak_rss_gb, run_dir=run_dir)
+                           peak_rss_gb=peak_rss_gb, run_dir=run_dir, blocks=blocks)
     finally:
         if ledger_owned:
             ledger.close()

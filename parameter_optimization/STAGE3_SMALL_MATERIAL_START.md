@@ -299,9 +299,10 @@ set +a
 ```
 
 The client can then read `MP_API_KEY` from the environment. The repository
-contains only the placeholder. Use `small_material_candidates.example.yaml` as
-the allowlist template; placeholder candidates remain disabled until every
-required field is supplied.
+contains only the placeholder. Use `material_catalog.yaml` as the allowlist
+(it replaced the earlier `small_material_candidates.example.yaml` template,
+removed 2026-08-21); candidates without a complete record remain `enabled:
+false` until every required field is supplied with provenance.
 
 **Exit check:** rebuilding the catalog from the same explicit IDs produces a
 complete, versioned snapshot, and no secret appears in Git status, logs, or run

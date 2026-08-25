@@ -19,6 +19,84 @@ Every claim below was verified against the code, the Geant4/G4CMP sources under
 
 ---
 
+## 2026-08-24 — Stage 4 implementation audit: shared-machinery changes
+
+Recorded here because these touch files both stages share. The full account is
+in [`STAGE4_AUDIT_REMEDIATION.md`](STAGE4_AUDIT_REMEDIATION.md); this is the
+Stage 3 view of what moved underneath it.
+
+**`stage3_ledger.py`**
+
+* `compute_cache_key()` takes an optional `control_replica_id`. It is the only
+  non-physics field in the key and is **omitted from the payload entirely when
+  absent**, so every pre-existing cache key is bit-identical. It exists so a
+  drift control executes fresh and mints its own row instead of returning the
+  cached original — the Stage 4 campaign's "6 re-evaluations, 0.0% spread" was
+  measuring the cache.
+* `observations()` excludes control rows by default (`include_controls=True` to
+  see them); new `controls()` returns the audit trail. Without this, a resume
+  would replay the same baseline into the surrogate once per control.
+* New columns, all additive and NULL for historical rows: `proposal_source`,
+  `optimizer_generation`, `used_in_optimizer_update`, `control_replica_id`,
+  `lease_uuid`, `heartbeat_at`, `hostname`, `owner_pid`, `owner_ppid`,
+  `scheduler_job_id`.
+* New `claim_trial()` / `heartbeat()`. Only the lease holder may beat.
+* **New: a freeze guard.** `Ledger.__init__` refuses to open a ledger with a
+  `<path>.frozen` file beside it, *before* `sqlite3.connect` and therefore
+  before `_migrate()`. `allow_frozen=True` overrides it explicitly. This exists
+  because a chain script would otherwise have migrated the schema underneath a
+  running evaluator.
+
+**`stage3_trial_runner.py`**
+
+* `evaluate()` takes `control_replica_id` and threads it into the cache key and
+  the trial row.
+* A daemon heartbeat thread beats every `STAGE4_HEARTBEAT_SECONDS` (default 120)
+  for the whole Geant4 wait, on its own connection, and stops in the `finally`
+  beside `guard.stop()`. The trial is claimed with hostname, pid, ppid and
+  scheduler job id first.
+* Nothing in `_write_lattice_config()` or `_write_sub_run_macro()` changed. This
+  was verified rather than asserted: all 163 recorded Stage 4 trials regenerate a
+  **byte-identical** lattice config from their stored candidate.
+
+**Follow-up review, same day — five further findings (N0–N4), all fixed.**
+Two touch shared Stage 3 machinery:
+
+* **`stage3_contract.py` — two identities instead of one.**
+  `contract_hash()` was both "which campaign" and "would a re-run reproduce
+  this". `campaign_contract_hash()` keeps the former (and `contract_hash()` is
+  now an alias for it, so the ledger column and `resume()` are unchanged);
+  `simulation_identity_hash()` is new and is what the cache key is built from.
+  It excludes `max_workers`, `total_mem_gb`, `per_sample_mem_gb`,
+  `sample_timeout_s`, `campaign_id` and the search/scoring sections — none of
+  which can change a completed simulation. This closes item 4b of
+  `STAGE4_RESULTS.md` §5.5: relaunching the ladder at a different worker count
+  is now a cache hit rather than four abandoned trials.
+
+* **`stage3_ledger.py` — the lease is enforced, and migration is race-tolerant.**
+  `claim_trial()` is a compare-and-swap in a `BEGIN IMMEDIATE` transaction with
+  a 1800 s expiry; `heartbeat()` and `set_trial_result()` return whether the
+  write landed, so a displaced owner cannot overwrite the new owner's result.
+  Separately, `_migrate()` now tolerates `duplicate column name`: several
+  threads opening a fresh ledger at once each issued the same `ALTER TABLE`, and
+  all but the first died — reachable from every multi-threaded entry point on
+  any new ledger's first use.
+
+**`parameter_set.txt`** — the gun energy read `1.0e-3 eV` while both contracts
+and all five macro templates have used `10.0e-3 eV` since the 2026-08-12
+protocol change. The human-facing parameter list described a different
+experiment from the one that ran. Corrected, and `stage4_audit.py` now checks
+contract, templates and `parameter_set.txt` against each other on every run.
+
+**Consequence for the cache.** Four `CODE_IDENTITY_FILES` changed
+(`stage3_ledger.py`, `stage3_trial_runner.py`, `stage4_space.py`,
+`stage4_objectives.py`), so the code fingerprint moved and no recorded trial is
+cache-reachable from the current code. That is the fingerprint working as
+designed. The decision taken was to **keep the cache cold and not re-baseline**:
+the old ledger stays as historical evidence, and the next compute budget goes
+only to campaigns whose scientific interpretation actually changed.
+
+
 ## What was verified correct (no action)
 
 | Item | Enforcement point | Evidence |
@@ -61,6 +139,88 @@ not expected to change results. The G4 default is `2.`.
 ---
 
 ## Change log
+
+### 2026-08-21 — Stage 4 opened: property-space optimization; three defects fixed
+
+New branch `Material_optimization_v3_scan_parameters`. The v2 campaign selected
+among **real material triplets**; Stage 4 opens the second interpretation of
+`STAGE3_MATERIAL_OPTIMIZATION_PIPELINE.md` §3.2 — a continuous scan of the
+tunable properties of `parameter_set.txt`, followed by nearest-real-material
+projection. Design, pseudo-code and the implementation record are in
+[`STAGE4_PROPERTY_OPTIMIZATION_PLAN.md`](STAGE4_PROPERTY_OPTIMIZATION_PLAN.md).
+
+**Three defects in the shared machinery, found and fixed:**
+
+1. **Incomplete cache identity** (the blocker the factorial audit raised).
+   `CODE_IDENTITY_FILES` omitted `material_catalog.yaml`,
+   `interface_transmission.py` and the macro template, so a lifetime-bracket or
+   interface-model change could have returned nominal cached results. All three
+   are now hashed, along with the Stage 4 modules. Prior cache keys are
+   invalidated by design; the recorded v2 results are unaffected because they
+   were audited by re-scoring their hit files, not by cache identity.
+
+2. **`--force` never recorded its re-run.** `evaluate(force=True)` minted a new
+   `trial_id` under the same cache key; `INSERT OR IGNORE` dropped the trial row
+   and `set_trial_result` updated nothing. A forced re-run executed, wrote
+   files, and left no ledger row. Now a re-run reuses the existing `trial_id`.
+
+3. **The contract hash ignored any section beyond `fixed`/`decision`/`derived`.**
+   Stage 4 adds a `space` section (bounds, scales, active variables); a hash
+   that ignored it would let two different searches share cache keys.
+
+**One measured correction to this document's §12.3.** "Deterministic seeding is
+confirmed working" is **too strong**. `/random/setSeeds` does control the
+stream, but two forced re-runs of an identical configuration gave **1578 vs 1590
+QPs** (10 of 32 sub-runs differing), and a single sub-run repeated with identical
+seeds diverges in roughly **1 run in 6**. The differing rows are the same physics
+at shifted event IDs — a stream phase shift. It is not the seeds, not the
+pre-`beamOn` draw sequence (an extra early `setSeeds` does not fix it), and not
+ASLR (`setarch --addr-no-randomize` does not fix it). Magnitude is 0.76% against
+a 5.9% stochastic error, so no recorded ranking is threatened, but **exact
+replay is not available on this executable** and the `--replay` exit check
+should be read as "agrees within noise", not "identical". Chasing it needs a
+sanitizer run on the C++ and is not scheduled here.
+
+**Also measured, and reassuring:** the Stage 4 pseudo-material path reproduces
+the v2 `Si/Nb/Cu` baseline **exactly** (1578 QPs at 4e6 events, same 16 sites,
+same seed bank), per-sub-run scoring is exactly equivalent to pooled scoring on
+a recorded v2 trial, and the replica-based error estimator independently
+reproduces the Fano ≈ 5 overdispersion (4.9) that the beamOn scaling study
+measured a different way.
+
+**Campaign result (2026-08-21), full record in
+[`STAGE4_RESULTS.md`](STAGE4_RESULTS.md):** three optimizers on the same
+contract, 92 scored trials at 4e6 events. Best property target **1.210e-4
+QPs/event on held-out seeds, −67.1% against the baseline** (paired z = −11.5,
+winning at 13 of 16 injection sites) — against the converged v2 real-material
+best of −36%. `bo_gp` reached in 16 trials what CMA-ES needed 32 for and random
+search never reached in 37. Projection onto real materials: nearest substrates
+**Be₃N₂ / SiC / BP**, nearest ground films **In / Sn / Zn**, nearest bottom films
+**Ag / Cu**. Verified by re-simulation: the catalogued triplets recover ~0% of
+the gain, while **SiC's measured elasticity and density recover 77%** of it —
+conditional on `scat`/`decay`/`decayTT`, which are unmeasured for every cubic
+material outside the seven shipped G4CMP records and are now the binding gap.
+
+**Open defect (found 2026-08-22, fix deferred):** `contract_hash()` includes
+`max_workers`, `total_mem_gb`, `per_sample_mem_gb` and `sample_timeout_s`. Those
+are operational settings that change no physics, but they change the cache key,
+so re-running a candidate at a different worker count re-simulates it instead of
+reusing the completed trial. It surfaced when the fidelity ladder was relaunched
+from 32 to 64 workers. Fixing it means editing `stage3_contract.py`, which is
+itself in the code identity, so it must wait until the multi-day 1e8 ladder run
+finishes — otherwise the running chain would lose every trial it depends on.
+
+**Ledger hygiene, following the 2026-08-16 precedent:** the Stage 4 ledger was
+backed up (`stage4_trials.sqlite.bak-20260821`) and the five plumbing-probe rows
+(`drysmoke`, `confirmsmoke`) were removed with their run directories, so the
+ledger contains campaigns only. Reporting also excludes probe campaign ids by
+name, so a leftover cannot silently enter a table again.
+
+**Removed as superseded:** `STAGE3_START_ROADMAP.md`,
+`small_material_candidates.example.yaml`, `ElasticityTensors.py` (replaced by
+`build_material_catalog.py`). `parameter_optimization/README.md` now indexes
+what is current and what is history.
+
 
 ### 2026-08-12 — Change 1 APPLIED: injection energy protocol
 
@@ -120,6 +280,43 @@ Verified:
   `vsound 8829.6 > vtrans 5471.0 m/s`.
 - `minEPhonons (38.2 µeV) < 2*setTopGap (382 µeV)` — the numerical cut is now
   below the physical threshold, which is the invariant that must hold.
+
+### 2026-08-16 — Integrity audit of the e7/e8 campaigns; two probe leftovers removed
+
+**No unfinished or incomplete 1e7/1e8 experiments exist.** Audited all three
+tiers at trial, sub-run and filesystem level:
+
+| ledger | trials | sub-runs | events_total | non-terminal |
+|---|---:|---:|---:|---:|
+| `stage3_trials.sqlite` (125k) | 18 success | 576 success | 4.0e6 | 0 |
+| `stage3_trials_e7.sqlite` | 18 success | 576 success | 3.2e8 | 0 |
+| `stage3_trials_e8.sqlite` | 6 success | 192 success | 3.2e9 | 0 |
+
+Every hits file has its completion marker (640 + 576 + 192 = 1408, zero
+missing, zero zero-byte), no stray `.logtmp`, no stale WAL/SHM, and the shard
+logs report `0 not scored, 0 rejected` for both tiers.
+
+**Removed (backed up first to `stage3_trials.sqlite.bak-20260816`):** two rows
+in the *baseline* ledger that were artifacts of my own 2026-08-13 timing probe,
+not campaign experiments, and that had begun to corrupt reporting —
+`stage3_report.py` was emitting `Si/Nb/Cu` three times and a 20-row baseline.
+
+| trial | events/sub-run | QPs | disposition |
+|---|---:|---:|---|
+| `…b9c502b82cec` | 125,000 | 1578 | kept — the factorial row |
+| `…c156fc847c51` | 125,000 | 1578 | removed — duplicate created when a code-fingerprint change produced a new cache key |
+| `…4bba865c33c9` | 500,000 | 6226 | removed — timing probe, never part of a campaign |
+
+Worth recording before the deletion: the two 125k rows agreed at **1578 QPs
+exactly**, an independent confirmation that a code edit which did not touch
+physics produced a bit-identical result.
+
+After cleanup: 42 trial directories on disk, 42 ledger rows, zero orphans in
+either direction; each ledger holds exactly one event count; the baseline CSV is
+back to 18 rows. The tier comparison is unchanged, because
+`stage3_compare_fidelity.py` already pinned the baseline with `--baseline-events`
+— that guard was added precisely because this leftover had silently selected the
+500k probe as the Si/Nb/Cu baseline.
 
 ### 2026-08-13 — Stage 3 STARTED: first 18-combination factorial complete
 

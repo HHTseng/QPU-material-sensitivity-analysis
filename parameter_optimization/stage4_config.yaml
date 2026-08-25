@@ -1,0 +1,245 @@
+# Stage 4 experiment contract -- property-space optimization.
+#
+# Same classification discipline as stage3_config.yaml: every value is exactly
+# one of `fixed`, `decision`, or `derived`, and stage3_contract.py refuses the
+# file otherwise. The difference is that the decisions are now CONTINUOUS
+# PROPERTIES rather than material identities, so a fourth section appears:
+#
+#   space    : the variable table -- bounds, scales, which variables are active
+#
+# `space` is hashed into contract_hash(), so widening a bound or activating a
+# variable creates a different campaign rather than silently contaminating an
+# existing one.
+#
+# See STAGE4_PROPERTY_OPTIMIZATION_PLAN.md for the design and
+# STAGE3_MATERIAL_OPTIMIZATION_PIPELINE.md sec 3.2 for why this is a separate
+# interpretation from the v2 material search.
+
+campaign_id: stage4_property_v1
+description: >
+  Continuous scan of the tunable parameters of parameter_set.txt to minimize
+  junction QP generation, followed by nearest-real-material projection. The
+  optimum is a property TARGET; a pseudo-material need not exist, which is
+  exactly why stage4_project_material.py is part of the deliverable.
+
+# --------------------------------------------------------------------------
+# fixed -- the controlled comparison. Identical to the v2 campaign except that
+# temperature has moved to `space`, so the two campaigns remain comparable.
+# --------------------------------------------------------------------------
+fixed:
+  # Injection. E_gun is an injection condition, not a material property.
+  gun_energy_eV: 10.0e-3
+  min_e_phonons_eV: 0.0000382
+  gun_type: phonon_Caustic
+
+  # Declared physics regime. topfilm_gap is a DECISION now, so the regime flag
+  # varies per candidate and is checked per candidate (gate G6): every member of
+  # a comparison set must sit in the same regime or the objective changes
+  # meaning across the campaign.
+  ground_plane_active_absorber: true
+
+  # Al junction -- frozen, and it sets the pair-breaking gate E_gun must clear.
+  setTopVSound: 3.582
+  setTopGap: 191.0e-6
+  setTopQPLim: 3
+  setTopPhLifetime: 0.242
+  setTopPhLifetimeSlope: 0.29
+  setTopThickness_um: 0.12
+
+  # Geometry
+  setSubWidth_mm: 10
+  setSubHeight_mm: 10
+  setSubThickness_um: 525
+  electrode_width_um: 10.0
+  electrode_height_um: 10.0
+  electrode_island_um: 200.0
+  electrode_island_spacing_um: 50.0
+
+  # 17 readout electrodes -- where QPs are counted, present in every sub-run.
+  electrode_x_mm: [-2.0, 0.0, 2.0, -2.0, 0.0, 2.0, -2.0, 0.0, 2.0,
+                    1.0, -1.0, 1.0, -1.0, -3.0, 1.0, -1.0, 3.0]
+  electrode_y_mm: [-2.0, -2.0, -2.0, 0.0, 0.0, 0.0, 2.0, 2.0, 2.0,
+                   -3.0, -1.0, 1.0, 3.0, -1.0, -1.0, 1.0, 1.0]
+
+  # Surfaces and transport
+  setWallAbs: 0.02
+  setTopPSpecProb: 0.8
+  setTopFilmPSpecProb: 0.8
+  setBotPSpecProb: 0.8
+  setWallPSpecProb: 0.0
+  chargeBounces: 1
+  phononBounces: 10000
+  clearance_mm: 1.0e-6
+  eTrappingMFP_mm: 0.3
+  hTrappingMFP_mm: 0.3
+  # NOTE: no temperature_K here on purpose -- see `space`.
+
+  # Injection-site set: the same 16 scrambled-Sobol positions and the same seed
+  # bank as the v2 campaign, so a Stage 4 candidate can be compared directly
+  # against the converged v2 material ranking. Sites are common to every
+  # candidate, which is what makes paired differences meaningful.
+  n_positions: 16
+  position_seed: 20260727
+  position_half_span_mm: 4.0
+  position_weights: uniform
+  n_replicas: 2
+  seed_base: 20260728
+  seed_bank_id: 0
+  explicit_seeds: true
+
+  # Resource policy. Deliberately conservative: mimir is shared, and at the time
+  # this campaign was written another user held ~95% of the 192 cores. The
+  # driver splits `max_workers` and the memory budget across concurrently
+  # evaluated candidates.
+  max_workers: 32
+  total_mem_gb: 120
+  per_sample_mem_gb: 4
+  sample_timeout_s: 3600
+
+  objective: total_qps_per_primary
+  require_complete_scenarios: true
+
+# --------------------------------------------------------------------------
+# decision -- what the campaign may select over
+# --------------------------------------------------------------------------
+decision:
+  property_space:
+    # The variable table lives in `space` below; this entry exists so the
+    # classification check sees the property vector declared as a decision.
+    allowed_space_ids: [stage4_property_v1]
+    value: stage4_property_v1
+
+  orientation:
+    # Integer Miller indices only: G4LatticePhysical::SetMillerOrientation takes
+    # (G4int h, G4int k, G4int l, G4double rot). The 13 directions below are the
+    # cubic-symmetry-reduced set with max|index| = 3.
+    allowed_miller: [[0, 0, 1], [0, 1, 1], [1, 1, 1], [0, 1, 2], [1, 1, 2],
+                     [1, 2, 2], [0, 1, 3], [1, 1, 3], [0, 2, 3], [1, 2, 3],
+                     [2, 2, 3], [1, 3, 3], [2, 3, 3]]
+    miller: [0, 0, 1]
+    lattice_deg: 45.0
+
+  fidelity:
+    # Calibrated by the v2 beamOn scaling study, not guessed:
+    #   S  4.0e6   ~41 s on 32 idle workers, corrected 1 sigma ~5.0%
+    #   M  3.2e7   ~7 min,                   corrected 1 sigma ~1.8%
+    #   L  3.2e8   ~1.5 h,                   corrected 1 sigma ~0.56%
+    # "Corrected" = Poisson x 2.3, the measured Fano ~ 5 overdispersion.
+    # L is the tier at which the v2 ranking was shown converged (1e8 changed no
+    # ordering and no value by more than 1.6%).
+    allowed: [S, M, L]
+    value: S
+    events_total_per_candidate:
+      S: 4000000
+      M: 32000000
+      L: 320000000
+
+# --------------------------------------------------------------------------
+# space -- the continuous property box (Stage 4 only)
+# --------------------------------------------------------------------------
+# Defaults come from stage4_space.VARIABLES, where each bound carries its
+# evidence. Anything overridden here changes contract_hash and therefore starts
+# a new campaign. `active` lists the variables this campaign searches; the
+# others are held at baseline and written for provenance.
+space:
+  id: stage4_property_v1
+  active:
+    - topfilm_vsound
+    - topfilm_gap
+    - topfilm_ph_lifetime
+    - topfilm_density
+    - bot_vsound
+    - bot_gap_thres
+    - bot_ph_lifetime
+    - bot_density
+    - sub_c11
+    - sub_c12
+    - sub_c44
+    - sub_scat
+    - sub_decay
+    - sub_decayTT
+    - temperature
+    - lattice_deg
+  # sub_lattice_a is deliberately NOT active: it sets fBasis, which for a cubic
+  # cell affects only the (scale-invariant) Miller direction and the charge
+  # cloud. Proved inert by A/B rather than assumed -- see tests_stage4.py T13.
+  # ---------------------------------------------------------------------
+  # BOX WIDENING for the next campaign (audit P2). Do NOT uncomment inside
+  # this campaign: `space` is hashed into contract_hash(), so changing a bound
+  # starts a different campaign -- which is the point, but it must be a
+  # deliberate one with a new campaign_id.
+  #
+  # The best point found in `stage4_property_v1` binds or nearly binds in four
+  # directions, so its value is a statement about the box as much as about the
+  # physics:
+  #   sub_c11      399.6 of [20, 450]      -- 89% of the way up
+  #   sub_c44      179.6 of [5, 200]       -- 90% of the way up, and real 3C-SiC
+  #                                           (241 GPa) does not fit at all
+  #   sub_scat     1.46e-43 of [1e-44, 5e-41] (log) -- pressed toward the floor
+  #   topfilm_gap  8.16e-5 of [5e-5, 3.5e-3] (log)  -- pressed toward the floor
+  #
+  # Evidence-based replacements, each with the material that justifies it:
+  #   sub_c11:  high 450 -> 1100   (diamond C11 = 1076 GPa; cBN = 820; SiC = 384)
+  #   sub_c44:  high 200 ->  600   (diamond C44 = 577 GPa; cBN = 480; SiC = 241)
+  #   sub_c12:  high 250 ->  400   (keeps C11 - C12 > 0 reachable at the new C11)
+  #   sub_scat: low 1e-44 -> 1e-45 (isotopically pure 28Si is ~1e-45 s3; below
+  #                                 that no crystal is known, so the floor is a
+  #                                 physical statement rather than a search bound)
+  #   topfilm_gap: low 5e-5 -> 2e-5 (Ir Tc = 0.11 K -> 1.7e-5 eV is the lowest
+  #                                 elemental superconductor in practical use)
+  # A campaign that widens these MUST also declare the P3 constraints, or the
+  # search will simply press further into the low-gap phonon-sink corner.
+  # ---------------------------------------------------------------------
+
+  # Engineering constraints the QP objective cannot express (audit P3).
+  # Hashed with the contract, so declaring one starts a different campaign
+  # rather than re-reporting this one. All three are OFF here: the campaign on
+  # record was run unconstrained, and turning one on retroactively would change
+  # what its numbers mean.
+  #
+  # Why they exist: the strongest lever the search found is a very low top-film
+  # gap, which makes the ground plane a phonon sink beside the qubits. Nothing
+  # in `total_qps_per_primary` penalises the ground plane's OWN quasiparticles
+  # or its microwave loss -- at 20 mK a 0.54 K ground plane sits ~366 orders of
+  # magnitude above Nb in equilibrium QP density (stage4_objectives
+  # .engineering_diagnostics). Before that design is recommended, declare the
+  # floor here and re-run, or present the finalists as a Pareto set.
+  # (No `constraints:` key is written here on purpose: the `space` section is
+  # hashed into contract_hash(), so even an empty mapping would mint a new
+  # contract hash and orphan every trial already in the ledger. Uncomment the
+  # block below only when deliberately starting a constrained campaign.)
+  #
+  # constraints:
+  #   topfilm_tc_min_K: 4.0                 # e.g. keep the ground plane Nb-like
+  #   topfilm_gap_min_eV: 6.1e-4
+  #   topfilm_gap_over_junction_min: 1.0    # forbid the phonon-sink regime
+
+  inactive_with_reason:
+    sub_lattice_a: "inert for the phonon objective (fBasis is scale-invariant
+      for the Miller direction; G4CMPChargeCloud is not on the phonon path).
+      Written into the generated config for provenance and used by the
+      projection metric."
+    substrate_density: "not addressable: G4CMP takes it from the G4Material and
+      the executable accepts only a NIST material NAME. Quantized to the three
+      verified carriers; redundant given a free elastic tensor, since density
+      enters as v = sqrt(C/rho) and as the boundary impedance."
+    debye: "measured inert for this gun type -- Ge at 2 vs 7.8 THz gave 144 vs
+      144 QPs, bit-identical. Consumed by G4CMPEnergyPartition, which the
+      phonon_Caustic gun bypasses."
+
+# --------------------------------------------------------------------------
+# derived -- computed from a decision, never set by hand
+# --------------------------------------------------------------------------
+derived:
+  - vsound                 # Christoffel spherical average of (C11,C12,C44,rho)
+  - vtrans                 # ditto; 0 < vtrans < vsound is gate G3
+  - setTopAbs              # substrate / Al junction interface
+  - setTopFilmAbs          # substrate / top film interface
+  - setBotAbs              # substrate / bottom film interface
+  - substrate_density      # from the Geant4 carrier material
+  - g4_material_name
+  - lattice_map_name
+  - anisotropy             # 2*C44/(C11-C12), reported and used by the projection
+  - impedance_substrate
+  - events_per_sub_run
+  - sub_run_seeds

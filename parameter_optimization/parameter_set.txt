@@ -56,9 +56,15 @@ fix at 0.02: ("/main/detector_param/setWallAbs ", 0.02, [0.0,0.5]),
 # At the old setting the primary sat exactly on the Al pair-breaking gate 2*Delta_Al = 382 ueV and
 # minEPhonons killed every downconversion daughter at the first decay, so the cascade -- the mechanism
 # through which scat/decay/decayTT/the elastic tensor act -- was not simulated. Measured: ~4x more QPs
-# per primary event. 1.0 meV is mid-range of the validated [0.6, 1.5] meV window (floor = the 382 ueV
-# gate with margin; ceiling = isotope MFP 137 um vs the 525 um substrate).
-fix 1.0e-3 eV:   ("/main/gun/setEnergy ", 1.0e-3, [1.0e-3, 1.0e-3], " eV"),
+# per primary event.
+#
+# CORRECTED 2026-08-24 (audit P7). This line read 1.0e-3 eV while the Stage 3 and
+# Stage 4 contracts and every macro template have used 10.0e-3 eV since the
+# protocol change -- so the human-facing parameter list described a different
+# experiment from the one that ran. 10 meV is the value in stage3_config.yaml,
+# stage4_config.yaml and sensitivity_template_beamOn*.mac; `stage4_audit.py`
+# now checks all four against each other on every run.
+fix 10.0e-3 eV:  ("/main/gun/setEnergy ", 10.0e-3, [10.0e-3, 10.0e-3], " eV"),
 
 # Keep fixed. If we start changing the aluminum values of the Josephson junction, then we should adjust minEPhonons accordingly
 # NOTE: this cut must stay BELOW the physical threshold 2*setTopGap, or a numerical cut preempts a physical one.

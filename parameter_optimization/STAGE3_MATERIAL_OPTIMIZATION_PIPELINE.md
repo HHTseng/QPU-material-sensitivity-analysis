@@ -237,8 +237,10 @@ candidate should contain at least:
 - top/bottom-film gap, sound speed, phonon lifetime, and provenance;
 - missing-data flags and uncertainty intervals.
 
-`ElasticityTensors.py` is a useful start, but it needs the following changes
-before it becomes the catalog builder:
+`ElasticityTensors.py` was the useful start. It has since been **replaced by
+`build_material_catalog.py`** and removed (2026-08-21); the list below is the
+change set that replacement had to implement, kept because it documents why the
+builder looks the way it does:
 
 1. write density and all query filters into its CSV/JSON outputs;
 2. distinguish the explicit `MATERIAL_IDS` mode from a database-wide filtered

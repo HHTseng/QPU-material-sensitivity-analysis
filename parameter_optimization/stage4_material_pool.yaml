@@ -1,0 +1,375 @@
+# Stage 4 projection pools: the real materials a property target is projected onto.
+#
+# PROVENANCE DISCIPLINE, unchanged from material_catalog.yaml and worth
+# restating because this file introduces values the simulation has never used:
+#
+#   verified: true   -- the value is already in this project's curated catalog,
+#                       with the provenance recorded there, and has been used in
+#                       a simulation that produced a checked-in result.
+#   verified: false  -- a standard-reference handbook value entered for
+#                       PROJECTION ONLY. It is good enough to rank candidates by
+#                       distance; it is NOT good enough to fabricate from, and
+#                       any finalist must have its properties re-sourced with a
+#                       citation before it is treated as a materials claim.
+#
+#   null             -- NOT KNOWN. A null is excluded from the distance and
+#                       counted as an unmatched feature, never imputed. A
+#                       candidate matched on 3 of 6 features is a different
+#                       claim from one matched on 6 of 6, and the report says so.
+#
+# SOUND-SPEED CONVENTION -- read this before using the numbers.
+# The project's own film speeds are internally inconsistent: Ta 4159 and Au 3240
+# are bulk LONGITUDINAL speeds, while Nb 2444 and Cu 2608 are much closer to
+# those metals' DEBYE-AVERAGED speeds (Nb v_L = 5060, Cu v_L = 4760). Because a
+# film's speed enters the objective through the macro AND enters the projection
+# metric through the impedance Z = rho*v, that inconsistency cannot be resolved
+# silently. Each entry therefore carries up to three speeds:
+#
+#   vsound_catalog_m_s      what this project has actually simulated (if any)
+#   vsound_longitudinal_m_s bulk longitudinal
+#   vsound_transverse_m_s   bulk transverse
+#
+# and stage4_project_material.py computes the Debye average from the last two
+# where both exist. `--film-speed-convention` selects which is compared, and the
+# report gives the distance under more than one so the ranking's dependence on
+# the convention is visible rather than assumed away.
+
+meta:
+  created_utc: "2026-08-21"
+  purpose: "nearest-real-material projection of a Stage 4 property target"
+  substrate_pool_file: catalog/substrates_raw.json     # 396 cubic MP materials
+  substrate_filters_already_applied:
+    - "crystal_system = Cubic"
+    - "is_metal = false"
+    - "num_magnetic_sites = 0"
+    - "theoretical = false (experimentally observed)"
+    - "energy_above_hull <= 0.1 eV/atom"
+    - "elements U, Th, Np excluded"
+    - "Born stability and cubic tensor validation passed"
+
+# ---------------------------------------------------------------------------
+# Substrates with a COMPLETE G4CMP lattice record. Only these carry the
+# anharmonic constants (scat, decay, decayTT), so only these can be matched on
+# the phonon-downconversion features -- for every other candidate those three
+# features are unmatched, which is a real and reportable gap.
+# `g4_carrier` is the NIST material whose density Geant4 would use; absent means
+# the material cannot be simulated without adding one (see
+# stage4_probe_g4_density.py).
+# ---------------------------------------------------------------------------
+g4cmp_substrates:
+  Si:
+    verified: true
+    g4_carrier: G4_Si
+    density_kg_m3: 2330.0
+    lattice_a_ang: 5.431
+    c11_GPa: 165.6
+    c12_GPa: 63.9
+    c44_GPa: 79.5
+    scat_s3: 2.43e-42
+    decay_s4: 7.41e-56
+    decayTT: 0.74
+    debye_THz: 15.0
+    source: "G4CMP CrystalMaps/Si/config.txt; density measured from a live run"
+  Ge:
+    verified: true
+    g4_carrier: G4_Ge
+    density_kg_m3: 5323.0
+    lattice_a_ang: 5.658
+    c11_GPa: 126.0
+    c12_GPa: 44.0
+    c44_GPa: 67.0
+    scat_s3: 3.67e-41
+    decay_s4: 1.6456e-54
+    decayTT: 0.74
+    debye_THz: 2.0
+    source: "G4CMP CrystalMaps/Ge/config.txt; density measured from a live run"
+  GaAs:
+    verified: true
+    g4_carrier: G4_GALLIUM_ARSENIDE
+    density_kg_m3: 5310.0
+    lattice_a_ang: 5.75
+    c11_GPa: 121.57
+    c12_GPa: 57.4
+    c44_GPa: 59.5
+    scat_s3: 7.22e-42
+    decay_s4: 7.778e-55
+    decayTT: 0.778
+    debye_THz: 6.56
+    source: "G4CMP CrystalMaps/GaAs/config.txt; density measured from a live run"
+  CaF2:
+    verified: false
+    g4_carrier: G4_CALCIUM_FLUORIDE   # density 3180 kg/m3 measured 2026-08-21
+    density_kg_m3: 3180.0
+    lattice_a_ang: 5.52
+    c11_GPa: 164.0
+    c12_GPa: 53.0
+    c44_GPa: 33.7
+    scat_s3: 4.83e-42
+    decay_s4: 6.14e-55
+    decayTT: 0.75
+    debye_THz: null
+    source: "G4CMP CrystalMaps/CaF2/config.txt; elastic constants standard reference"
+  LiF:
+    verified: false
+    g4_carrier: G4_LITHIUM_FLUORIDE   # density 2635 kg/m3 measured 2026-08-21
+    density_kg_m3: 2640.0
+    lattice_a_ang: 4.03
+    c11_GPa: 114.0
+    c12_GPa: 47.7
+    c44_GPa: 63.6
+    scat_s3: 1.17e-42
+    decay_s4: 5.50e-55
+    decayTT: 0.68
+    debye_THz: 10.73
+    source: "G4CMP CrystalMaps/LiF/config.txt; elastic constants standard reference"
+
+# ---------------------------------------------------------------------------
+# Superconducting films (top ground plane).
+#
+# gap_eV is the SINGLE-quasiparticle gap Delta. Where a measured T=0 gap is
+# established it is used; otherwise the BCS relation Delta = 1.764 k_B Tc is
+# applied and `gap_source: bcs_from_tc` says so. Nb and Pb are strong-coupling
+# (2Delta/kTc = 3.9 and 4.4 against BCS 3.53), which is exactly why the measured
+# value is preferred where it exists.
+#
+# ph_lifetime_ns is null for every film this project has not been given a
+# sourced value for. That is the single largest gap in the film pool and it is
+# left visible rather than filled.
+# ---------------------------------------------------------------------------
+top_films:
+  Nb:
+    verified: true
+    tc_K: 9.25
+    gap_eV: 1.5384e-3
+    gap_source: measured
+    density_kg_m3: 8570.0
+    vsound_catalog_m_s: 2444.0
+    vsound_longitudinal_m_s: 5060.0
+    vsound_transverse_m_s: 2092.0
+    ph_lifetime_ns: 0.00417
+    source: "project catalog (material_catalog.yaml)"
+  Ta:
+    verified: true
+    tc_K: 4.47
+    gap_eV: 0.70e-3
+    gap_source: measured
+    density_kg_m3: 16650.0
+    vsound_catalog_m_s: 4159.0
+    vsound_longitudinal_m_s: 4159.0
+    vsound_transverse_m_s: 2036.0
+    ph_lifetime_ns: 0.0227
+    ph_lifetime_uncertainty_ns: [0.015, 0.040]
+    source: "project catalog; used in state-of-the-art transmons"
+  Ti:
+    verified: true
+    tc_K: 0.40
+    gap_eV: 0.061e-3
+    gap_source: bcs_from_tc
+    density_kg_m3: 4540.0
+    vsound_catalog_m_s: 4140.0
+    vsound_longitudinal_m_s: 6070.0
+    vsound_transverse_m_s: 3125.0
+    ph_lifetime_ns: 0.414
+    ph_lifetime_uncertainty_ns: [0.25, 0.70]
+    source: "project catalog"
+  Pb:
+    verified: true
+    tc_K: 7.19
+    gap_eV: 1.36e-3
+    gap_source: measured
+    density_kg_m3: 11340.0
+    vsound_catalog_m_s: 2160.0
+    vsound_longitudinal_m_s: 2160.0
+    vsound_transverse_m_s: 700.0
+    ph_lifetime_ns: null        # the reason Pb is disabled in material_catalog.yaml
+    source: "project catalog (disabled there: no sourced phonon lifetime)"
+  Al:
+    verified: true              # as the fixed junction material; not yet as a ground film
+    tc_K: 1.175
+    gap_eV: 0.191e-3
+    gap_source: measured
+    density_kg_m3: 2699.0
+    vsound_catalog_m_s: 3582.0
+    vsound_longitudinal_m_s: 6420.0
+    vsound_transverse_m_s: 3040.0
+    ph_lifetime_ns: 0.242
+    source: "project catalog, junction values (setTopVSound / setTopGap / setTopPhLifetime)"
+  V:
+    verified: false
+    tc_K: 5.40
+    gap_eV: 8.21e-4
+    gap_source: bcs_from_tc
+    density_kg_m3: 6110.0
+    vsound_catalog_m_s: null
+    vsound_longitudinal_m_s: 6023.0
+    vsound_transverse_m_s: 2774.0
+    ph_lifetime_ns: null
+    source: "standard reference; VERIFY before fabrication"
+  Mo:
+    verified: false
+    tc_K: 0.92
+    gap_eV: 1.40e-4
+    gap_source: bcs_from_tc
+    density_kg_m3: 10220.0
+    vsound_catalog_m_s: null
+    vsound_longitudinal_m_s: 6290.0
+    vsound_transverse_m_s: 3350.0
+    ph_lifetime_ns: null
+    source: "standard reference; VERIFY before fabrication"
+  Sn:
+    verified: false
+    tc_K: 3.72
+    gap_eV: 5.75e-4
+    gap_source: measured
+    density_kg_m3: 7290.0
+    vsound_catalog_m_s: null
+    vsound_longitudinal_m_s: 3320.0
+    vsound_transverse_m_s: 1670.0
+    ph_lifetime_ns: null
+    source: "standard reference; VERIFY before fabrication"
+  In:
+    verified: false
+    tc_K: 3.41
+    gap_eV: 5.40e-4
+    gap_source: measured
+    density_kg_m3: 7310.0
+    vsound_catalog_m_s: null
+    vsound_longitudinal_m_s: 2560.0
+    vsound_transverse_m_s: 1160.0
+    ph_lifetime_ns: null
+    source: "standard reference; VERIFY before fabrication"
+  Zn:
+    verified: false
+    tc_K: 0.85
+    gap_eV: 1.29e-4
+    gap_source: bcs_from_tc
+    density_kg_m3: 7140.0
+    vsound_catalog_m_s: null
+    vsound_longitudinal_m_s: 4210.0
+    vsound_transverse_m_s: 2440.0
+    ph_lifetime_ns: null
+    source: "standard reference; VERIFY before fabrication"
+  W:
+    verified: false
+    tc_K: 0.015
+    gap_eV: 2.3e-6
+    gap_source: bcs_from_tc
+    density_kg_m3: 19300.0
+    vsound_catalog_m_s: null
+    vsound_longitudinal_m_s: 5220.0
+    vsound_transverse_m_s: 2890.0
+    ph_lifetime_ns: null
+    note: "alpha-W. Sputtered beta-W reaches Tc ~ 4 K; a fabricated film must
+      declare which phase it is, since the two differ by two orders of magnitude
+      in Tc and therefore in gap."
+    source: "standard reference; VERIFY before fabrication"
+  NbN:
+    verified: false
+    tc_K: 16.0
+    gap_eV: 2.60e-3
+    gap_source: measured
+    density_kg_m3: 8470.0
+    vsound_catalog_m_s: null
+    vsound_longitudinal_m_s: null     # not entered rather than guessed
+    vsound_transverse_m_s: null
+    ph_lifetime_ns: null
+    source: "standard reference for Tc/gap/density; speeds NOT entered"
+  TiN:
+    verified: false
+    tc_K: 5.6
+    gap_eV: 8.51e-4
+    gap_source: bcs_from_tc
+    density_kg_m3: 5220.0
+    vsound_catalog_m_s: null
+    vsound_longitudinal_m_s: null
+    vsound_transverse_m_s: null
+    ph_lifetime_ns: null
+    note: "Tc is strongly film- and stoichiometry-dependent (2-5.6 K reported)."
+    source: "standard reference for Tc/density; speeds NOT entered"
+  Nb3Sn:
+    verified: false
+    tc_K: 18.3
+    gap_eV: 3.40e-3
+    gap_source: measured
+    density_kg_m3: 8900.0
+    vsound_catalog_m_s: null
+    vsound_longitudinal_m_s: null
+    vsound_transverse_m_s: null
+    ph_lifetime_ns: null
+    source: "standard reference for Tc/gap/density; speeds NOT entered"
+
+# ---------------------------------------------------------------------------
+# Bottom films: normal metals at mK. Gap is identically zero by construction
+# (setBotNormal true), so the matched features are speed, impedance and phonon
+# lifetime -- and lifetime is the one the v2 campaign found dominant, with only
+# two sourced values in existence.
+# ---------------------------------------------------------------------------
+bottom_films:
+  Cu:
+    verified: true
+    density_kg_m3: 8960.0
+    vsound_catalog_m_s: 2608.0
+    vsound_longitudinal_m_s: 4760.0
+    vsound_transverse_m_s: 2325.0
+    ph_lifetime_ns: 5.1
+    source: "project catalog (harness baseline)"
+  Au:
+    verified: true
+    density_kg_m3: 19300.0
+    vsound_catalog_m_s: 3240.0
+    vsound_longitudinal_m_s: 3240.0
+    vsound_transverse_m_s: 1200.0
+    ph_lifetime_ns: 16.0
+    ph_lifetime_uncertainty_ns: [10.0, 30.0]
+    source: "project catalog"
+  Ag:
+    verified: false
+    density_kg_m3: 10490.0
+    vsound_catalog_m_s: null
+    vsound_longitudinal_m_s: 3650.0
+    vsound_transverse_m_s: 1660.0
+    ph_lifetime_ns: null
+    source: "standard reference; VERIFY before fabrication"
+  Al_normal:
+    verified: false
+    density_kg_m3: 2699.0
+    vsound_catalog_m_s: null
+    vsound_longitudinal_m_s: 6420.0
+    vsound_transverse_m_s: 3040.0
+    ph_lifetime_ns: null
+    note: "Al is superconducting below 1.18 K; usable as a NORMAL bottom film
+      only above Tc or when driven normal. Included because its acoustic
+      properties are the extreme low-impedance end of the fabrication metals."
+    source: "standard reference; VERIFY before fabrication"
+  Pt:
+    verified: false
+    density_kg_m3: 21450.0
+    vsound_catalog_m_s: null
+    vsound_longitudinal_m_s: 3960.0
+    vsound_transverse_m_s: 1670.0
+    ph_lifetime_ns: null
+    source: "standard reference; VERIFY before fabrication"
+  Pd:
+    verified: false
+    density_kg_m3: 12020.0
+    vsound_catalog_m_s: null
+    vsound_longitudinal_m_s: 4700.0
+    vsound_transverse_m_s: 2200.0
+    ph_lifetime_ns: null
+    source: "standard reference; VERIFY before fabrication"
+  W_normal:
+    verified: false
+    density_kg_m3: 19300.0
+    vsound_catalog_m_s: null
+    vsound_longitudinal_m_s: 5220.0
+    vsound_transverse_m_s: 2890.0
+    ph_lifetime_ns: null
+    source: "standard reference; VERIFY before fabrication"
+  Mo_normal:
+    verified: false
+    density_kg_m3: 10220.0
+    vsound_catalog_m_s: null
+    vsound_longitudinal_m_s: 6290.0
+    vsound_transverse_m_s: 3350.0
+    ph_lifetime_ns: null
+    source: "standard reference; VERIFY before fabrication"

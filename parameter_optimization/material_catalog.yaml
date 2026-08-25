@@ -199,10 +199,7 @@ top_films:
     provenance:
       gap: "measured T=0 gap 1.36 meV (strong coupling, 2D/kTc = 4.4); 2D = 2.72x E_gun"
       density: "standard reference 11340 (MP gives 11080, -2.3%)"
-      ph_lifetime: "supplied 2026-08-13 as the energy-scaling coefficient in G4CMPNormal;
-        uncertainty [10.0, 30.0] ns. NOTE: with setBotNormal true the bottom MPT
-        carries phononLifetime but NOT phononLifetimeSlope, so the slope field is
-        inert for this layer."
+      ph_lifetime: "NOT SOURCED -- Pb stays disabled until a value with a citation is supplied"
 
 # ---------------------------------------------------------------------------
 # Bottom films (normal metal in this model: gap 0, gapThreshold set to setTopGap).
@@ -239,4 +236,6 @@ bottom_films:
     provenance:
       vsound: "longitudinal 3240 m/s, standard reference"
       density: "standard reference 19300 (MP gives 18026, -6.6% -- MP unreliable here)"
-      ph_lifetime: "NOT SOURCED"
+      ph_lifetime: "supplied 2026-08-13 as the energy-scaling coefficient in G4CMPNormal;
+        uncertainty [10.0, 30.0] ns. NOTE: with setBotNormal true the bottom MPT carries
+        phononLifetime but NOT phononLifetimeSlope, so the slope field is inert here."

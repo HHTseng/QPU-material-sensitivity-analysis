@@ -37,6 +37,24 @@ CODE_IDENTITY_FILES = (
     "parameter_optimization/stage3_contract.py",
     "parameter_optimization/stage3_ledger.py",
     "parameter_optimization/stage3_trial_runner.py",
+    # Added 2026-08-21 (Stage 4). The factorial audit found these three missing:
+    # changing a film lifetime in the catalog, or the interface model, or the
+    # macro template changed the generated macro while leaving the cache payload
+    # identical -- so a lifetime-bracket run could return nominal cached results.
+    "parameter_optimization/material_catalog.yaml",
+    "parameter_optimization/interface_transmission.py",
+    # Stage 4 property-space modules. Absent on a v2-only checkout, which is why
+    # `code_fingerprint` tolerates a missing OPTIONAL file but not a required one.
+    "parameter_optimization/stage4_space.py",
+    "parameter_optimization/stage4_objectives.py",
+)
+
+# Files that may legitimately not exist (a Stage 3-only checkout). They are still
+# hashed when present, so adding one later changes the fingerprint -- which is
+# correct: the computation did change.
+OPTIONAL_IDENTITY_FILES = (
+    "parameter_optimization/stage4_space.py",
+    "parameter_optimization/stage4_objectives.py",
 )
 
 REQUIRED_SECTIONS = ("fixed", "decision", "derived")
@@ -119,19 +137,31 @@ class Contract:
             if not isinstance(spec, dict):
                 raise ContractError(f"decision.{name} must be a mapping, got {type(spec).__name__}")
             allowed_key = next((k for k in spec if k.startswith("allowed")), None)
-            if allowed_key is None:
-                raise ContractError(
-                    f"decision.{name} declares no `allowed*` set. An unbounded "
-                    f"decision cannot be enumerated or validated."
-                )
             value_key = "miller" if name == "orientation" else "value"
+            if allowed_key is None and "bounds" not in spec:
+                raise ContractError(
+                    f"decision.{name} declares neither an `allowed*` set nor "
+                    f"`bounds`. An unbounded decision cannot be enumerated or "
+                    f"validated."
+                )
             if value_key not in spec:
                 raise ContractError(f"decision.{name} declares no `{value_key}`.")
-            if spec[value_key] not in spec[allowed_key]:
-                raise ContractError(
-                    f"decision.{name}.{value_key}={spec[value_key]!r} is not in "
-                    f"{allowed_key}={spec[allowed_key]!r}."
-                )
+            if allowed_key is not None:
+                if spec[value_key] not in spec[allowed_key]:
+                    raise ContractError(
+                        f"decision.{name}.{value_key}={spec[value_key]!r} is not in "
+                        f"{allowed_key}={spec[allowed_key]!r}."
+                    )
+            else:
+                # Continuous decision (Stage 4 property space): a closed interval
+                # plus a default inside it. The full variable table lives in the
+                # `space` section and is hashed with the contract.
+                low, high = spec["bounds"]
+                if not low <= spec[value_key] <= high:
+                    raise ContractError(
+                        f"decision.{name}.{value_key}={spec[value_key]!r} is outside "
+                        f"bounds [{low}, {high}]."
+                    )
         return self
 
     # -- physics gate -------------------------------------------------------
@@ -208,10 +238,21 @@ class Contract:
 
     # -- identity -----------------------------------------------------------
     def code_fingerprint(self):
-        """Hashes of everything that defines 'the same computation'."""
+        """Hashes of everything that defines 'the same computation'.
+
+        Includes the macro template, because the template is an input to every
+        generated sub-run: two campaigns run from different templates are not
+        the same computation and must not share a cache key.
+        """
         files = {name: _sha256_file(os.path.join(REPO_ROOT, name))
                  for name in CODE_IDENTITY_FILES}
-        missing = [n for n, h in files.items() if h is None]
+        template = os.environ.get(
+            "SENSITIVITY_MACRO_TEMPLATE",
+            os.path.join(REPO_ROOT, "sensitivity_template_beamOn1e6.mac"))
+        files["macro_template:" + os.path.basename(template)] = _sha256_file(template)
+        missing = [n for n, h in files.items()
+                   if h is None and n not in OPTIONAL_IDENTITY_FILES]
+        files = {n: h for n, h in files.items() if h is not None}
         if missing:
             raise ContractError(
                 f"Cannot fingerprint the code: missing {missing}. A cache key built "
@@ -228,14 +269,89 @@ class Contract:
             "main_exe_sha256": _sha256_file(exe),
         }
 
+    # ----------------------------------------------------------------------
+    # Two identities, not one (audit finding N2)
+    #
+    # `contract_hash()` used to be both "which campaign is this" and "would a
+    # re-run reproduce this simulation". Those are different questions, and
+    # conflating them cost real compute: `max_workers`, `total_mem_gb`,
+    # `per_sample_mem_gb` and `sample_timeout_s` live in `fixed`, so relaunching
+    # the fidelity ladder from 32 to 64 workers minted new cache keys and
+    # abandoned four in-flight trials that would otherwise have resumed. None of
+    # those four values can change a completed simulation's result.
+    #
+    # The same conflation blocked legitimate reuse in the other direction: an
+    # identical property vector evaluated under a different optimizer, a
+    # different objective, a widened search box or a renamed campaign is the
+    # SAME simulation and should hit the cache.
+    #
+    #   campaign_contract_hash()   -- the whole declaration, for provenance and
+    #                                 for deciding which trials may be replayed
+    #                                 into one optimizer's history.
+    #   simulation_identity_hash() -- only what can change the generated macro,
+    #                                 the resolved material, the ordered
+    #                                 scenario, the seeds, the event count or the
+    #                                 scored physics. This is what the cache key
+    #                                 is built from.
+    # ----------------------------------------------------------------------
+
+    # Execution-only knobs: how hard the machine is driven, never what is
+    # computed. Adding one here is a claim that it cannot change a completed
+    # trial's result -- justify it in the comment.
+    EXECUTION_ONLY_FIXED_KEYS = (
+        "max_workers",          # thread-pool width over independent sub-runs
+        "total_mem_gb",         # memory guard ceiling
+        "per_sample_mem_gb",    # per-sub-run memory estimate for that guard
+        "sample_timeout_s",     # watchdog; a trial it kills is INCOMPLETE, never
+                                # scored, so it cannot alter a successful result
+    )
+
+    # Top-level sections that describe the SEARCH rather than the simulation.
+    # A point is simulated identically whatever proposed it.
+    CAMPAIGN_ONLY_SECTIONS = ("space", "stage4", "optimizer", "description")
+
+    def _identity_payload(self, simulation_only):
+        raw = self.raw or {}
+        skip = ("campaign_id", "fixed", "decision", "derived")
+        extra = {k: v for k, v in raw.items() if k not in skip}
+        fixed = dict(self.fixed)
+        if simulation_only:
+            for key in self.EXECUTION_ONLY_FIXED_KEYS:
+                fixed.pop(key, None)
+            extra = {k: v for k, v in extra.items()
+                     if k not in self.CAMPAIGN_ONLY_SECTIONS}
+        payload = {"fixed": fixed, "decision": self.decision,
+                   "derived": sorted(self.derived), "other_sections": extra}
+        if not simulation_only:
+            payload["campaign_id"] = self.campaign_id
+        return json.dumps(payload, sort_keys=True, default=str)
+
+    def campaign_contract_hash(self):
+        """Identity of the CAMPAIGN: every section, including its name.
+
+        Two campaigns with different bounds, objectives or names are different
+        campaigns and their trials must not be merged into one optimizer
+        history -- which is what `stage4_optimize.resume()` uses this for.
+        """
+        return hashlib.sha256(self._identity_payload(False).encode()).hexdigest()
+
+    def simulation_identity_hash(self):
+        """Identity of the SIMULATION: what a re-run would have to match.
+
+        Excludes resource limits, the watchdog, the campaign name, and the
+        search/scoring metadata. Everything else in the contract is included,
+        because the safe default for an unclassified field is "it might matter".
+        """
+        return hashlib.sha256(self._identity_payload(True).encode()).hexdigest()
+
     def contract_hash(self):
-        """Stable hash of the whole contract, for the ledger and cache key."""
-        payload = json.dumps(
-            {"campaign_id": self.campaign_id, "fixed": self.fixed,
-             "decision": self.decision, "derived": sorted(self.derived)},
-            sort_keys=True, default=str,
-        )
-        return hashlib.sha256(payload.encode()).hexdigest()
+        """Backwards-compatible alias for the CAMPAIGN hash.
+
+        Kept because it is what the ledger's `contract_hash` column has always
+        held and what `resume()` compares against. New code should say which
+        identity it means.
+        """
+        return self.campaign_contract_hash()
 
 
 def load_contract(path):
@@ -265,7 +381,8 @@ if __name__ == "__main__":
     c = load_contract(target)
     print(f"Contract OK: {c.campaign_id}")
     print(f"  fixed={len(c.fixed)} decision={len(c.decision)} derived={len(c.derived)}")
-    print(f"  contract_hash={c.contract_hash()[:16]}")
+    print(f"  campaign_contract_hash  ={c.campaign_contract_hash()[:16]}")
+    print(f"  simulation_identity_hash={c.simulation_identity_hash()[:16]}")
     # Nb baseline gap; the resolver supplies this per candidate.
     gate = c.check_excitation_thresholds(top_film_gap_eV=1.5384e-3)
     print(f"  thresholds OK: gun is {gate['margin_above_junction_gate']:.2f}x the "
