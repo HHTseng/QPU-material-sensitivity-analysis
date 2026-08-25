@@ -133,7 +133,15 @@ def main():
                     help="MUST be a bank the campaign did not use")
     ap.add_argument("--workers", type=int, default=16)
     ap.add_argument("--parallel", type=int, default=2)
-    ap.add_argument("--timeout", type=float, default=7200.0)
+    ap.add_argument("--timeout", type=float, default=0.0,
+                    help="absolute wall-clock limit per sub-run; 0 = UNLIMITED "
+                         "(default). An absolute limit censors on candidate "
+                         "quality -- the low-absorption designs the optimizer "
+                         "prefers are the slow ones -- so prefer --stall-timeout")
+    ap.add_argument("--stall-timeout", type=float, default=7200.0,
+                    help="kill a sub-run only if it writes NOTHING for this "
+                         "long (0 = off). Cannot correlate with candidate "
+                         "quality; catches a hung process and nothing else")
     ap.add_argument("--objective", default="total_qps_per_primary")
     ap.add_argument("--tag", default="confirm")
     ap.add_argument("--out", default=os.path.join(HERE, "results", "stage4_confirmation.json"))
@@ -154,6 +162,7 @@ def main():
     contract.fixed["max_workers"] = max(1, args.workers // max(1, args.parallel))
     contract.fixed["total_mem_gb"] = float(contract.fixed["total_mem_gb"]) / max(1, args.parallel)
     contract.fixed["sample_timeout_s"] = args.timeout
+    contract.fixed["sample_stall_timeout_s"] = args.stall_timeout
     objective = O.get(args.objective)
     resolver = resolver_for(space)
     local = threading.local()

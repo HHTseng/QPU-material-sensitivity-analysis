@@ -692,8 +692,28 @@ def validate_macro_lines(lines):
 # Execution
 # --------------------------------------------------------------------------
 def _run_one(sub_run, lattice_root, timeout_s, guard, logs_dir,
-             expected_g4_name=None, expected_density=None):
-    """Run one sub-run; return (status, return_code, runtime, reason)."""
+             expected_g4_name=None, expected_density=None, stall_timeout_s=0):
+    """Run one sub-run; return (status, return_code, runtime, reason).
+
+    Two independent watchdogs, and the difference between them matters:
+
+    `timeout_s` is an ABSOLUTE wall-clock limit. It is a biased instrument: how
+    long a sub-run takes is a function of the physics being simulated -- a
+    low-absorption design lets phonons bounce toward the 10 000-bounce limit
+    before they are absorbed -- so a wall-clock kill preferentially destroys
+    exactly the candidates the optimizer prefers. It censors on candidate
+    quality. Measured: `best_random` at 1e8 events/sub-run lost all 32 sub-runs
+    to a 41.7 h limit, ~1300 core-hours that produced nothing, while the
+    baseline (three times the QP yield) finished the same tier in 8.3 h.
+    Set it to 0 for no wall-clock limit; the run is still physically bounded by
+    `/g4cmp/phononBounces`.
+
+    `stall_timeout_s` is a PROGRESS watchdog: it kills only when the process has
+    written nothing for that long. A slow-but-progressing candidate is never
+    touched, however slow, so it cannot correlate with candidate quality -- it
+    catches the thing a watchdog should catch, a hung process, and nothing else.
+    This is the one to use.
+    """
     command = harness.build_run_command(sub_run["macro"], lattice_name=None)
     command = command.replace(
         "export G4LATTICEDATA=" + shlex.quote(
@@ -718,39 +738,74 @@ def _run_one(sub_run, lattice_root, timeout_s, guard, logs_dir,
 
     log_file = os.path.join(logs_dir, sub_run["name"] + ".log")
     start = time.monotonic()
-    fired = {"timeout": False}
+    fired = {"timeout": False, "reason": None}
     with open(log_file, "w") as log:
         process = subprocess.Popen(["bash", "-lc", command], stdout=log,
                                    stderr=subprocess.STDOUT, start_new_session=True)
         if guard is not None:
             guard.register(process.pid, sub_run["name"])
-        timer = None
-        if timeout_s and timeout_s > 0:
-            import threading
+        def _kill(reason):
+            if process.poll() is None:
+                fired["timeout"] = True
+                fired["reason"] = reason
+                try:
+                    os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    process.kill()
 
-            def on_timeout():
-                if process.poll() is None:
-                    fired["timeout"] = True
-                    try:
-                        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-                    except (ProcessLookupError, PermissionError):
-                        process.kill()
+        def _progress():
+            """Bytes written so far, across the log and the hits file."""
+            total = 0
+            for path in (log_file, sub_run["hits_file"]):
+                try:
+                    total += os.path.getsize(path)
+                except OSError:
+                    pass
+            return total
 
-            timer = threading.Timer(timeout_s, on_timeout)
-            timer.daemon = True
-            timer.start()
+        stop_watch = threading.Event()
+
+        def _watch():
+            deadline = (start + timeout_s) if (timeout_s and timeout_s > 0) else None
+            last_bytes, last_change = _progress(), time.monotonic()
+            # The poll interval must be short enough to honour whichever limit
+            # is actually set -- keying it off the stall timeout alone meant an
+            # explicit 3 s absolute limit was not noticed until the first poll
+            # 60 s later, so the limit silently did nothing.
+            limits = [x for x in (stall_timeout_s, timeout_s) if x and x > 0]
+            poll = min([60.0] + [x / 4.0 for x in limits])
+            poll = max(0.25, poll)
+            while not stop_watch.wait(poll):
+                now = time.monotonic()
+                if deadline is not None and now >= deadline:
+                    _kill(f"exceeded the absolute wall-clock limit {timeout_s:g}s")
+                    return
+                if stall_timeout_s and stall_timeout_s > 0:
+                    current = _progress()
+                    if current != last_bytes:
+                        last_bytes, last_change = current, now
+                    elif now - last_change >= stall_timeout_s:
+                        _kill(f"no output for {stall_timeout_s:g}s "
+                              f"({current:,} bytes written, process appears hung)")
+                        return
+
+        watcher = None
+        if (timeout_s and timeout_s > 0) or (stall_timeout_s and stall_timeout_s > 0):
+            watcher = threading.Thread(target=_watch,
+                                       name=f"watchdog-{sub_run['name'][-12:]}",
+                                       daemon=True)
+            watcher.start()
         try:
             rc = process.wait()
         finally:
-            if timer is not None:
-                timer.cancel()
+            stop_watch.set()
             if guard is not None:
                 guard.unregister(process.pid)
     runtime = time.monotonic() - start
     completed = os.path.exists(sub_run["done_marker"])
 
     if fired["timeout"]:
-        return STATUS_TIMEOUT, rc, runtime, f"exceeded {timeout_s:g}s"
+        return STATUS_TIMEOUT, rc, runtime, fired.get("reason", f"exceeded {timeout_s:g}s")
     if rc != 0:
         if rc == -signal.SIGKILL:
             return STATUS_MEMORY_KILLED, rc, runtime, "SIGKILLed (memory guard or external)"
@@ -1057,6 +1112,13 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
         beater.start()
 
         timeout_s = float(contract.fixed.get("sample_timeout_s") or 0)
+        stall_timeout_s = float(contract.fixed.get("sample_stall_timeout_s") or 0)
+        if verbose:
+            print(f"  watchdog: "
+                  + ("no wall-clock limit" if timeout_s <= 0
+                     else f"absolute {timeout_s:g}s")
+                  + (f", stall {stall_timeout_s:g}s" if stall_timeout_s > 0
+                     else ", no stall detector"))
         workers = int(contract.fixed.get("max_workers", 32))
         guard = MemoryGuard(total_gb=float(contract.fixed["total_mem_gb"]),
                             per_sample_gb=float(contract.fixed["per_sample_mem_gb"]),
@@ -1067,7 +1129,8 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
             with ThreadPoolExecutor(max_workers=max(1, min(workers, len(todo) or 1))) as pool:
                 futures = {pool.submit(_run_one, sr, lattice_root, timeout_s, guard,
                                        logs_dir, derived["g4_material_name"],
-                                       derived["substrate_density_kg_m3"]): sr
+                                       derived["substrate_density_kg_m3"],
+                                       stall_timeout_s): sr
                            for sr in todo}
                 for future in as_completed(futures):
                     sr = futures[future]

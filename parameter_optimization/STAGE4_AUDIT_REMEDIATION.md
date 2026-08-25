@@ -726,6 +726,124 @@ with a watchdog sized from the *converged*-tier cost model rather than the
 screening one (see `STAGE4_RESULTS.md` §5.4). It runs alongside the corrected
 projection; it does not gate it.
 
+## N6 — the watchdog censored on candidate quality
+
+**The design flaw behind the lost 41.7 h.** A wall-clock timeout is not a
+neutral safety device here. How long a sub-run takes is a *function of the
+physics being simulated*: a low-absorption design lets phonons bounce toward the
+10 000-bounce limit before they are absorbed. So elapsed time correlates with
+candidate quality, and an absolute limit destroys preferentially **the
+candidates the optimizer prefers** — the ones worth measuring.
+
+The measured case, at 1e8 events/sub-run:
+
+| candidate | QP yield | wall time |
+|---|---:|---:|
+| baseline | 3.886e-4 | 8.3 h |
+| best_cmaes | 1.447e-4 | 6.1 h |
+| elasticity_of_SiC | 1.895e-4 | 9.4 h |
+| best_bo_gp | **1.176e-4** | **28.9 h** |
+| best_random | **~1.36e-4** | **>41.7 h — killed, ~1300 core-hours, no result** |
+
+`STAGE4_RESULTS.md` §5.4 already warned "do not fix this by shortening the
+watchdog — that would preferentially kill exactly the low-absorption candidates
+the search is drawn to and bias the result." That was right, and it was never
+acted on: the mechanism itself was the problem, not its setting.
+
+**The fix — two independent watchdogs, and only one of them is neutral.**
+
+* `sample_timeout_s` — the absolute wall-clock limit. **Now 0 (unlimited)** in
+  `stage4_config.yaml`. Removing it is defensible because the run is still
+  *physically* bounded: a phonon cannot exceed `/g4cmp/phononBounces` (10 000),
+  and the memory guard is untouched. The bound comes from the physics, not the
+  clock.
+* `sample_stall_timeout_s` — **new**, default 7200 s. Kills a sub-run only when
+  it has written *nothing* for that long. A slow-but-progressing candidate is
+  never touched however slow it is, so this **cannot correlate with candidate
+  quality**. It catches what a watchdog should catch — a hung process — and
+  nothing else.
+
+Both are classified execution-only, so changing either cannot change a cache key
+(T25g/T25h).
+
+> **A bug in this fix, caught by its own gate.** The poll interval was derived
+> from the stall timeout alone, so with `stall=0` it polled every 60 s and an
+> explicit 3 s absolute limit was not noticed until long after the job had
+> finished — the limit silently did nothing. The interval is now the minimum
+> over whichever limits are actually set. T25d exists specifically to check that
+> an absolute limit *fires*, not merely that it is configured.
+
+Gates T25a–T25h cover: slow-but-progressing survives; hung is killed with a
+reason; unlimited really is unlimited; an explicit absolute limit fires; both
+together race correctly; the shipped contract has no wall-clock limit and does
+have a stall detector.
+
+**A third change is recommended but not made, because it is a campaign-design
+decision.** At 1e8 events/sub-run a single kill discards the whole 41.7 h. The
+same total events split over more replicas (`n_replicas` 2 → 8, so 32 → 128
+sub-runs of 2.5e7 each) would lose at most a quarter of that to any one kill,
+**and** would improve the replica-based error estimate, which is what every
+uncertainty in this project rests on. It changes the simulation identity (the
+seeds and block structure genuinely differ), so it belongs at the start of the
+corrected campaigns rather than as a retrofit.
+
+## P0 propagation smoke test — 2026-08-25
+
+The first simulation after the audit, deliberately cheap (S tier, 4e6 events per
+candidate, held-out seed bank 9), run to prove the carrier fix end to end rather
+than to produce a physics result.
+
+Checked by hand before trusting anything downstream:
+
+| check | result |
+|---|---|
+| projection emits a realization | SiC → `pseudo_si_base` / `G4_CALCIUM_FLUORIDE`; GaAs → `native_g4cmp` / `G4_GALLIUM_ARSENIDE` |
+| survives into the ledger candidate | yes, both |
+| resolver density | SiC 3180 kg/m³ (was 2330) |
+| generated macro | `setSubstrateG4Name G4_CALCIUM_FLUORIDE` (was `G4_Si`) |
+| **Geant4 runtime material** | **`Material: G4_CALCIUM_FLUORIDE density: 3.180 g/cm3`** — the decisive check, and the one no unit test can make |
+| measured constants unclipped | SiC `C44 = 241.0 GPa` in the lattice config (was clipped to 200) |
+| GaAs lattice source | its **own** record, copied verbatim — `config_overrides` empty |
+| derived speeds | SiC v_L 12288 m/s at the correct density (was 14352 at Si's) |
+
+### The corrected numbers, and a conclusion that changes
+
+S tier (4e6 events per candidate), held-out seed bank 9, same tier as the
+withdrawn run so the comparison is like for like:
+
+| candidate | **corrected** | vs baseline | of ideal gain | ~~withdrawn~~ | ~~vs baseline~~ | ~~of ideal~~ |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline | 3.675e-4 | — | — | 3.675e-4 | — | — |
+| ideal target | 1.210e-4 | −67.1% | 100% | 1.210e-4 | −67.1% | 100% |
+| elasticity of SiC | **1.935e-4** | **−47.3%** | **70.6%** | ~~1.785e-4~~ | ~~−51.4%~~ | ~~77%~~ |
+| `GaAs/Nb/Cu` | **2.890e-4** | **−21.4%** | **31.8%** | ~~3.510e-4~~ | ~~−4.5%~~ | ~~7%~~ |
+
+Paired and site-matched: SiC z = −9.6 winning 13/16 sites, GaAs z = −4.2 winning
+11/16. The baseline reproduced its earlier value **exactly** (1470 QPs,
+3.675e-4) on the same seed bank, which is a useful incidental check that the
+audit's code changes did not disturb the unaffected path.
+
+**SiC: the claim survives, the number does not.** 70.6% of the ideal gain, not
+77%. Correcting the density from 2330 to 3180 kg/m³ made it *worse*, which is
+the expected direction — the real crystal is denser, so its phonons are slower
+than the Si-carried run pretended.
+
+**GaAs: a conclusion has to be rewritten.** The defective run put it at −4.5%,
+i.e. 7% of the ideal gain, and that number is where "catalogued materials
+realize essentially none of the gain" came from. Simulated as itself — its own
+density *and* its own complete G4CMP record — it reaches **−21.4%, about a
+third of the ideal gain**. That is not "essentially none".
+
+So the surviving form of the Stage 4 argument is narrower than the withdrawn
+one: the property target is still far beyond any catalogued triplet (−67% vs
+−21%), but the catalogued materials are **not** worthless, and the gap between
+"best real material" and "property target" is roughly a factor of three in
+recovered gain rather than an order of magnitude.
+
+Both are **screening-tier** numbers and neither is quotable yet — the v2 study
+showed this tier gets the broad ordering right and still flips the top-1. They
+have been promoted to the M tier; nothing should be claimed until that lands.
+
 ## Best major scientific step next
 
 After N0–N3 are fixed and the XL snapshot/validation/migration has completed,

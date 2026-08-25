@@ -363,10 +363,22 @@ not deleted — they are the evidence that the defect was real.
 −51.4%"; "elasticity of Be₂C = −43.0%, 64% of the gain"; "GaAs/Nb/Cu = −4.5%";
 and the whole "fraction of ideal gain realized" column.
 
-**One conclusion survives**, because it does not depend on the broken rows: the
-catalogued triplets realize essentially none of the property-space gain — the
-`Si/Nb/Cu` projection is a valid row and it returns the baseline. The property
-target is not a re-labelling of the v2 material study.
+**Update 2026-08-25 — the corrected rerun landed, and it revises this.** The
+claim above ("catalogued triplets realize essentially none of the gain") rested
+on the defective `GaAs/Nb/Cu` row. Re-simulated with GaAs's own density *and*
+its own complete G4CMP record, at the same tier and seed bank:
+
+| candidate | corrected | vs baseline | of ideal gain | withdrawn |
+|---|---:|---:|---:|---:|
+| elasticity of SiC | 1.935e-4 | −47.3% | 70.6% | ~~−51.4%, 77%~~ |
+| `GaAs/Nb/Cu` | 2.890e-4 | −21.4% | **31.8%** | ~~−4.5%, 7%~~ |
+
+`Si/Nb/Cu` still returns the baseline, so the property target is genuinely not a
+re-labelling of the v2 study. But **GaAs recovers about a third of the ideal
+gain, not 7%**, so "essentially none" is withdrawn too. The honest form: the
+property target is roughly three times better than the best catalogued triplet
+in recovered gain, not an order of magnitude. Both numbers are screening-tier
+and await M-tier confirmation before they are quotable.
 
 **What the rerun must do differently.** Beyond the carrier fix:
 

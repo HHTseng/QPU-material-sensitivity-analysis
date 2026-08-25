@@ -94,7 +94,24 @@ fixed:
   max_workers: 32
   total_mem_gb: 120
   per_sample_mem_gb: 4
-  sample_timeout_s: 3600
+  # Watchdogs. CHANGED 2026-08-25 after best_random lost all 32 sub-runs (~1300
+  # core-hours) to a 41.7 h wall-clock limit at the 1e8 tier.
+  #
+  # An absolute wall-clock limit censors on CANDIDATE QUALITY: how long a
+  # sub-run takes is a function of the physics, and the low-absorption designs
+  # the optimizer prefers are the slow ones. It therefore destroys preferentially
+  # the candidates worth measuring. STAGE4_RESULTS.md 5.4 already said "do not
+  # fix this by shortening the watchdog"; the mechanism itself was the problem.
+  #
+  # 0 = NO wall-clock limit. The run is still bounded by physics -- a phonon
+  # cannot exceed /g4cmp/phononBounces (10000) -- and by the memory guard.
+  sample_timeout_s: 0
+  # Progress watchdog instead: kill only when the process has written NOTHING
+  # for this long. A slow-but-progressing candidate is never touched however
+  # slow it is, so this cannot correlate with candidate quality. It catches what
+  # a watchdog should catch -- a hung process -- and nothing else. 2 h is far
+  # above any observed inter-write gap.
+  sample_stall_timeout_s: 7200
 
   objective: total_qps_per_primary
   require_complete_scenarios: true

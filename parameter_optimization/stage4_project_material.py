@@ -620,7 +620,9 @@ def verify(points, contract_path, ledger_path, events, workers, parallel,
     n_slots = min(parallel, max(1, len(points)))
     contract.fixed["max_workers"] = max(1, workers // n_slots)
     contract.fixed["total_mem_gb"] = float(contract.fixed["total_mem_gb"]) / n_slots
-    if timeout:
+    # `timeout` is the ABSOLUTE limit and defaults to unlimited; the stall
+    # detector from the contract does the real work (see stage4_config.yaml).
+    if timeout is not None:
         contract.fixed["sample_timeout_s"] = timeout
     space = S.DEFAULT_SPACE
     results = {}

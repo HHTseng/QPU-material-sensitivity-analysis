@@ -304,6 +304,7 @@ class Contract:
         "per_sample_mem_gb",    # per-sub-run memory estimate for that guard
         "sample_timeout_s",     # watchdog; a trial it kills is INCOMPLETE, never
                                 # scored, so it cannot alter a successful result
+        "sample_stall_timeout_s",   # progress watchdog, same argument
     )
 
     # Top-level sections that describe the SEARCH rather than the simulation.

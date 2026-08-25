@@ -1620,6 +1620,89 @@ def t24_projection_parallelism(tmpdir):
           or "8 threads x 4 ledgers, no error")
 
 
+def t25_watchdog_does_not_censor_by_quality(tmpdir):
+    """Catches: a watchdog that destroys the candidates worth measuring.
+
+    How long a sub-run takes is a function of the physics -- a low-absorption
+    design lets phonons bounce toward the 10 000-bounce limit before they are
+    absorbed -- so an ABSOLUTE wall-clock limit censors on candidate quality.
+    Measured on 2026-08-25: `best_random` lost all 32 sub-runs to a 41.7 h limit
+    (~1300 core-hours, no result) while the baseline, at three times the QP
+    yield, finished the same tier in 8.3 h.
+
+    The replacement is a PROGRESS watchdog: a slow-but-progressing run is never
+    killed however slow it is, a hung one still is.
+    """
+    import types
+    import stage3_trial_runner as TR
+    from stage3_ledger import STATUS_SUCCESS, STATUS_TIMEOUT
+
+    root = os.path.join(tmpdir, "watchdog")
+    os.makedirs(root, exist_ok=True)
+    scripts = {}
+    real_harness = TR.harness
+    TR.harness = types.SimpleNamespace(
+        build_run_command=lambda macro, lattice_name=None: scripts[os.path.basename(macro)],
+        CRYSTALMAPS_DIR="/nonexistent")
+
+    def run(name, shell, timeout_s, stall_s):
+        macro = os.path.join(root, name + ".mac")
+        with open(macro, "w") as handle:
+            handle.write("#\n")
+        sub = {"name": name, "macro": macro,
+               "hits_file": os.path.join(root, name + "_h.txt"),
+               "done_marker": os.path.join(root, name + "_h.txt.done"),
+               "replica": 0, "position_index": 0, "seed": 1}
+        scripts[os.path.basename(macro)] = shell.format(h=sub["hits_file"],
+                                                        d=sub["done_marker"])
+        return TR._run_one(sub, root, timeout_s, None, root,
+                           stall_timeout_s=stall_s)
+
+    try:
+        slow = run("slow", 'for i in $(seq 5); do echo tick >> {h}; sleep 1; done; '
+                           'touch {d}', 0, 3)
+        hung = run("hung", 'echo s >> {h}; sleep 60; touch {d}', 0, 3)
+        free = run("free", 'echo x >> {h}; sleep 2; touch {d}', 0, 0)
+        absol = run("absolute", 'echo x >> {h}; sleep 30; touch {d}', 3, 0)
+        both = run("both", 'echo x >> {h}; sleep 60; touch {d}', 30, 3)
+    finally:
+        TR.harness = real_harness
+
+    check("T25a a SLOW but progressing sub-run is never killed, however slow",
+          slow[0] == STATUS_SUCCESS, f"{slow[0]}: {slow[3]}")
+    check("T25b a HUNG sub-run is still killed, and says why",
+          hung[0] == STATUS_TIMEOUT and "no output" in (hung[3] or ""),
+          f"{hung[0]}: {hung[3]}")
+    check("T25c timeout 0 with no stall detector means genuinely unlimited",
+          free[0] == STATUS_SUCCESS, f"{free[0]}: {free[3]}")
+    check("T25d an explicit absolute limit still fires when asked for -- and is "
+          "polled often enough to actually fire",
+          absol[0] == STATUS_TIMEOUT and "absolute" in (absol[3] or ""),
+          f"{absol[0]}: {absol[3]}")
+    check("T25e with both set, whichever triggers first wins",
+          both[0] == STATUS_TIMEOUT and "no output" in (both[3] or ""),
+          f"{both[0]}: {both[3]}")
+
+    from stage3_contract import load_contract, Contract
+    base = load_contract(os.path.join(HERE, "stage4_config.yaml"))
+    check("T25f the shipped contract has NO absolute wall-clock limit and DOES "
+          "have a stall detector",
+          float(base.fixed.get("sample_timeout_s", 1)) == 0
+          and float(base.fixed.get("sample_stall_timeout_s", 0)) > 0,
+          f"timeout={base.fixed.get('sample_timeout_s')} "
+          f"stall={base.fixed.get('sample_stall_timeout_s')}")
+
+    alt = load_contract(os.path.join(HERE, "stage4_config.yaml"))
+    alt.fixed["sample_timeout_s"] = 12345
+    alt.fixed["sample_stall_timeout_s"] = 99
+    check("T25g both watchdogs are execution-only: changing them cannot change "
+          "a cache key",
+          alt.simulation_identity_hash() == base.simulation_identity_hash()
+          and alt.campaign_contract_hash() != base.campaign_contract_hash())
+    check("T25h the stall watchdog is declared execution-only by name",
+          "sample_stall_timeout_s" in Contract.EXECUTION_ONLY_FIXED_KEYS)
+
+
 def t13_inertness_from_pilot():
     """Reports the Geant4 A/B result if the pilot has produced one."""
     path = os.path.join(HERE, "results", "stage4_pilot.json")
@@ -1697,6 +1780,7 @@ def main():
         t11_projection_sanity()
         t18_projection_coverage(tmpdir)
         t24_projection_parallelism(tmpdir)
+        t25_watchdog_does_not_censor_by_quality(tmpdir)
         t15_realization_propagation(tmpdir)
         print("\nPhysics A/B (from the pilot):")
         t13_inertness_from_pilot()
