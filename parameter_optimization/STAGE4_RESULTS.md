@@ -17,11 +17,12 @@ Audit and remediation: [`STAGE4_IMPLEMENTATION_AUDIT_AND_FIX_PLAN.md`](STAGE4_IM
 > registered, with their measured error, in
 > [`stage4_invalidations.yaml`](stage4_invalidations.yaml).
 >
-> **The corrected reruns HAVE now been done at the S and M tiers** (2026-08-25)
-> and are in §4.3, which is authoritative. They are not yet at the converged
-> tier: the L run is in flight. Where this document's prose and §4.3's table
-> disagree, **the table is right** — the prose was written before the reruns
-> landed.
+> **The corrected reruns are COMPLETE and CONVERGED** (2026-08-25), through the
+> S, M and L tiers under the corrected 8-replica contract, and are in §4.3 —
+> which is authoritative. Where this document's older prose and §4.3's table
+> disagree, **the table is right**. Headline: SiC recovers **76.2%** of the ideal
+> gain (−53.3% vs baseline), `GaAs/Nb/Cu` **44.6%** (−31.2%); M→L RMS shift
+> 0.7%, inside the ≤1.6% convergence criterion.
 >
 > The audit also withdrew the **optimizer-efficiency ranking** of §2 (the
 > winning point came from the Sobol initialisation, not from a GP acquisition)
@@ -399,12 +400,35 @@ gain, not 7%**, so "essentially none" is withdrawn too. The honest form: the
 property target is roughly three times better than the best catalogued triplet
 in recovered gain, not an order of magnitude.
 
-**M-tier confirmation has since landed** (the table above): SiC −54.1% / 76.8%
-of the ideal gain, GaAs −33.0% / 46.8%, with paired z of −12.3 and −5.1. Both
-moved further from the baseline at the higher tier. They are still **not
-quotable for fabrication**: this project's converged tier is 1e7 events per
-sub-run, and that run is in flight under the corrected 8-replica contract. Quote
-nothing from here for a material decision until it lands.
+### The corrected projection is now CONVERGED (2026-08-25)
+
+The full ladder, held-out seed bank 9, under the corrected 8-replica contract:
+
+| candidate | S (1.25e5/sub) | M (1e6/sub) | **L (2.5e6/sub)** | of ideal gain | M→L shift |
+|---|---:|---:|---:|---:|---:|
+| ideal target | 1.210e-4 (−67.1%) | 1.170e-4 (−70.5%) | **1.174e-4 (−70.0%)** | 100% | ±0.0 pt |
+| elasticity of SiC | 1.935e-4 (−47.3%) | 1.821e-4 (−54.1%) | **1.825e-4 (−53.3%)** | **76.2%** | −0.6 pt |
+| `GaAs/Nb/Cu` | 2.890e-4 (−21.4%) | 2.659e-4 (−33.0%) | **2.689e-4 (−31.2%)** | **44.6%** | −2.2 pt |
+| baseline | 3.675e-4 | 3.970e-4 | 3.910e-4 | — | — |
+
+At L: errors **±0.7–1.5%**, paired z of −68.1 (ideal), −47.2 (SiC) and −23.7
+(GaAs), winning 16/16, 16/16 and 15/16 sites. Rank agreement across every tier
+pair is ρ = τ = 1.000, and the **M→L RMS value shift is 0.7%** — inside the
+project's ≤1.6% convergence criterion. Both adjacent pairs are resolved at 2σ
+with wide margins (55.5% gap vs 3.7% error; 47.4% vs 2.5%).
+
+**An independent cross-check the replica change made possible.** The original
+campaign measured the ideal target at **−69.9%** using 32 sub-runs of 1e7
+events. This one measures **−70.0%** using 128 sub-runs of 2.5e6 — a different
+sub-run split, different seeds, different block structure, and a code base whose
+fingerprint has changed five times since. Agreement to 0.1 points is strong
+evidence that none of the audit's changes moved the physics.
+
+**These numbers are now quotable**, with the standing scope caveat: simulated
+*junction* QP yield, under this model, this 16-site scenario set, this
+calibrated interface model. Not a logical-error rate, and not yet a fabrication
+recommendation — §5.5's limitations and the P3 ground-plane trade-off still
+apply, and P6's spatial/lifetime/interface systematics remain unrun.
 
 **What the rerun must do differently.** Beyond the carrier fix:
 

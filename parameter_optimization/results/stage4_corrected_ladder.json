@@ -1,0 +1,101 @@
+{
+ "tiers": [
+  {
+   "path": "stage4_smoke_P0.json",
+   "events": 4000000,
+   "per_sub_run": 125000,
+   "seed_bank": 9
+  },
+  {
+   "path": "stage4_smoke_P0_M.json",
+   "events": 32000000,
+   "per_sub_run": 1000000,
+   "seed_bank": 9
+  },
+  {
+   "path": "stage4_corrected_L.json",
+   "events": 320000000,
+   "per_sub_run": 2500000,
+   "seed_bank": 9
+  }
+ ],
+ "pairs": [
+  {
+   "low": 125000,
+   "high": 1000000,
+   "n": 3,
+   "spearman": 1.0,
+   "kendall": 1.0,
+   "top1_kept": true,
+   "order_low": [
+    "ideal_target",
+    "elasticity_of_SiC",
+    "GaAs/Nb/Cu"
+   ],
+   "order_high": [
+    "ideal_target",
+    "elasticity_of_SiC",
+    "GaAs/Nb/Cu"
+   ],
+   "rms_value_shift": 0.06042859473265638
+  },
+  {
+   "low": 125000,
+   "high": 2500000,
+   "n": 3,
+   "spearman": 1.0,
+   "kendall": 1.0,
+   "top1_kept": true,
+   "order_low": [
+    "ideal_target",
+    "elasticity_of_SiC",
+    "GaAs/Nb/Cu"
+   ],
+   "order_high": [
+    "ideal_target",
+    "elasticity_of_SiC",
+    "GaAs/Nb/Cu"
+   ],
+   "rms_value_shift": 0.05469666479195262
+  },
+  {
+   "low": 1000000,
+   "high": 2500000,
+   "n": 3,
+   "spearman": 1.0,
+   "kendall": 1.0,
+   "top1_kept": true,
+   "order_low": [
+    "ideal_target",
+    "elasticity_of_SiC",
+    "GaAs/Nb/Cu"
+   ],
+   "order_high": [
+    "ideal_target",
+    "elasticity_of_SiC",
+    "GaAs/Nb/Cu"
+   ],
+   "rms_value_shift": 0.006849292753773633
+  }
+ ],
+ "adjacent_pairs": [
+  {
+   "a": "ideal_target",
+   "b": "elasticity_of_SiC",
+   "gap": 0.5547153735555673,
+   "combined_relative_error": 0.018463187851883223,
+   "threshold": 0.036926375703766445,
+   "resolved": true,
+   "error_model": "quadrature sum of the two replica-based relative errors, compared at 2 sigma; a paired error would be tighter but needs per-block data"
+  },
+  {
+   "a": "elasticity_of_SiC",
+   "b": "GaAs/Nb/Cu",
+   "gap": 0.47372927798328524,
+   "combined_relative_error": 0.012696142601314494,
+   "threshold": 0.025392285202628987,
+   "resolved": true,
+   "error_model": "quadrature sum of the two replica-based relative errors, compared at 2 sigma; a paired error would be tighter but needs per-block data"
+  }
+ ]
+}

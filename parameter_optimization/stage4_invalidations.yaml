@@ -229,11 +229,41 @@ findings:
     # says they are withdrawn. `stage4_audit.py` searches for these and checks
     # for a withdrawal marker nearby, so the withdrawal notices themselves are
     # not flagged as violations.
+    # Phrases that must not be ASSERTED unless the surrounding sentence says
+    # they are withdrawn. Narrowed 2026-08-25: "SiC recovers" was on this list,
+    # but the CLAIM is no longer withdrawn -- only its NUMBERS were. The
+    # corrected rerun re-established it at 76.2% (see `superseded_by` below), so
+    # banning the bare phrase would now suppress a valid, converged result. What
+    # stays banned is the specific withdrawn figure.
     withdrawn_phrases:
       - "77% of the ideal gain"
       - "77% of the gain"
       - "recovers 77%"
-      - "SiC recovers"
+      - "SiC recovers 77"
+
+    superseded_by:
+      date: 2026-08-25
+      what: >
+        The projected-material claims were re-measured after the carrier fix,
+        through the S, M and L tiers on held-out seed bank 9 under the corrected
+        8-replica contract, and are converged (M->L RMS value shift 0.7%, inside
+        the project's <=1.6% criterion; rank agreement rho = tau = 1.000 across
+        every tier pair).
+      corrected_values:
+        ideal_target: "-70.0% vs baseline (1.174e-4), paired z = -68.1, 16/16 sites"
+        elasticity_of_SiC: "-53.3% (1.825e-4), 76.2% of the ideal gain, z = -47.2, 16/16 sites"
+        GaAs_Nb_Cu: "-31.2% (2.689e-4), 44.6% of the ideal gain, z = -23.7, 15/16 sites"
+      note: >
+        The corrected SiC figure (76.2% at the converged tier) is numerically
+        close to the withdrawn one (77% at the screening tier with the wrong
+        density). That is a coincidence of two different calculations, not
+        evidence the original was right. The withdrawn number remains withdrawn.
+      independent_cross_check: >
+        The ideal target reads -69.9% in the original campaign (32 sub-runs of
+        1e7 events) and -70.0% here (128 sub-runs of 2.5e6, different seeds,
+        different block structure, five intervening code-fingerprint changes).
+        Agreement to 0.1 points indicates the audit's changes did not move the
+        physics.
 
     not_invalidated:
       - "The 92 scored search trials: they are pseudo-material candidates whose

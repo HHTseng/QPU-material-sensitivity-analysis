@@ -2051,7 +2051,7 @@
   }
  },
  "_invalidation_notice": {
-  "labelled_at": "2026-08-25 16:20:14",
+  "labelled_at": "2026-08-25 21:20:47",
   "registry": "stage4_invalidations.yaml",
   "invalid_rows": [
    "GaAs/Nb/Cu",

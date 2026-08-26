@@ -7,7 +7,7 @@ Al junctions, per primary event) with two different notions of "candidate".
 |---|---|---|
 | Candidate | a triplet of **real materials** (substrate / top ground film / bottom film) | a **continuous property vector** — a pseudo-material that need not exist |
 | Search | exhaustive enumeration of 18 triplets | Bayesian optimization, CMA-ES, Sobol/random baselines, LLM-agentic proposal |
-| Result | `Ge/Nb/Cu`, −36.0% vs the `Si/Nb/Cu` baseline, converged at 1e7 events/sub-run | **−69.9%** junction QPs at held-out seeds, converged at 1e7 events/sub-run. The real-material projection is **not yet validated** — see the notice below |
+| Result | `Ge/Nb/Cu`, −36.0% vs the `Si/Nb/Cu` baseline, converged at 1e7 events/sub-run | **−70.0%** junction QPs at held-out seeds (converged). Nearest real substrate **3C-SiC recovers 76.2%** of that gain; the catalogued triplet `GaAs/Nb/Cu` recovers **44.6%** |
 
 > ### Validity notice — 2026-08-24
 >
@@ -25,9 +25,13 @@ Al junctions, per primary event) with two different notions of "candidate".
 > the **"six baseline re-evaluations, 0% drift"** validation (the controls were
 > cache hits). All three defects are fixed and gated; the reruns are not done.
 >
-> Checked mechanically: **9 of the ledger's 11 projection-derived trials are
-> affected; nothing else is.** The 1e6 / 1e7 / 1e8 fidelity ladder does not need
-> repeating — only the real-material projection does.
+> **Resolved 2026-08-25.** The corrected projection has been rerun through the
+> S, M and L tiers under the fixed carrier propagation and the 8-replica
+> contract, and is **converged** (M→L RMS shift 0.7%). SiC recovers **76.2%** of
+> the ideal gain, `GaAs/Nb/Cu` **44.6%** — so the withdrawn claim that
+> catalogued materials realise "essentially none" of it is dead: GaAs realises
+> nearly half. The optimizer-efficiency ranking stays withdrawn permanently
+> (its provenance was never recorded). See `STAGE4_RESULTS.md` §4.3.
 >
 > `python parameter_optimization/stage4_audit.py` re-checks every claim against
 > the ledger, the contract and the macro templates.
