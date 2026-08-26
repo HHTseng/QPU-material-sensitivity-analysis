@@ -1,0 +1,194 @@
+{
+ "elasticity_of_Be2C": {
+  "topfilm_vsound": 2.56,
+  "topfilm_gap": 0.00054,
+  "topfilm_ph_lifetime": 0.0032391345908296698,
+  "topfilm_density": 7310.0,
+  "bot_vsound": 3.65,
+  "bot_gap_thres": 0.000219769477378577,
+  "bot_ph_lifetime": 2.657830536907085,
+  "bot_density": 10490.0,
+  "sub_c11": 570.0,
+  "sub_c12": 16.0,
+  "sub_c44": 201.0,
+  "sub_scat": 1.4612400804627297e-43,
+  "sub_decay": 6.5588631961413265e-56,
+  "sub_decayTT": 0.9432507706806064,
+  "temperature": 0.056437374930828815,
+  "lattice_deg": 63.81921119056642,
+  "sub_lattice_a": 3.057890265677607,
+  "miller": [
+   2,
+   2,
+   3
+  ],
+  "_realization": {
+   "mode": "pseudo_si_base",
+   "substrate_carrier": "G4_BORON_CARBIDE",
+   "base_lattice_map": "Si",
+   "label": "elasticity_of_Be2C (mp-1569)",
+   "material_of_record": "Be2C (mp-1569)",
+   "material_density_kg_m3": 2466.75687772511,
+   "density_tolerance": 0.03,
+   "density_carrier_deviation": 0.021584,
+   "own_fields": [
+    "c11",
+    "c12",
+    "c44",
+    "lattice_a",
+    "density(via carrier)"
+   ],
+   "target_fields": [
+    "scat",
+    "decay",
+    "decayTT"
+   ],
+   "schema": "stage4_realization_v1",
+   "lattice_map": "PseudoCubic"
+  }
+ },
+ "SiC__sub_scat_high": {
+  "topfilm_vsound": 2.56,
+  "topfilm_gap": 0.00054,
+  "topfilm_ph_lifetime": 0.0032391345908296698,
+  "topfilm_density": 7310.0,
+  "bot_vsound": 3.65,
+  "bot_gap_thres": 0.000219769477378577,
+  "bot_ph_lifetime": 2.657830536907085,
+  "bot_density": 10490.0,
+  "sub_c11": 384.0,
+  "sub_c12": 127.0,
+  "sub_c44": 241.0,
+  "sub_scat": 3.67e-41,
+  "sub_decay": 6.5588631961413265e-56,
+  "sub_decayTT": 0.9432507706806064,
+  "temperature": 0.056437374930828815,
+  "lattice_deg": 63.81921119056642,
+  "sub_lattice_a": 3.07873852111218,
+  "miller": [
+   2,
+   2,
+   3
+  ],
+  "_realization": {
+   "mode": "pseudo_si_base",
+   "substrate_carrier": "G4_CALCIUM_FLUORIDE",
+   "base_lattice_map": "Si",
+   "label": "elasticity_of_SiC (mp-8062)",
+   "material_of_record": "SiC (mp-8062)",
+   "material_density_kg_m3": 3226.6291385651007,
+   "density_tolerance": 0.03,
+   "density_carrier_deviation": 0.014451,
+   "own_fields": [
+    "c11",
+    "c12",
+    "c44",
+    "lattice_a",
+    "density(via carrier)"
+   ],
+   "target_fields": [
+    "scat",
+    "decay",
+    "decayTT"
+   ],
+   "schema": "stage4_realization_v1",
+   "lattice_map": "PseudoCubic"
+  }
+ },
+ "SiC__sub_decay_high": {
+  "topfilm_vsound": 2.56,
+  "topfilm_gap": 0.00054,
+  "topfilm_ph_lifetime": 0.0032391345908296698,
+  "topfilm_density": 7310.0,
+  "bot_vsound": 3.65,
+  "bot_gap_thres": 0.000219769477378577,
+  "bot_ph_lifetime": 2.657830536907085,
+  "bot_density": 10490.0,
+  "sub_c11": 384.0,
+  "sub_c12": 127.0,
+  "sub_c44": 241.0,
+  "sub_scat": 1.4612400804627297e-43,
+  "sub_decay": 1.6456e-54,
+  "sub_decayTT": 0.9432507706806064,
+  "temperature": 0.056437374930828815,
+  "lattice_deg": 63.81921119056642,
+  "sub_lattice_a": 3.07873852111218,
+  "miller": [
+   2,
+   2,
+   3
+  ],
+  "_realization": {
+   "mode": "pseudo_si_base",
+   "substrate_carrier": "G4_CALCIUM_FLUORIDE",
+   "base_lattice_map": "Si",
+   "label": "elasticity_of_SiC (mp-8062)",
+   "material_of_record": "SiC (mp-8062)",
+   "material_density_kg_m3": 3226.6291385651007,
+   "density_tolerance": 0.03,
+   "density_carrier_deviation": 0.014451,
+   "own_fields": [
+    "c11",
+    "c12",
+    "c44",
+    "lattice_a",
+    "density(via carrier)"
+   ],
+   "target_fields": [
+    "scat",
+    "decay",
+    "decayTT"
+   ],
+   "schema": "stage4_realization_v1",
+   "lattice_map": "PseudoCubic"
+  }
+ },
+ "SiC__sub_decayTT_low": {
+  "topfilm_vsound": 2.56,
+  "topfilm_gap": 0.00054,
+  "topfilm_ph_lifetime": 0.0032391345908296698,
+  "topfilm_density": 7310.0,
+  "bot_vsound": 3.65,
+  "bot_gap_thres": 0.000219769477378577,
+  "bot_ph_lifetime": 2.657830536907085,
+  "bot_density": 10490.0,
+  "sub_c11": 384.0,
+  "sub_c12": 127.0,
+  "sub_c44": 241.0,
+  "sub_scat": 1.4612400804627297e-43,
+  "sub_decay": 6.5588631961413265e-56,
+  "sub_decayTT": 0.68,
+  "temperature": 0.056437374930828815,
+  "lattice_deg": 63.81921119056642,
+  "sub_lattice_a": 3.07873852111218,
+  "miller": [
+   2,
+   2,
+   3
+  ],
+  "_realization": {
+   "mode": "pseudo_si_base",
+   "substrate_carrier": "G4_CALCIUM_FLUORIDE",
+   "base_lattice_map": "Si",
+   "label": "elasticity_of_SiC (mp-8062)",
+   "material_of_record": "SiC (mp-8062)",
+   "material_density_kg_m3": 3226.6291385651007,
+   "density_tolerance": 0.03,
+   "density_carrier_deviation": 0.014451,
+   "own_fields": [
+    "c11",
+    "c12",
+    "c44",
+    "lattice_a",
+    "density(via carrier)"
+   ],
+   "target_fields": [
+    "scat",
+    "decay",
+    "decayTT"
+   ],
+   "schema": "stage4_realization_v1",
+   "lattice_map": "PseudoCubic"
+  }
+ }
+}

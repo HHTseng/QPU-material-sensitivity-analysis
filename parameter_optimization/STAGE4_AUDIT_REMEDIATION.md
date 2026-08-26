@@ -198,12 +198,12 @@ Gates T20a–T20j cover the freeze guard and all three liveness verdicts.
 
 | | Finding | Code | Gates | Still needs simulation budget |
 |---|---|---|---|---|
-| **P0** | Projected substrate carrier lost before evaluation | **fixed** | T15a–T15j, T15h2 | rerun every projected/real-material verification |
+| **P0** | Projected substrate carrier lost before evaluation | **fixed** | T15a–T15j, T15h2 | **rerun DONE and converged** for SiC and GaAs (S/M/L); Be₂C outstanding |
 | **P1** | Optimizer labels did not match the proposals evaluated | **fixed** | T16a–T16i | rerun the optimizer comparison, ≥3 seeds |
 | **P2** | Search not converged; binds against the box | **tooling fixed** | — | continue the search in a widened box |
 | **P3** | Objective counts junction QPs only | **fixed** | T19a–T19g | the *choice* of constraint is a decision, then a rerun |
-| **P4** | Distance compares incomplete feature vectors | **fixed** | T18a–T18f | rerun the projection with brackets |
-| **P5** | Drift controls were cache hits | **fixed** | T17a–T17d | run controls in the next campaign |
+| **P4** | Distance compares incomplete feature vectors | **fixed** | T18a–T18f | stratified ranking rerun; **`--phonon-brackets` still never executed**, so SiC's borrowed constants remain a point estimate |
+| **P5** | Drift controls were cache hits | **fixed** | T17a–T17d | **still zero control rows in the ledger** — only `stage4_optimize --baseline-every` emits them, and no optimizer campaign has run since |
 | **P6** | Spatial / interface / lifetime systematics unfinished | not started | — | 16/32/64 sites, lifetime brackets, alternate interface model |
 | **P7** | Documentation and ledger status inconsistent | **fixed** | `stage4_audit.py` | — |
 
@@ -1036,6 +1036,11 @@ code change.
 
 ## Best major scientific step next
 
+> **Steps 1–4 below are COMPLETE as of 2026-08-25** and are kept as the record
+> of what was planned and why. The propagation smoke test ran, the corrected
+> S/M/L projection ran, and it converged. The forward-looking advice that still
+> applies begins at "Before spending the much larger P1/P2 optimizer budget".
+
 After N0–N3 are fixed and the XL snapshot/validation/migration has completed,
 the next simulation should be the cheap **P0 propagation smoke test**, not a
 large optimizer campaign:
@@ -1062,15 +1067,20 @@ remain required before making a fabrication claim.
 
 ## What has NOT been done
 
-Everything below needs simulation budget on a machine that is currently running
-a 22-hour job, and none of it can be inferred from the existing data:
+*Rewritten 2026-08-25 after the corrected projection converged. Nothing is
+running; the machine is free.* Everything below still needs simulation budget
+and none of it can be inferred from existing data:
 
-1. **The P0 rerun.** A cheap SiC/GaAs propagation smoke test first — inspect the
-   macro, the runtime density in the Geant4 log, the lattice source, the ledger
-   payload and the cache key by hand — then the full projected-material
-   verification on held-out seeds, then promote survivors to high fidelity.
-   Until then there is **no** valid estimate of how much of the property-space
-   gain a real substrate recovers.
+1. ~~**The P0 rerun.**~~ **DONE for SiC and GaAs**, through S/M/L on held-out
+   seed bank 9, converged (M→L RMS shift 0.7%). SiC recovers 76.2% of the ideal
+   gain, `GaAs/Nb/Cu` 44.6%. Two pieces remain:
+   * **Be₂C was never rerun.** It is still registered `invalid` with no
+     replacement, so it must not be quoted at all.
+   * **Be₃N₂ and BP still cannot be simulated** — no NIST material sits within
+     3% of their density (3.3% and 6.7% away). They are the *nearest* substrates
+     in the 4/7 stratum and remain entirely unmeasured. Closing this needs the
+     `BuildMaterialWithNewDensity` addition to `PhononDetectorConstruction`,
+     which changes the executable.
 2. **The P1 optimizer rerun** — ≥3 seeds per method, equal paid event budget,
    ≥50 real GP acquisitions, ≥8–10 complete CMA generations. Until then no
    algorithm-efficiency claim is available at all.
@@ -1084,6 +1094,16 @@ a 22-hour job, and none of it can be inferred from the existing data:
    model uncertainty and material-property uncertainty.
 5. **The P3 decision.** The constraint machinery exists; which floor to impose is
    a judgement about the device, not a computation.
+6. **The P4 phonon brackets have never been executed.** `--phonon-brackets` is
+   implemented and gated (T18f), but no run has used it. So SiC's 76.2% still
+   *assumes* the design target's `scat`/`decay`/`decayTT` are achievable in SiC,
+   with no bound on what happens if they are not — and the target asks for 17×
+   less isotope scattering than Si. This is the **largest unquantified
+   assumption behind the headline** and the cheapest to close.
+7. **P5 has never actually recorded a control.** The ledger holds **zero**
+   `control_replica_id` rows. The machinery is fixed and gated, but only
+   `stage4_optimize --baseline-every` emits controls and no optimizer campaign
+   has run since the fix, so the project still has *no* drift evidence.
 
 ## Which recorded experiments actually need rerunning
 
