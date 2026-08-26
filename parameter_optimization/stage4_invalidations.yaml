@@ -253,6 +253,15 @@ findings:
         ideal_target: "-70.0% vs baseline (1.174e-4), paired z = -68.1, 16/16 sites"
         elasticity_of_SiC: "-53.3% (1.825e-4), 76.2% of the ideal gain, z = -47.2, 16/16 sites"
         GaAs_Nb_Cu: "-31.2% (2.689e-4), 44.6% of the ideal gain, z = -23.7, 15/16 sites"
+      elasticity_of_Be2C: "-52.0% (1.896e-4), 73.6% of the ideal gain, M tier,
+          z = -17.7, 12/16 sites -- the last invalidated row to be replaced"
+      phonon_bracket_result: >
+        SiC's borrowed scat/decay/decayTT were each pushed to the far edge of the
+        range spanned by the measured G4CMP records. SiC recovers 73.8-76.9% of
+        the ideal gain across all of them, against +-2.8-3.3% errors. Moving
+        isotope scattering 251x (to Ge's value) shifts the answer by 0.2 points.
+        The claim does not rest on the unmeasured constants, and the caveat that
+        SiC would require isotopic purification is withdrawn as a requirement.
       note: >
         The corrected SiC figure (76.2% at the converged tier) is numerically
         close to the withdrawn one (77% at the screening tier with the wrong

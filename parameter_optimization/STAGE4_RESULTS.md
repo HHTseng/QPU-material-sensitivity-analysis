@@ -424,6 +424,54 @@ sub-run split, different seeds, different block structure, and a code base whose
 fingerprint has changed five times since. Agreement to 0.1 points is strong
 evidence that none of the audit's changes moved the physics.
 
+### The unmeasured constants turn out not to matter (P4 brackets, 2026-08-25)
+
+SiC's figure borrows `scat`, `decay` and `decayTT` from the design target
+because nobody has measured them for SiC. That was flagged as the largest
+unquantified assumption behind the headline — the target asks for **17× less
+isotope scattering than Si**, which for SiC would mean isotopic purification.
+
+Each constant was pushed to the far edge of the range spanned by the *measured*
+G4CMP records and re-simulated (M tier, 128 sub-runs, held-out bank 9):
+
+| variant | constant moved | vs baseline | of ideal gain | shift |
+|---|---|---:|---:|---:|
+| SiC nominal | — | −54.1% | 76.4% | — |
+| `sub_scat` high | 1.46e-43 → 3.67e-41 (**251× more** scattering, Ge's value) | −54.3% | 76.9% | −0.2 pt |
+| `sub_decay` high | 6.56e-56 → 1.65e-54 (25× more, Ge's value) | −52.6% | 74.3% | +1.6 pt |
+| `sub_decayTT` low | 0.943 → 0.68 (lowest measured) | −52.2% | 73.8% | +1.9 pt |
+
+**The assumption does not carry the result.** Across the entire measured range
+of all three constants, SiC recovers **73.8–76.9%** of the ideal gain — a
+**3-point** spread against error bars of ±2.8–3.3%. Most striking: making
+isotope scattering **251× worse** than the target moves the answer by 0.2
+points, i.e. not at all.
+
+Two consequences worth stating plainly:
+
+* **SiC no longer depends on isotopic purification.** The caveat that ³⁰Si/¹³C
+  enrichment would be "the physical knob" is withdrawn as a *requirement*; the
+  result survives natural-abundance scattering.
+* **This does not contradict §3's "cut isotope scattering by ~17×" lever.** That
+  was measured at the *ideal* point, which is a different, stiffer place in the
+  space. What these brackets show is that *at SiC's elasticity* the objective is
+  flat in the anharmonic constants — the elasticity is doing the work.
+
+Sourcing SiC's true constants is still worth doing, but it is no longer
+load-bearing for the claim.
+
+### Be₂C — the last invalidated row, rerun
+
+| | corrected | ~~withdrawn~~ |
+|---|---:|---:|
+| elasticity of Be₂C (M tier) | **1.896e-4, −52.0%, 73.6% of ideal** | ~~2.123e-4, −46.5%~~ |
+
+Every row registered `invalid` under P0 now has a corrected replacement. Be₂C
+lands just below SiC (73.6% vs 76.4%) and wins fewer sites (12/16 against
+13–16/16), so **SiC remains the better projected substrate** — but the two are
+closer than the withdrawn numbers suggested, and Be₂C's measured `C11` = 570 GPa
+and `C44` = 201 GPa are now kept unclipped rather than forced into the search box.
+
 **These numbers are now quotable**, with the standing scope caveat: simulated
 *junction* QP yield, under this model, this 16-site scenario set, this
 calibrated interface model. Not a logical-error rate, and not yet a fabrication

@@ -1074,8 +1074,11 @@ and none of it can be inferred from existing data:
 1. ~~**The P0 rerun.**~~ **DONE for SiC and GaAs**, through S/M/L on held-out
    seed bank 9, converged (M→L RMS shift 0.7%). SiC recovers 76.2% of the ideal
    gain, `GaAs/Nb/Cu` 44.6%. Two pieces remain:
-   * **Be₂C was never rerun.** It is still registered `invalid` with no
-     replacement, so it must not be quoted at all.
+   * ~~**Be₂C was never rerun.**~~ **DONE 2026-08-25**: −52.0%, 73.6% of the
+     ideal gain at the M tier, with its measured `C11` = 570 and `C44` = 201 GPa
+     kept unclipped. **Every row registered `invalid` under P0 now has a
+     corrected replacement.** SiC still leads (76.4% vs 73.6%, and 13–16/16
+     sites against 12/16), but by less than the withdrawn numbers implied.
    * **Be₃N₂ and BP still cannot be simulated** — no NIST material sits within
      3% of their density (3.3% and 6.7% away). They are the *nearest* substrates
      in the 4/7 stratum and remain entirely unmeasured. Closing this needs the
@@ -1094,12 +1097,14 @@ and none of it can be inferred from existing data:
    model uncertainty and material-property uncertainty.
 5. **The P3 decision.** The constraint machinery exists; which floor to impose is
    a judgement about the device, not a computation.
-6. **The P4 phonon brackets have never been executed.** `--phonon-brackets` is
-   implemented and gated (T18f), but no run has used it. So SiC's 76.2% still
-   *assumes* the design target's `scat`/`decay`/`decayTT` are achievable in SiC,
-   with no bound on what happens if they are not — and the target asks for 17×
-   less isotope scattering than Si. This is the **largest unquantified
-   assumption behind the headline** and the cheapest to close.
+6. ~~**The P4 phonon brackets have never been executed.**~~ **DONE 2026-08-25,
+   and the answer is the reassuring one.** Each borrowed constant was pushed to
+   the far edge of the measured G4CMP range: SiC recovers **73.8–76.9%** of the
+   ideal gain across all of them, a 3-point spread against ±2.8–3.3% errors.
+   Moving isotope scattering **251×** (to Ge's value) shifts the result by 0.2
+   points. The headline does **not** rest on the unmeasured constants, and the
+   "SiC would need isotopic purification" caveat is withdrawn as a requirement.
+   Sourcing the true values is still worth doing; it is no longer load-bearing.
 7. **P5 has never actually recorded a control.** The ledger holds **zero**
    `control_replica_id` rows. The machinery is fixed and gated, but only
    `stage4_optimize --baseline-every` emits controls and no optimizer campaign
