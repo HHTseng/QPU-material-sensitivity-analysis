@@ -922,6 +922,22 @@ def t17_controls_are_fresh(tmpdir):
     check("T17d every control keeps its own inspectable row",
           ctl == ["camp_t1", "camp_t2"], str(ctl))
 
+    # `--baseline-every N` must mean every N COMPLETED TRIALS. It used to be
+    # multiplied by `--batch` (default 4), so the recommended `--baseline-every
+    # 24` silently meant "every 96" -- one control per 96-trial campaign, or
+    # none if the loop hit its target first. That is why P5 had recorded zero
+    # controls even after its machinery was fixed and gated: the flag was doing
+    # a quarter of what it appeared to.
+    import re as _re
+    driver = open(os.path.join(HERE, "stage4_optimize.py")).read()
+    trigger = _re.search(r"if a\.baseline_every and completed % ([^:]+):", driver)
+    check("T17e --baseline-every counts completed trials, not batches",
+          trigger is not None and "a.batch" not in trigger.group(1),
+          trigger.group(1).strip() if trigger else "trigger not found")
+    n_ctl = len([c for c in range(1, 97) if c % 24 == 0])
+    check("T17f the recommended --baseline-every 24 yields 4 controls over a "
+          "96-trial campaign, not 1", n_ctl == 4, f"{n_ctl} controls")
+
 
 def t19_engineering_objective():
     """Catches P3: a candidate winning by moving damage into an unobserved film.

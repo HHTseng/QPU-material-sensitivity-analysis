@@ -74,9 +74,44 @@ Al junctions, per primary event) with two different notions of "candidate".
 | `stage4_audit.py` | consistency audit: energy protocol, invalidated results, ledger vs manifests, liveness, code identity, doc headlines |
 | `stage4_invalidations.yaml` | register of invalidated results, contaminated inputs and **recorded decisions**; read by `stage4_audit.py` |
 | `stage4_reconcile.py` | labels invalidated rows in result files and backfills the ledger's counts into historical manifests — additive, idempotent, never overwrites a value |
+| [`BO_GP_and_CMA_ES_Rerun_Recommendations.md`](BO_GP_and_CMA_ES_Rerun_Recommendations.md) | the design of the formal optimizer comparison: 96 evaluations per seed, ≥3 seeds, equal paid event budget |
+| `run_stage4_optimizer_benchmark.sh` | runs that comparison — 4 methods × 3 seeds × 96 S-tier evaluations, restartable, no absolute timeouts |
 | `stage4_assemble_xl.py` | merges confirmation JSONs into the combined 1e8 table — **no simulation, no ledger** |
 | `stage4_post_xl.sh` | fail-closed runbook: check → snapshot → validate → migrate → unfreeze, with receipts |
 | `tests_stage4.py` | the exit-gate suite; run before any campaign |
+
+## In flight — the formal optimizer comparison
+
+The original campaigns cannot support an algorithm ranking: `bo_gp` completed
+**one** genuine GP acquisition (its winner came from the Sobol initialisation)
+and `cmaes` completed **one** generation, with random filler labelled as its
+own. Those measured property vectors remain valid; the efficiency ranking was
+withdrawn and is permanently unrecoverable for those runs
+(`optimizer_provenance_unrecoverable` in `stage4_invalidations.yaml`).
+
+The replacement, per
+[`BO_GP_and_CMA_ES_Rerun_Recommendations.md`](BO_GP_and_CMA_ES_Rerun_Recommendations.md):
+
+| method | design per seed | evaluations | seeds |
+|---|---|---:|---:|
+| BO–GP | 32 Sobol init + 64 genuine GP–EI cycles | 96 | 3 |
+| CMA-ES | 8 complete generations × 12 | 96 | 3 |
+| random | 96 independent draws | 96 | 3 |
+| Sobol | 96 space-filling points | 96 | 3 |
+
+**1152 evaluations, 4.6e9 primary events.** Every method shares the same frozen
+contract, injection sites, physics seed bank, objective and paid event budget —
+the optimizer is the only variable (Priority 0 of the recommendation). Compared
+on best-so-far against *cumulative paid events*, not trial count.
+
+Two things this run produces that the project has never had: **true proposal
+provenance** for every trial (`sobol_init` / `gp_ei` / `cma_generation` / …), and
+its **first drift controls** — `--baseline-every 24` gives 4 fresh baseline
+re-evaluations per campaign, 48 across the benchmark, each with its own ledger
+row. Until now the project had **zero** recorded controls.
+
+`./run_stage4_optimizer_benchmark.sh` — restartable; it skips campaigns already
+complete in the ledger.
 
 ## Shared machinery (used by both stages)
 

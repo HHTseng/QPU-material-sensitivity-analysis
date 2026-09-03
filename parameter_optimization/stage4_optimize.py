@@ -428,7 +428,15 @@ class Campaign:
                     best_seen, improved = self._record(rec, best_seen)
                     stagnant = 0 if improved else stagnant + 1
                     completed = len(self.history) + self.n_rejected + self.n_failed
-                    if a.baseline_every and completed % (a.baseline_every * a.batch) == 0:
+                    # `--baseline-every N` means every N COMPLETED TRIALS, which
+                    # is what the name says. It used to be multiplied by
+                    # `--batch` (default 4), so `--baseline-every 24` silently
+                    # meant "every 96" -- one control per 96-trial campaign, or
+                    # none if the loop hit its target first. That is how P5
+                    # ended up with zero controls recorded even after the
+                    # machinery was fixed: the flag was doing a quarter of what
+                    # it appeared to.
+                    if a.baseline_every and completed % a.baseline_every == 0:
                         self.baseline_control(self.optimizer.iteration)
                     self.save_manifest()
                 if len(self.history) >= target:
@@ -578,7 +586,11 @@ def main():
     ap.add_argument("--max-events", type=int, default=None)
     ap.add_argument("--max-hours", type=float, default=None)
     ap.add_argument("--baseline-every", type=int, default=0,
-                    help="re-evaluate the frozen baseline every N batches")
+                    help="re-evaluate the frozen baseline every N COMPLETED "
+                         "TRIALS (0 = never). Each control executes fresh under "
+                         "its own control_replica_id, is excluded from the "
+                         "optimizer's observations and from the event-efficiency "
+                         "curve, and leaves its own inspectable ledger row.")
     ap.add_argument("--llm-model", default=None)
     ap.add_argument("--llm-host", default=None)
     args = ap.parse_args()
