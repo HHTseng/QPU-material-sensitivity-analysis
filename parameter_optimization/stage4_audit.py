@@ -253,18 +253,33 @@ def check_ledger_status(ledger_path, registry_path=None):
                 rows = conn.execute(
                     "SELECT status, count(*) n FROM trials WHERE campaign_id=? "
                     "GROUP BY status", (man.get("campaign_id", campaign),)).fetchall()
+                # `running` is neither a success nor a failure -- it is work in
+                # flight. Counting it as non-success made this check warn on
+                # every LIVE campaign, which trains the reader to ignore it.
                 led_bad = sum(r["n"] for r in rows
-                              if r["status"] not in ("success", "success_zero_qp"))
+                              if r["status"] not in ("success", "success_zero_qp",
+                                                     "running"))
                 counts = man.get("ledger_status_counts")
                 # backfilled manifests carry the authoritative view
                 if counts is not None:
                     man_bad = sum(v for k, v in counts.items()
-                                  if k not in ("success", "success_zero_qp")
+                                  if k not in ("success", "success_zero_qp",
+                                               "running")
                                   and isinstance(v, int))
                 else:
-                    man_bad = (int(man.get("n_failed") or 0)
-                               + int(man.get("n_rejected") or 0))
-                if led_bad != man_bad:
+                    # `n_rejected` counts CONSTRAINT rejections, which are
+                    # refused by the gates BEFORE `plan_trial` and therefore
+                    # never produce a ledger row at all. Adding them here
+                    # compared two different populations and made the manifest
+                    # look permanently "ahead" of the ledger. Only `n_failed`
+                    # -- evaluated, then failed -- has a row to compare against.
+                    man_bad = int(man.get("n_failed") or 0)
+                # A live campaign's manifest is a periodic snapshot, so it can
+                # legitimately lag the ledger by the trials that finished since
+                # the last save. Only a manifest that is BEHIND matters; one
+                # that is ahead cannot happen.
+                live = any(r["status"] == "running" for r in rows)
+                if led_bad != man_bad and not (live and man_bad <= led_bad):
                     mismatches.append(
                         f"{campaign}/{name}: manifest {man_bad} failed+rejected, "
                         f"ledger {led_bad} non-success")

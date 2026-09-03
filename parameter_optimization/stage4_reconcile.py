@@ -138,8 +138,24 @@ def backfill_manifests(runs_root, ledger_path, dry_run):
             path = os.path.join(cdir, name)
             with open(path) as handle:
                 man = json.load(handle)
-            if "ledger_status_counts" in man:
-                continue                                  # already authoritative
+            cid_probe = man.get("campaign_id", campaign)
+            live = conn.execute(
+                "SELECT count(*) n FROM trials WHERE campaign_id=? AND status='running'",
+                (cid_probe,)).fetchone()["n"] > 0
+            if live:
+                continue          # a live campaign rewrites its own manifest
+            existing = man.get("ledger_status_counts")
+            if existing is not None:
+                fresh = {r["status"]: r["n"] for r in conn.execute(
+                    "SELECT status, count(*) n FROM trials WHERE campaign_id=? "
+                    "GROUP BY status", (cid_probe,))}
+                if existing == fresh:
+                    continue                              # already authoritative
+                # Stale: the campaign was killed before it could save, so its
+                # counts predate whatever happened afterwards. Refresh them --
+                # the ledger is the authority, and a manifest frozen at the
+                # moment of death is exactly the misleading artifact this tool
+                # exists to correct.
             cid = man.get("campaign_id", campaign)
             counts = {r["status"]: r["n"] for r in conn.execute(
                 "SELECT status, count(*) n FROM trials WHERE campaign_id=? "
