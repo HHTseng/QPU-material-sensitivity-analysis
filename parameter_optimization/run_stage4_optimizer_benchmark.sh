@@ -26,7 +26,19 @@ say() { printf '[%s] %s\n' "$(date '+%F %T')" "$*" | tee -a "$LOG/benchmark.log"
 
 TRIALS=${TRIALS:-96}
 PARALLEL=${PARALLEL:-4}
-WORKERS=${WORKERS:-32}
+# 96 worker slots. Measured 2026-09-04: a Geant4 worker draws ~99% of one core
+# and 0.06 GB RSS, so 96 workers is ~96 cores against 96 physical (192 SMT
+# threads), with ~17 cores in use by other users. Memory is nowhere near a
+# constraint -- `per_sample_mem_gb: 4` is a kill threshold, not an admission
+# gate, and actual usage is ~65x below it.
+#
+# With PARALLEL=4 that is 24 workers per candidate. A trial has 128 sub-runs, so
+# it runs 6 waves of which the last uses 8 of 24 slots: 89% worker utilisation.
+# PARALLEL=6 (16 each) would divide 128 exactly and reach 100%, worth ~13%
+# throughput, but 4 is the value pinned in
+# BO_GP_and_CMA_ES_Rerun_Recommendations.md and the degree of asynchrony changes
+# how much the GP must fantasise, so it is left alone.
+WORKERS=${WORKERS:-96}
 # A drift control every 24 completions -> 4 per campaign, 48 over the benchmark.
 # They are excluded from observations and from the event-efficiency curve, so
 # they cannot affect the comparison; they exist because P5 has never recorded a

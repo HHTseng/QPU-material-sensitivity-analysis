@@ -454,12 +454,22 @@ class Ledger:
         trial (finding N3). An evaluator whose lease was taken over must not
         overwrite the new owner's result with its own stale one.
         """
+        # A TERMINAL status releases the lease. Acquiring a lease without ever
+        # releasing it was a real gap in the N3 work: a finished or abandoned
+        # trial kept its lease for the full 1800 s expiry, so a legitimate
+        # resume -- the whole point of the restartable design -- was refused
+        # with "leased by a live evaluator" by an evaluator that no longer
+        # existed. Measured 2026-09-04: relaunching the benchmark produced a
+        # burst of constraint_rejected on exactly the trials just closed.
+        # `running` and `planned` must NOT clear it; the owner is still working.
+        terminal = status not in (STATUS_RUNNING, STATUS_PLANNED)
         args = [status, total_qps, qps_per_primary,
                 json.dumps(per_electrode_qps) if per_electrode_qps is not None else None,
                 runtime_s, peak_rss_gb, failure_reason, time.time(), trial_id]
         sql = ("UPDATE trials SET status=?, total_qps=?, qps_per_primary=?, "
                "per_electrode_qps=?, runtime_s=?, peak_rss_gb=?, failure_reason=?, "
-               "updated_at=? WHERE trial_id=?")
+               "updated_at=?" + (", lease_uuid=NULL" if terminal else "") +
+               " WHERE trial_id=?")
         if lease_uuid is not None:
             sql += " AND (lease_uuid IS NULL OR lease_uuid=?)"
             args.append(lease_uuid)

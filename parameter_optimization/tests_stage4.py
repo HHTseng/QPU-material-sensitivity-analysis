@@ -1467,6 +1467,29 @@ def t23_lease_enforcement(tmpdir):
               and led.set_trial_result("t", STATUS_SUCCESS, total_qps=2.0,
                                        lease_uuid="lease-C") is True)
 
+    # Acquiring a lease without releasing it was a real gap: a finished or
+    # abandoned trial kept its lease for the full expiry, so a legitimate resume
+    # -- the point of the restartable design -- was refused by an evaluator that
+    # no longer existed. Measured 2026-09-04 as a burst of constraint_rejected.
+    with Ledger(path) as led:
+        led.plan_trial(trial_id="t2", campaign_id="c", cache_key="k2",
+                       contract_hash="h", code_fingerprint={}, candidate={},
+                       derived={}, fidelity="S", events_total=1,
+                       events_per_sub_run=1, n_positions=1, n_replicas=1,
+                       scenario={}, seed_bank_id=0, run_dir="d",
+                       planned_sub_runs=[])
+        led.claim_trial("t2", "lease-X")
+        led.set_trial_result("t2", "running")
+        held_while_running = led.holds_lease("t2", "lease-X")
+        led.set_trial_result("t2", STATUS_SUCCESS, total_qps=1.0)
+        held_after_terminal = led.holds_lease("t2", "lease-X")
+        reclaimable = led.claim_trial("t2", "lease-Y")
+    check("T23j `running` keeps the lease but a terminal status releases it, so "
+          "the trial can be re-claimed immediately",
+          held_while_running and not held_after_terminal and reclaimable,
+          f"running={held_while_running} terminal={held_after_terminal} "
+          f"reclaim={reclaimable}")
+
     # -- a stale heartbeat alone is SUSPICION, not proof of death ------------
     now = _t.time()
 
