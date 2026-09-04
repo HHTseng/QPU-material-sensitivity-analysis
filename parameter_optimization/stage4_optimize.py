@@ -38,7 +38,8 @@ for _p in (HERE, REPO_ROOT):
         sys.path.insert(0, _p)
 
 from stage3_contract import load_contract, ContractError          # noqa: E402
-from stage3_ledger import Ledger, STATUS_SUCCESS, STATUS_SUCCESS_ZERO  # noqa: E402
+from stage3_ledger import (Ledger, STATUS_SUCCESS, STATUS_SUCCESS_ZERO,  # noqa: E402
+                           STATUS_TIMEOUT)
 from stage3_trial_runner import evaluate, _blocks_from_ledger     # noqa: E402
 import stage4_space as space_mod                                  # noqa: E402
 import stage4_objectives as objectives                            # noqa: E402
@@ -229,6 +230,26 @@ class Campaign:
             return {"point": point, "status": "constraint_rejected",
                     "reason": str(exc), "candidate": candidate}
         if not result.is_observation:
+            # A trial stopped by the TRIAL-LEVEL CAP is censored, not failed: we
+            # know it is expensive, and the optimizer must be told so it stops
+            # steering into that region. Everything else (a crash, a corrupt
+            # file, an operator stop) stays a non-observation.
+            capped = (result.status == STATUS_TIMEOUT
+                      and "TRIAL-level cap" in (result.failure_reason or ""))
+            if capped and self.history:
+                worst = max(h["value"].value for h in self.history)
+                value = objectives.censored_value(
+                    self.args.objective, worst, result.failure_reason)
+                led.set_optimizer_record(
+                    result.trial_id, objective_name=self.args.objective,
+                    objective_value=value.value, optimizer=self.args.optimizer,
+                    iteration=iteration, proposal_source=(
+                        self.optimizer.provenance_of(point).get("proposal_source")
+                        if hasattr(self.optimizer, "provenance_of") else None))
+                return {"point": point, "status": result.status, "value": value,
+                        "result": result, "candidate": candidate,
+                        "trial_id": result.trial_id, "censored": True,
+                        "cached": False}
             return {"point": point, "status": result.status,
                     "reason": result.failure_reason, "candidate": candidate,
                     "trial_id": result.trial_id}
@@ -272,6 +293,11 @@ class Campaign:
             if not rec.get("cached"):
                 self.events_used += self.events_total
             v = rec["value"].value
+            if rec.get("censored"):
+                print(f"  [{len(self.history):4d}/{self.args.trials}] CENSORED "
+                      f"obj>={v:.4e} (too expensive to measure; the surrogate is "
+                      f"told to avoid this region)", flush=True)
+                return best_seen, False
             if best_seen is None or v < best_seen * (1 - self.args.tolerance):
                 improved = True
             if best_seen is None or v < best_seen:

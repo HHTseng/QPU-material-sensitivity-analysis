@@ -716,7 +716,8 @@ def validate_macro_lines(lines):
 # Execution
 # --------------------------------------------------------------------------
 def _run_one(sub_run, lattice_root, timeout_s, guard, logs_dir,
-             expected_g4_name=None, expected_density=None, stall_timeout_s=0):
+             expected_g4_name=None, expected_density=None, stall_timeout_s=0,
+             trial_deadline=None):
     """Run one sub-run; return (status, return_code, runtime, reason).
 
     Two independent watchdogs, and the difference between them matters:
@@ -869,6 +870,12 @@ def _run_one(sub_run, lattice_root, timeout_s, guard, logs_dir,
 
         def _watch():
             deadline = (start + timeout_s) if (timeout_s and timeout_s > 0) else None
+            # The trial-level cap is a shared deadline across every sub-run of
+            # this trial, so a trial cannot exceed it however its sub-runs are
+            # scheduled. Whichever bound is nearer wins.
+            if trial_deadline is not None:
+                deadline = trial_deadline if deadline is None else min(deadline,
+                                                                       trial_deadline)
             last_bytes, last_change = _progress(), time.monotonic()
             # The poll interval must be short enough to honour whichever limit
             # is actually set -- keying it off the stall timeout alone meant an
@@ -876,12 +883,19 @@ def _run_one(sub_run, lattice_root, timeout_s, guard, logs_dir,
             # 60 s later, so the limit silently did nothing.
             limits = [x for x in (stall_timeout_s if stall_usable else 0,
                                   timeout_s) if x and x > 0]
+            if trial_deadline is not None:
+                limits.append(max(1.0, trial_deadline - time.monotonic()))
             poll = min([60.0] + [x / 4.0 for x in limits])
             poll = max(0.25, poll)
             while not stop_watch.wait(poll):
                 now = time.monotonic()
                 if deadline is not None and now >= deadline:
-                    _kill(f"exceeded the absolute wall-clock limit {timeout_s:g}s")
+                    if trial_deadline is not None and now >= trial_deadline:
+                        _kill("the TRIAL-level cap was reached; this sub-run is "
+                              "censored, not failed -- the candidate is recorded "
+                              "as too expensive to measure at this budget")
+                    else:
+                        _kill(f"exceeded the absolute wall-clock limit {timeout_s:g}s")
                     return
                 if stall_usable:
                     current = _progress()
@@ -896,7 +910,7 @@ def _run_one(sub_run, lattice_root, timeout_s, guard, logs_dir,
                         return
 
         watcher = None
-        if (timeout_s and timeout_s > 0) or stall_usable:
+        if (timeout_s and timeout_s > 0) or stall_usable or trial_deadline is not None:
             watcher = threading.Thread(target=_watch,
                                        name=f"watchdog-{sub_run['name'][-12:]}",
                                        daemon=True)
@@ -1219,6 +1233,25 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
 
         timeout_s = float(contract.fixed.get("sample_timeout_s") or 0)
         stall_timeout_s = float(contract.fixed.get("sample_stall_timeout_s") or 0)
+        # TRIAL-level cap, distinct from the per-sub-run watchdogs above.
+        #
+        # Removing the absolute per-sub-run limit (finding N6) was right -- it
+        # censored on candidate quality. But with NO bound at all, one
+        # pathological candidate blocks a whole campaign: measured 2026-09-03, a
+        # bo_gp trial ran 26 h without completing one of its 128 sub-runs,
+        # projecting ~3300 h against a 123 s campaign median, and serialised the
+        # campaign because the GP would not propose until it reported.
+        #
+        # The cap bounds the damage. What makes it different from the mechanism
+        # N6 removed is what happens NEXT: a capped trial is reported to the
+        # optimizer as a CENSORED observation, so the surrogate learns the
+        # region is expensive instead of being silently steered into it again.
+        # See stage4_objectives.censored_value and STAGE4_RESULTS.md 5.4.
+        max_trial_s = float(contract.fixed.get("sample_max_trial_hours") or 0) * 3600.0
+        trial_deadline = (time.monotonic() + max_trial_s) if max_trial_s > 0 else None
+        if verbose and trial_deadline:
+            print(f"  trial cap: {max_trial_s / 3600:.1f} h "
+                  f"(a trial that hits it is CENSORED, not discarded)")
         if verbose:
             print(f"  watchdog: "
                   + ("no wall-clock limit" if timeout_s <= 0
@@ -1236,7 +1269,7 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
                 futures = {pool.submit(_run_one, sr, lattice_root, timeout_s, guard,
                                        logs_dir, derived["g4_material_name"],
                                        derived["substrate_density_kg_m3"],
-                                       stall_timeout_s): sr
+                                       stall_timeout_s, trial_deadline): sr
                            for sr in todo}
                 for future in as_completed(futures):
                     sr = futures[future]

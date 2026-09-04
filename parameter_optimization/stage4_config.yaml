@@ -133,6 +133,22 @@ fixed:
   # a watchdog should catch -- a hung process -- and nothing else. 2 h is far
   # above any observed inter-write gap.
   sample_stall_timeout_s: 7200
+  # TRIAL-level cap. ADDED 2026-09-04 after a bo_gp trial ran 26 h without
+  # completing one of its 128 sub-runs (~3300 h projected, against a 123 s
+  # campaign median) and serialised the whole campaign.
+  #
+  # This is NOT the mechanism finding N6 removed. That one killed slow sub-runs
+  # and told the optimizer nothing, so the surrogate kept steering into the
+  # expensive region and the objective was silently biased against exactly the
+  # candidates worth measuring. A trial that hits THIS cap is reported to the
+  # optimizer as a RIGHT-CENSORED observation -- worse than anything yet seen --
+  # so the search learns to avoid the region, and it is flagged `censored`
+  # everywhere downstream so no report can mistake it for a measurement.
+  #
+  # 4 h is ~117x the observed median trial. Generous enough that no legitimately
+  # slow candidate is censored; small enough that a pathological one costs one
+  # slot-afternoon instead of a campaign.
+  sample_max_trial_hours: 4.0
 
   objective: total_qps_per_primary
   require_complete_scenarios: true

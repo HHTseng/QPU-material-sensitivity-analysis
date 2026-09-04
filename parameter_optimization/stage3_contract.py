@@ -305,6 +305,11 @@ class Contract:
         "sample_timeout_s",     # watchdog; a trial it kills is INCOMPLETE, never
                                 # scored, so it cannot alter a successful result
         "sample_stall_timeout_s",   # progress watchdog, same argument
+        "sample_max_trial_hours",   # trial cap: it cannot change a COMPLETED
+                                    # trial's result, only whether an expensive
+                                    # one is censored. It does change the search
+                                    # trajectory, which is why it stays in the
+                                    # campaign identity.
     )
 
     # Top-level sections that describe the SEARCH rather than the simulation.

@@ -405,6 +405,37 @@ def pareto_front(rows, keys, lower_is_better=None):
     return [a for a in usable if not any(dominates(b, a) for b in usable if b is not a)]
 
 
+def censored_value(name, worst_observed, reason, penalty=1.5):
+    """An observation for a candidate too expensive to measure at this budget.
+
+    STAGE4_RESULTS.md §5.4 diagnosed the original watchdog's real flaw and named
+    the fix: *"because a rejection carries no objective value, the surrogate does
+    not learn to avoid them. The right fix is to model failures (a feasibility
+    classifier or censored-observation treatment)."* This is that treatment, in
+    its simplest defensible form.
+
+    A capped trial is **not** a failure and **not** a zero. It is a right-censored
+    observation: we know only that measuring it costs more than the budget
+    allows. It is reported to the optimizer as worse than anything yet seen, so
+    the surrogate learns the region is unattractive, and it is flagged
+    `censored` everywhere downstream so no report can mistake it for a measured
+    value.
+
+    `penalty` multiplies the worst observed objective. It is deliberately modest:
+    a huge value would dominate the GP's length-scale fit and distort the whole
+    surface, when all that is needed is "worse than the others".
+    """
+    value = float(worst_observed) * float(penalty)
+    return ObjectiveValue(
+        name=name, value=value, raw=value, se=None, n_blocks=0, transform="log",
+        detail={"censored": True, "reason": str(reason),
+                "worst_observed": float(worst_observed), "penalty": float(penalty),
+                "value_floor": value,
+                "note": "RIGHT-CENSORED: the trial exceeded the budget, so its "
+                        "objective is a lower bound reported as a penalty, not a "
+                        "measurement. Never quote it as a result."})
+
+
 def paired_difference(result_a, result_b):
     """Site-matched difference A - B, with the paired stochastic error.
 

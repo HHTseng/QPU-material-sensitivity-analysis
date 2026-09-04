@@ -1983,6 +1983,91 @@ def t27_external_review_findings(tmpdir):
               not missing, f"missing: {missing}")
 
 
+def t28_trial_cap_and_censoring(tmpdir):
+    """Catches: a pathological candidate blocking a campaign, and a cap that
+    repeats the mistake finding N6 removed.
+
+    Measured 2026-09-03: a bo_gp trial ran 26 h without completing one of its
+    128 sub-runs (~3300 h projected against a 123 s campaign median) and
+    serialised the campaign, because the GP would not propose until it reported.
+    Removing the absolute per-sub-run watchdog was right -- it censored on
+    candidate quality -- but no bound at all is its own failure mode.
+
+    What makes the cap legitimate is what happens next: the trial is reported to
+    the optimizer as a RIGHT-CENSORED observation, so the surrogate learns to
+    avoid the region. The old watchdog carried no objective value at all, which
+    is why the search kept being steered back into it (STAGE4_RESULTS.md 5.4).
+    """
+    import types
+    import stage3_trial_runner as TR
+    import stage4_objectives as O
+    from stage3_contract import load_contract, Contract
+    from stage3_ledger import STATUS_TIMEOUT
+
+    # -- the cap actually fires, and says it is censoring ---------------------
+    root = os.path.join(tmpdir, "cap")
+    os.makedirs(root, exist_ok=True)
+    scripts = {}
+    real_harness = TR.harness
+    TR.harness = types.SimpleNamespace(
+        build_run_command=lambda m, lattice_name=None: scripts[os.path.basename(m)],
+        CRYSTALMAPS_DIR="/nonexistent")
+    try:
+        macro = os.path.join(root, "slow.mac")
+        with open(macro, "w") as handle:
+            handle.write("#\n")
+        sub = {"name": "slow", "macro": macro,
+               "hits_file": os.path.join(root, "slow_h.txt"),
+               "done_marker": os.path.join(root, "slow_h.txt.done"),
+               "replica": 0, "position_index": 0, "seed": 1}
+        # progressing steadily, so neither stall detector nor absence of CPU
+        # would stop it -- only the trial cap can.
+        scripts["slow.mac"] = ("for i in $(seq 60); do echo tick >> {h}; sleep 0.5; "
+                               "done; touch {d}").format(h=sub["hits_file"],
+                                                         d=sub["done_marker"])
+        deadline = time.monotonic() + 2.0
+        status, _, runtime, reason = TR._run_one(
+            sub, root, 0, None, root, stall_timeout_s=30, trial_deadline=deadline)
+    finally:
+        TR.harness = real_harness
+    check("T28a the trial cap stops a healthy, progressing, CPU-busy sub-run "
+          "that no other watchdog would touch",
+          status == STATUS_TIMEOUT and runtime < 10, f"{status} after {runtime:.1f}s")
+    check("T28b it says it is CENSORING, not that the run failed",
+          "censored" in (reason or "").lower(), reason)
+
+    # -- the censored observation teaches the surrogate -----------------------
+    v = O.censored_value("total_qps_per_primary", 4.0e-4, "cap reached")
+    check("T28c a censored value is worse than everything observed, so the "
+          "surrogate avoids the region",
+          v.value > 4.0e-4, f"{v.value:.3e} vs worst observed 4.000e-04")
+    check("T28d it is flagged censored and carries its reason, so no report can "
+          "mistake it for a measurement",
+          v.detail.get("censored") is True and v.detail.get("reason")
+          and "lower bound" in v.detail.get("note", ""),
+          str(v.detail.get("censored")))
+    check("T28e it is finite and modest -- a huge penalty would dominate the "
+          "GP's length-scale fit instead of just ranking low",
+          math.isfinite(v.surrogate_y()) and v.value < 4.0e-4 * 5,
+          f"surrogate_y={v.surrogate_y():.3f}, penalty x{v.detail['penalty']}")
+
+    # -- classification ------------------------------------------------------
+    base = load_contract(os.path.join(HERE, "stage4_config.yaml"))
+    alt = load_contract(os.path.join(HERE, "stage4_config.yaml"))
+    alt.fixed["sample_max_trial_hours"] = 99.0
+    check("T28f the cap cannot change a completed trial's cache key, but IS "
+          "recorded in the campaign identity",
+          alt.simulation_identity_hash() == base.simulation_identity_hash()
+          and alt.campaign_contract_hash() != base.campaign_contract_hash())
+    check("T28g the shipped contract sets a cap generous against the measured "
+          "median (123 s)",
+          float(base.fixed.get("sample_max_trial_hours", 0)) >= 1.0,
+          f"{base.fixed.get('sample_max_trial_hours')} h "
+          f"= {float(base.fixed['sample_max_trial_hours']) * 3600 / 123:.0f}x the median")
+    check("T28h the cap is declared execution-only by name",
+          "sample_max_trial_hours" in Contract.EXECUTION_ONLY_FIXED_KEYS)
+
+
 def t13_inertness_from_pilot():
     """Reports the Geant4 A/B result if the pilot has produced one."""
     path = os.path.join(HERE, "results", "stage4_pilot.json")
@@ -2063,6 +2148,7 @@ def main():
         t18_projection_coverage(tmpdir)
         t24_projection_parallelism(tmpdir)
         t25_watchdog_does_not_censor_by_quality(tmpdir)
+        t28_trial_cap_and_censoring(tmpdir)
         t15_realization_propagation(tmpdir)
         print("\nPhysics A/B (from the pilot):")
         t13_inertness_from_pilot()
