@@ -142,6 +142,31 @@ class Campaign:
             self.contract.campaign_id = f"{self.contract.campaign_id}_{a.tag}"
         if a.positions:
             f["n_positions"] = a.positions
+        # Electrode-aware stratified quadrature. Built from the contract's own
+        # electrode table and carried in `fixed`, so it reaches build_scenario()
+        # and is hashed into every cache key -- a stratified campaign can never
+        # collide with a uniform one at the same site count.
+        if getattr(a, "stratified", None):
+            import stage4_strata as ST
+            import stage3_trial_runner as TR
+            weights = ST.stratum_weights(f)
+            pilot_sd = {"H0": 3.815e-3, "H1": 2.769e-4,
+                        "H2": 8.325e-5, "H3": 5.776e-5}
+            alloc = ST.neyman_allocation(a.stratified, weights, pilot_sd)
+            template = os.environ.get(
+                "SENSITIVITY_MACRO_TEMPLATE",
+                os.path.join(TR.REPO_ROOT, "sensitivity_template_beamOn1e6.mac"))
+            tz = float(TR.find_macro_value(
+                template, "/main/gun/setPosition").split()[2])
+            design = ST.build_design(f, alloc, tz)
+            f["n_positions"] = a.stratified
+            f["stratified_design"] = design
+            objectives.set_stratified_design(design)
+            if a.objective == "total_qps_per_primary":
+                a.objective = "device_weighted_junction_qps_per_energy"
+            print(f"Stratified design {design['design_hash']}: "
+                  + "  ".join(f"{h}={design['stratum_counts'][h]}"
+                              for h in ST.STRATA))
         if a.replicas:
             f["n_replicas"] = a.replicas
         if a.timeout:
@@ -600,6 +625,15 @@ def main():
     ap.add_argument("--events", type=int, default=None,
                     help="override events per candidate for this fidelity")
     ap.add_argument("--positions", type=int, default=None)
+    ap.add_argument("--stratified", type=int, default=None, metavar="N",
+                    help="electrode-aware stratified design of N sites; implies "
+                         "--objective device_weighted_junction_qps_per_energy")
+    ap.add_argument("--warm-start", default=None, metavar="JSON",
+                    help="{label: physical vector} to seed the initial design. "
+                         "PHYSICAL vectors only -- old objective values are "
+                         "never imported, because J_16 and J_stratified are "
+                         "different quantities and this optimizer is "
+                         "single-fidelity.")
     ap.add_argument("--replicas", type=int, default=None)
     ap.add_argument("--timeout", type=float, default=None, help="per sub-run seconds")
     ap.add_argument("--seed", type=int, default=1, help="optimizer seed (not physics)")

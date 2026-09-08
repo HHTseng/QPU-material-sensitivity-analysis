@@ -2147,6 +2147,135 @@ def t13_inertness_from_pilot():
               f"{n['within_run_se']:.1%}, implied Fano {n['implied_fano']:.1f}")
 
 
+def t29_stratified_quadrature(tmpdir):
+    """Catches: the bug that broke the 16->32->64 sweep -- an equal-site mean
+    over a design that deliberately oversamples the near-electrode strata.
+
+    The Sep-8 plan asks specifically for a synthetic case where H0 is
+    oversampled 10x: the WEIGHTED answer must not move, while the equal-site
+    average must.
+    """
+    import types
+    import yaml as _yaml
+    import numpy as _np
+    import stage4_strata as ST
+    import stage4_objectives as O
+
+    fixed = _yaml.safe_load(open(os.path.join(HERE, "stage4_config.yaml")))["fixed"]
+
+    w = ST.stratum_weights(fixed, n_mc=400_000, seed=1)
+    check("T29a stratum weights are a partition of the chip",
+          abs(sum(w.values()) - 1.0) < 1e-9 and all(v > 0 for v in w.values()),
+          ", ".join(f"{k}={v:.4f}" for k, v in sorted(w.items())))
+
+    sd = {"H0": 3.815e-3, "H1": 2.769e-4, "H2": 8.325e-5, "H3": 5.776e-5}
+    a128 = ST.neyman_allocation(128, w, sd)
+    a256 = ST.neyman_allocation(256, w, sd)
+    check("T29b Neyman allocation puts most sites where the variance is",
+          a128["H0"] > a128["H1"] + a128["H2"] + a128["H3"],
+          f"128 sites -> {a128}; uniform area would give H0={round(128 * w['H0'])}")
+    check("T29c every electrode gets explicit H0 coverage",
+          a128["H0"] >= len(fixed["electrode_x_mm"]),
+          f"H0={a128['H0']} for {len(fixed['electrode_x_mm'])} electrodes")
+
+    d128 = ST.build_design(fixed, a128, 0.259875)
+    d256 = ST.build_design(fixed, a256, 0.259875)
+    nested = all(
+        [s for s, l in zip(d256["sites_mm"], d256["stratum"]) if l == h][
+            :sum(1 for l in d128["stratum"] if l == h)]
+        == [s for s, l in zip(d128["sites_mm"], d128["stratum"]) if l == h]
+        for h in ST.STRATA)
+    check("T29d refinements are nested within every stratum", nested,
+          "sites(2N) extends sites(N); a refinement is a superset, not a redraw")
+
+    xs = _np.asarray(fixed["electrode_x_mm"]); ys = _np.asarray(fixed["electrode_y_mm"])
+    r = ST.island_radius_mm(fixed)
+    bad = [i for i, (st, lab) in enumerate(zip(d128["sites_mm"], d128["stratum"]))
+           if ST.classify(st[0], st[1], xs, ys, r)[0] != lab]
+    check("T29e every site's stored label reproduces from the geometry",
+          not bad, f"{len(bad)} mislabelled of {len(d128['sites_mm'])}")
+
+    # The two sites that broke the uniform sweep must land on a footprint.
+    lab11 = ST.classify(-1.8819, -0.0145, xs, ys, r)
+    lab36 = ST.classify(-1.0503, 2.9749, xs, ys, r)
+    check("T29f the two sites that broke the sweep classify as on-footprint",
+          lab11[0] == "H0" and lab36[0] == "H0",
+          f"site11 -> {lab11[0]}/electrode {lab11[1]}, "
+          f"site36 -> {lab36[0]}/electrode {lab36[1]}")
+
+    # Coverage must not be bought with electrode CENTRES. Measured on a
+    # 64-site pilot: injecting at the exact centre yields 43x what the same
+    # footprint yields elsewhere, so centre-seeding biased mu_H0 by 24x and the
+    # objective by ~10x. The stratum mean estimates a footprint AVERAGE.
+    h0 = [(st[0], st[1], e) for st, lab, e
+          in zip(d128["sites_mm"], d128["stratum"], d128["nearest_electrode"])
+          if lab == "H0"]
+    at_centre = sum(1 for x, y, _ in h0
+                    if float(_np.hypot(x - xs, y - ys).min()) < 1e-6)
+    inside = all(float(_np.hypot(x - xs, y - ys).min()) <= r + 1e-9
+                 for x, y, _ in h0)
+    check("T29k H0 coverage points are inside footprints, never at centres",
+          at_centre == 0 and inside and len({e for _, _, e in h0}) == len(xs),
+          f"{len(h0)} H0 sites, {at_centre} at a centre, "
+          f"{len({e for _, _, e in h0})}/{len(xs)} electrodes covered")
+
+    # --- the invariance test the plan asks for ------------------------------
+    truth = {"H0": 4.583e-3, "H1": 8.086e-4, "H2": 3.193e-4, "H3": 1.239e-4}
+    j_true = sum(w[h] * truth[h] for h in w)
+
+    def synth(alloc, events=100000, reps=4):
+        labels, blocks, p = [], [], 0
+        for h in ST.STRATA:
+            for _ in range(alloc[h]):
+                labels.append(h)
+                for rep in range(reps):
+                    blocks.append({"position": p, "replica": rep,
+                                   "events": events,
+                                   "total_qps": truth[h] * events,
+                                   "per_electrode_qps": None})
+                p += 1
+        res = types.SimpleNamespace(blocks=blocks)
+        design = {"stratum": labels, "stratum_weights": w,
+                  "design_hash": "synthetic", "injection_law": "uniform_surface"}
+        return res, design
+
+    balanced = {"H0": 20, "H1": 20, "H2": 20, "H3": 20}
+    oversamp = {"H0": 200, "H1": 20, "H2": 20, "H3": 20}
+    rb, db = synth(balanced)
+    ro, do = synth(oversamp)
+    eb = O.stratified_estimate(rb, db)
+    eo = O.stratified_estimate(ro, do)
+
+    check("T29g the weighted estimate is invariant to allocation",
+          abs(eo["J"] - eb["J"]) / eb["J"] < 1e-9
+          and abs(eb["J"] - j_true) / j_true < 1e-9,
+          f"H0 oversampled 10x: J {eb['J']:.4e} -> {eo['J']:.4e} "
+          f"(truth {j_true:.4e})")
+    check("T29h the equal-site mean IS biased by the same oversampling -- "
+          "which is the bug being fixed",
+          abs(eo["naive_equal_site"] - eb["naive_equal_site"])
+          / eb["naive_equal_site"] > 0.5,
+          f"naive {eb['naive_equal_site']:.4e} -> {eo['naive_equal_site']:.4e} "
+          f"({eo['naive_equal_site'] / j_true:.1f}x the truth)")
+
+    fell_over = False
+    try:
+        O.set_stratified_design({"stratum": ["H0"], "stratum_weights": {"H0": 0.5}})
+    except ValueError:
+        fell_over = True
+    check("T29i unnormalised stratum weights are refused", fell_over,
+          "weights that do not sum to 1 are a silently wrong estimand")
+
+    refused = False
+    try:
+        O.set_stratified_design(None)
+        O.stratified_estimate(rb)
+    except ValueError:
+        refused = True
+    check("T29j the stratified objective refuses to run without a design",
+          refused, "no silent fallback to the equal-site mean")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--slow", action="store_true",
@@ -2187,6 +2316,7 @@ def main():
         t24_projection_parallelism(tmpdir)
         t25_watchdog_does_not_censor_by_quality(tmpdir)
         t28_trial_cap_and_censoring(tmpdir)
+        t29_stratified_quadrature(tmpdir)
         t15_realization_propagation(tmpdir)
         print("\nPhysics A/B (from the pilot):")
         t13_inertness_from_pilot()

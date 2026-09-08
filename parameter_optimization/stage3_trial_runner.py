@@ -420,7 +420,34 @@ def resolve_candidate(contract, candidate, debye_override_THz=None):
 # Scenario (injection sites)
 # --------------------------------------------------------------------------
 def build_scenario(contract, template_z_mm):
-    """Ordered injection-site set. Identical for every candidate by construction."""
+    """Ordered injection-site set. Identical for every candidate by construction.
+
+    Two designs are supported. The default is the historical uniform scrambled
+    Sobol draw. If the contract carries `stratified_design`, that explicit
+    electrode-aware design is used instead -- see stage4_strata.py for why the
+    uniform draw does not converge. The design travels inside the returned
+    scenario, so it is hashed into the cache key and a stratified trial can
+    never collide with a uniform one at the same site count.
+    """
+    explicit = contract.fixed.get("stratified_design")
+    if explicit:
+        sites = [tuple(s) for s in explicit["sites_mm"]]
+        n_expect = int(contract.fixed["n_positions"])
+        if len(sites) != n_expect:
+            raise ContractError(
+                f"stratified_design carries {len(sites)} sites but n_positions "
+                f"is {n_expect}; the two must agree or the sub-run grid is wrong")
+        return {
+            "sites_mm": sites,
+            "weights": "stratified",
+            "position_seed": int(explicit["position_seed"]),
+            "half_span_mm": float(explicit["half_span_mm"]),
+            "stratum": list(explicit["stratum"]),
+            "stratum_weights": dict(explicit["stratum_weights"]),
+            "nearest_electrode": list(explicit["nearest_electrode"]),
+            "injection_law": explicit["injection_law"],
+            "design_hash": explicit["design_hash"],
+        }
     n = int(contract.fixed["n_positions"])
     if n < 1:
         raise ContractError("n_positions must be >= 1")

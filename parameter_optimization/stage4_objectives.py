@@ -473,3 +473,164 @@ if __name__ == "__main__":
     print("Stage 4 objectives:")
     for name, doc in available().items():
         print(f"  {name:32s} {doc}")
+
+
+# ---------------------------------------------------------------------------
+# Electrode-aware stratified device objective (Sep-8 plan, Priority 3)
+# ---------------------------------------------------------------------------
+# The equal-site mean above is only correct when the sites are an unbiased
+# uniform sample. Once the design deliberately oversamples the near-electrode
+# strata -- which it must, because 3.3% of the area carries ~39% of the yield --
+# pooling sites with equal weight overcounts that area by ~20x. The estimator
+# here reweights by the strata's true probability mass, so the answer is
+# INVARIANT to how the sites were allocated. That invariance is the whole point
+# and is asserted by T27 in tests_stage4.py.
+_ACTIVE_DESIGN = None
+
+
+def set_stratified_design(design):
+    """Install the design whose stratum labels the stratified objective uses.
+
+    Explicit rather than inferred: an objective that silently fell back to the
+    equal-site mean when labels were missing would reintroduce exactly the bias
+    this module exists to remove.
+    """
+    global _ACTIVE_DESIGN
+    if design is not None:
+        need = ("stratum", "stratum_weights")
+        missing = [k for k in need if not design.get(k)]
+        if missing:
+            raise ValueError(f"stratified design is missing {missing}")
+        w = design["stratum_weights"]
+        if abs(sum(w.values()) - 1.0) > 1e-6:
+            raise ValueError(f"stratum weights sum to {sum(w.values())}, not 1")
+    _ACTIVE_DESIGN = design
+
+
+def active_design():
+    return _ACTIVE_DESIGN
+
+
+def stratified_estimate(result, design=None, gun_energy_eV=None):
+    """J = sum_h W_h * mu_h, with hierarchical-bootstrap uncertainty.
+
+    Returns the estimate, the per-stratum means and counts, the weighted
+    leverage of the heaviest single node, and R_0.95 -- the CVaR of the
+    worst-electrode burden over sites, which is the tail term that exposes a
+    candidate lowering its mean by concentrating damage on one junction.
+
+    `gun_energy_eV` normalises to QPs per deposited eV. With a fixed-energy gun
+    it is a constant factor and changes no ranking; it is carried so that a
+    later energy-spectrum run does not silently compare against per-primary
+    numbers.
+    """
+    design = design or _ACTIVE_DESIGN
+    if design is None:
+        raise ValueError(
+            "no stratified design installed: call set_stratified_design() first")
+    labels = design["stratum"]
+    weights = design["stratum_weights"]
+    table, events, positions, replicas = _block_table(result)
+    if len(labels) < max(positions) + 1:
+        raise ValueError(
+            f"design has {len(labels)} labels but the trial reports position "
+            f"{max(positions)}; the design and the scenario disagree")
+
+    per_site = {p: float(table[i].mean()) / events
+                for i, p in enumerate(positions)}
+    per_site_rep = {p: (table[i] / events).tolist()
+                    for i, p in enumerate(positions)}
+    present = {}
+    for i, p in enumerate(positions):
+        present.setdefault(labels[p], []).append(per_site[p])
+    wsum = sum(weights[h] for h in present)
+    mu = {h: float(np.mean(v)) for h, v in present.items()}
+    j = sum(weights[h] * mu[h] for h in present) / wsum
+
+    # Weighted contribution of each node. Under the uniform design one site
+    # carried 30-40% of J; Priority 4 requires every node below 10%.
+    lev = {p: (weights[labels[p]] / wsum) * per_site[p]
+              / len(present[labels[p]]) / j
+           for p in per_site}
+    worst_node = max(lev.values()) if lev else float("nan")
+
+    # Tail protection. Worst-ELECTRODE burden per site, then the stratum-
+    # weighted mean of the upper 5%. Reported as a diagnostic, not enforced:
+    # no defensible threshold exists yet, and the Sep-8 plan says to show the
+    # Pareto pair rather than invent a scalar weight after seeing results.
+    r95 = None
+    blocks = getattr(result, "blocks", None)
+    if blocks and blocks[0].get("per_electrode_qps") is not None:
+        acc = {}
+        for b in blocks:
+            pe = np.asarray(b["per_electrode_qps"], dtype=float)
+            acc.setdefault(b["position"], []).append(pe.max() / b["events"])
+        zmax = {p: float(np.mean(v)) for p, v in acc.items()}
+        pairs = sorted(((zmax[p], weights[labels[p]] / len(present[labels[p]]))
+                        for p in zmax), reverse=True)
+        cut, num, den = 0.05 * sum(w for _, w in pairs), 0.0, 0.0
+        for val, w in pairs:
+            take = min(w, cut - den)
+            if take <= 0:
+                break
+            num += val * take
+            den += take
+        r95 = float(num / den) if den > 0 else None
+
+    se, _ = _hier_bootstrap(per_site_rep, labels, weights)
+    scale = 1.0 if not gun_energy_eV else 1.0 / float(gun_energy_eV)
+    return {
+        "J": j * scale, "se": se * scale,
+        "relative_se": (se / j) if j else None,
+        "mu_h": {h: v * scale for h, v in mu.items()},
+        "n_h": {h: len(v) for h, v in present.items()},
+        "W_h": {h: weights[h] for h in present},
+        "weight_covered": wsum,
+        "max_node_leverage": worst_node,
+        "R95": (r95 * scale) if r95 is not None else None,
+        "naive_equal_site": float(np.mean(list(per_site.values()))) * scale,
+        "design_hash": design.get("design_hash"),
+        "injection_law": design.get("injection_law"),
+        "gun_energy_eV": gun_energy_eV,
+        "n_sites": len(per_site), "n_replicas": len(replicas), "events": events,
+    }
+
+
+def _hier_bootstrap(per_site_rep, labels, weights, n_boot=1000, seed=7):
+    """Resample sites within stratum, then replicas within site.
+
+    Two levels rather than one pooled resample, so the spatial and the
+    stochastic contribution are not conflated -- the sweep's failure was
+    entirely spatial and a pooled bar would have hidden that.
+    """
+    rng = np.random.default_rng(seed)
+    by_h = {}
+    for p in per_site_rep:
+        by_h.setdefault(labels[p], []).append(p)
+    wsum = sum(weights[h] for h in by_h)
+    draws = np.empty(n_boot)
+    for b in range(n_boot):
+        tot = 0.0
+        for h, idx in by_h.items():
+            pick = rng.choice(idx, size=len(idx), replace=True)
+            means = [float(np.mean(rng.choice(per_site_rep[i],
+                                              size=len(per_site_rep[i]),
+                                              replace=True))) for i in pick]
+            tot += weights[h] * float(np.mean(means))
+        draws[b] = tot / wsum
+    return float(draws.std(ddof=1)), draws
+
+
+@register("device_weighted_junction_qps_per_energy")
+def _device_weighted(result):
+    """Stratum-weighted junction-QP burden per deposited eV (Sep-8 plan 1.3).
+
+    The estimand is E_xi[Z] under the declared injection law, NOT the mean over
+    whatever sites happened to be drawn. Requires an installed stratified
+    design; it refuses rather than silently averaging sites equally.
+    """
+    est = stratified_estimate(result)
+    table, events, _, _ = _block_table(result)
+    return ObjectiveValue(
+        name="", value=est["J"], raw=float(table.sum()), se=est["se"],
+        n_blocks=table.size, detail=est)

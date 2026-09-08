@@ -39,7 +39,17 @@ for _p in (HERE, REPO_ROOT):
 
 from stage3_contract import load_contract, ContractError        # noqa: E402
 from stage3_ledger import Ledger                                # noqa: E402
-from stage3_trial_runner import evaluate                        # noqa: E402
+from stage3_trial_runner import (evaluate, find_macro_value,   # noqa: E402
+                                 REPO_ROOT)
+
+# Pilot within-stratum spatial SDs, measured from the 64-site baseline block
+# data (see stage4_strata.py). They set the Neyman split only; a wrong value
+# costs efficiency, never correctness, because the estimator reweights by the
+# true area mass whatever the allocation turns out to be.
+PILOT_SD = {"H0": 3.815e-3, "H1": 2.769e-4, "H2": 8.325e-5, "H3": 5.776e-5}
+MACRO_TEMPLATE = os.environ.get(
+    "SENSITIVITY_MACRO_TEMPLATE",
+    os.path.join(REPO_ROOT, "sensitivity_template_beamOn1e6.mac"))
 import stage4_space as S                                        # noqa: E402
 import stage4_objectives as O                                   # noqa: E402
 from stage4_optimize import candidate_payload, resolver_for, build_space  # noqa: E402
@@ -135,6 +145,14 @@ def main():
                          "these trials are a different simulation identity and "
                          "cannot be paired against a different site count -- "
                          "only absolute yields and rankings are comparable.")
+    ap.add_argument("--stratified", type=int, default=None, metavar="N",
+                    help="use an electrode-aware STRATIFIED design of N sites "
+                         "instead of the uniform Sobol draw. Sites are allocated "
+                         "by cost-aware Neyman allocation across the four strata "
+                         "and every electrode gets explicit coverage; the "
+                         "estimator reweights by true area mass, so the answer "
+                         "is invariant to the oversampling. Implies "
+                         "--objective device_weighted_junction_qps_per_energy.")
     ap.add_argument("--seed-bank", type=int, default=9,
                     help="MUST be a bank the campaign did not use")
     ap.add_argument("--workers", type=int, default=16)
@@ -163,6 +181,28 @@ def main():
     contract.campaign_id = f"{contract.campaign_id}_{args.tag}"
     if args.positions:
         contract.fixed["n_positions"] = args.positions
+
+    # Electrode-aware stratified design. Built from the contract's own electrode
+    # table, then carried inside `fixed` so it reaches build_scenario() and is
+    # hashed into every cache key -- a stratified trial can never collide with a
+    # uniform one at the same site count.
+    design = None
+    if args.stratified:
+        import stage4_strata as ST
+        weights = ST.stratum_weights(contract.fixed)
+        alloc = ST.neyman_allocation(args.stratified, weights, PILOT_SD)
+        template_z = float(find_macro_value(
+            MACRO_TEMPLATE, "/main/gun/setPosition").split()[2])
+        design = ST.build_design(contract.fixed, alloc, template_z)
+        contract.fixed["n_positions"] = args.stratified
+        contract.fixed["stratified_design"] = design
+        O.set_stratified_design(design)
+        if args.objective == "total_qps_per_primary":
+            args.objective = "device_weighted_junction_qps_per_energy"
+        print(f"Stratified design {design['design_hash']}: "
+              + "  ".join(f"{h}={design['stratum_counts'][h]}"
+                          f"(W={design['stratum_weights'][h]:.3f})"
+                          for h in ST.STRATA))
     contract.decision["fidelity"]["value"] = args.fidelity
     if args.events:
         contract.decision["fidelity"]["events_total_per_candidate"][args.fidelity] = args.events
@@ -251,6 +291,7 @@ def main():
            "code_fingerprint": contract.code_fingerprint(),
            "sample_timeout_s": contract.fixed.get("sample_timeout_s"),
            "sample_stall_timeout_s": contract.fixed.get("sample_stall_timeout_s"),
+           "stratified_design": design,
            "results": results,
            "points": {k: {kk: (list(vv) if isinstance(vv, list) else vv)
                           for kk, vv in v.items()} for k, v in points.items()}}
