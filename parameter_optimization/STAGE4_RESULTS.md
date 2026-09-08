@@ -472,6 +472,24 @@ lands just below SiC (73.6% vs 76.4%) and wins fewer sites (12/16 against
 closer than the withdrawn numbers suggested, and Be₂C's measured `C11` = 570 GPa
 and `C44` = 201 GPa are now kept unclipped rather than forced into the search box.
 
+> ### Magnitudes are provisional pending the site sweep (2026-09-08)
+>
+> Leave-one-site-out on this same L-tier data: one of the sixteen injection
+> sites (index 11, 0.119 mm from an electrode, inside the 0.200 mm island)
+> supplies **49.3%** of the baseline's QPs. Dropping it moves the ideal target
+> from **−70.0% to −54.3%** and **SiC from −53.3% to −26.2%**.
+>
+> §5.5 has always noted that one site dominates, with the mitigation that
+> "paired differences cancel it". That holds for the significance test and not
+> for the magnitude — and every headline here is a magnitude. The *ranking* is
+> stable under leave-one-out; the *numbers* are a property of a 16-point
+> quadrature over an integrand that is steeply peaked at the electrodes.
+>
+> A nested 16 → 32 → 64 site test is running. Until it lands, treat the
+> percentages below as accurate for this scenario set and **not yet established
+> as device averages**. See
+> [`STAGE4_P3_AND_SPATIAL_FINDINGS.md`](STAGE4_P3_AND_SPATIAL_FINDINGS.md).
+
 **These numbers are now quotable**, with the standing scope caveat: simulated
 *junction* QP yield, under this model, this 16-site scenario set, this
 calibrated interface model. Not a logical-error rate, and not yet a fabrication

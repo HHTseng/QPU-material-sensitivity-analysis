@@ -139,6 +139,26 @@ draw was ahead. The real gain is that the result is now **attributable**.
 > algorithm ranking is valid; the material answer is not. Widening the box before
 > making the P3 device-quality decision would only find a deeper corner.
 
+> ### Two findings from data already in hand — 2026-09-08
+> [`STAGE4_P3_AND_SPATIAL_FINDINGS.md`](STAGE4_P3_AND_SPATIAL_FINDINGS.md),
+> both at **zero simulation cost**.
+>
+> **P3 is nearly free.** Screening all 402 simulated benchmark points against
+> every candidate device-quality floor: *the same point satisfies all of them*,
+> at **1.24×** the unconstrained best. Even a fully Nb-like ground plane
+> (`T_c` ≥ 9 K) costs only 24%. The best constrained design has `T_c` = 10.99 K
+> and equilibrium QP density **33 orders of magnitude below Nb**, against the
+> unconstrained corner's **+374** — and sits at 5 box walls instead of 13.
+> **Recommendation: impose `T_c` ≥ 9 K.** It is the strictest option, costs the
+> same as the loosest, and 69 already-simulated points satisfy it.
+>
+> **One injection site carries most of every headline reduction.** Site 11 sits
+> 0.119 mm from an electrode — inside the 0.200 mm island — and supplies 49.3%
+> of the baseline's QPs. Leave-one-site-out: the ideal target's −70.0% becomes
+> −54.3%, and **SiC's −53.3% becomes −26.2%**. The ranking is stable; the
+> **magnitudes are provisional** until a 16→32→64 site sweep (running) shows the
+> quadrature has converged.
+
 **P5 finally has drift evidence**: 16 fresh baseline re-evaluations over 33 h,
 CV **0.25%** against a ~5% stochastic error — no machine or executable drift.
 The withdrawn "0.0% spread" claim measured the cache; this measures the machine.

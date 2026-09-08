@@ -129,6 +129,12 @@ def main():
     ap.add_argument("--ledger", default=os.path.join(HERE, "stage4_trials.sqlite"))
     ap.add_argument("--fidelity", default="M", choices=("S", "M", "L"))
     ap.add_argument("--events", type=int, default=None, help="override the tier")
+    ap.add_argument("--positions", type=int, default=None,
+                    help="override n_positions for a spatial-convergence sweep "
+                         "(power of two). Changing it changes the SCENARIO, so "
+                         "these trials are a different simulation identity and "
+                         "cannot be paired against a different site count -- "
+                         "only absolute yields and rankings are comparable.")
     ap.add_argument("--seed-bank", type=int, default=9,
                     help="MUST be a bank the campaign did not use")
     ap.add_argument("--workers", type=int, default=16)
@@ -155,6 +161,8 @@ def main():
         sys.exit("nothing to confirm: no finalists found")
 
     contract.campaign_id = f"{contract.campaign_id}_{args.tag}"
+    if args.positions:
+        contract.fixed["n_positions"] = args.positions
     contract.decision["fidelity"]["value"] = args.fidelity
     if args.events:
         contract.decision["fidelity"]["events_total_per_candidate"][args.fidelity] = args.events
