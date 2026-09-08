@@ -120,10 +120,86 @@ This does not overturn the ranking — every candidate is measured on the same
 sites, and the ordering is stable under LOO. It does mean the **magnitudes**
 (−70%, −53%, −31%) are provisional until the quadrature is shown to converge.
 
-A nested **16 → 32 → 64** site test is running at the M tier on the baseline,
-the ideal target, SiC and the bo_gp corner. A different site count is a different
-scenario, so those trials cannot be paired across counts; what is comparable is
-the absolute yield and the ranking.
+## Site-sweep result (2026-09-08): the quadrature did NOT converge
+
+The nested 16 → 32 → 64 sweep finished (M tier, held-out bank 9, 128/256/512
+sub-runs per candidate). **The third branch of the decision rule fired.**
+
+| candidate | 16 sites | 32 sites | 64 sites | 32→64 shift | combined SE |
+|---|---:|---:|---:|---:|---:|
+| baseline | 3.955e−4 | 3.457e−4 | 4.628e−4 | **+33.9%** | 3.5% |
+| `bo_gp_corner` | 8.744e−5 | 9.475e−5 | 9.656e−5 | +1.9% | 7.9% |
+| elasticity of SiC | 1.878e−4 | 1.770e−4 | 1.977e−4 | **+11.7%** | 4.5% |
+| ideal target | 1.175e−4 | 1.123e−4 | 2.154e−4 | **+91.9%** | 6.2% |
+
+Three of four candidates moved far outside their combined error bars, and the
+**ranking flipped**: at 16 and 32 sites the order is
+`bo_gp_corner < ideal_target < SiC < baseline`; at 64 it is
+`bo_gp_corner < SiC < ideal_target < baseline`. The ideal target nearly doubled.
+
+### Cause: one site landed on an electrode
+
+Sobol is nested here — the 64-set contains the 32-set exactly (verified) — so the
+entire shift comes from the 32 newly added sites. It comes from essentially one
+of them.
+
+| | site 36 = (−1.050, +2.975) mm | |
+|---|---:|---|
+| share of the baseline's 64-site total | **30.1%** | one of sixty-four points |
+| share of the ideal target's total | **39.5%** | |
+| fraction of its QPs into a single electrode | **98%** (electrode 12) | site 11 was 95% into electrode 3 |
+| new-32 vs first-32 mean yield, ideal target | **2.61×** | baseline 1.67×, SiC 1.32×, corner 1.09× |
+
+Site 36 sits **on top of electrode 12**. It is the same pathology as site 11 in
+the 16-site set, drawn again at a different place and with a larger effect.
+
+Dropping site 36 alone from the 64-site set restores both the magnitudes and the
+ordering:
+
+| candidate | 64 sites | 64 sites minus site 36 | 32 sites |
+|---|---:|---:|---:|
+| `bo_gp_corner` | −79.1% | **−72.7%** | −72.6% |
+| elasticity of SiC | −57.3% | **−49.2%** | −48.8% |
+| ideal target | −53.5% | **−59.7%** | −67.5% |
+
+The corner and SiC land within a fraction of a point of their 32-site values. So
+the disagreement is not diffuse Monte-Carlo noise that more events would fix —
+**it is one quadrature point with 30–40% leverage.** Adding events at fixed sites
+would converge to the wrong number more precisely.
+
+### What this means
+
+1. **No optimization on this objective.** *J* at 16, 32 and 64 sites are three
+   different quantities, and none is yet an estimate of the device average.
+2. **The reduction magnitudes stay unquoted.** Depending on site count, the ideal
+   target is −70.3%, −67.5% or −53.5%. That spread is the quadrature, not physics.
+3. **The ranking survives, weakly.** `bo_gp_corner` is best at every site count
+   and is the only candidate stable across 32→64 (+1.9%, inside its 7.9% SE) —
+   it is the flattest of the four in space, which is itself a desirable property.
+   The middle of the ranking is not resolved.
+4. **The uniform-Sobol design is the defect, not the sample size.** QP yield near
+   an electrode is a sharp peak on a ~0.2 mm island inside an 8 mm span; uniform
+   sampling resolves it only by luck, and the estimator's variance is dominated
+   by whether a point happened to land there.
+
+### Redesign: electrode-aware stratification
+
+The device average should be a weighted sum over two strata, each converging on
+its own:
+
+- **near-electrode stratum** — the union of the 17 islands plus a margin, a few
+  percent of the area but the large majority of the yield; sampled densely.
+- **bulk stratum** — the remainder; smooth, cheap, converges fast.
+
+with the strata weighted by true area fraction. That replaces "hope a Sobol
+point lands on the peak" with "always sample the peak, and weight it correctly."
+This needs the electrode layout to be read from the geometry rather than
+inferred, which is the next implementation step.
+
+**The anchor sweep is not the bottleneck and should still run** — it measures
+the Nb-gap-compatible candidate on the same three site sets, and its 32→64
+stability is itself information about how peaked that candidate is. But it
+cannot be the basis for launching a campaign either.
 
 ---
 
@@ -131,7 +207,8 @@ the absolute yield and the ranking.
 
 1. **P3 is decided cheaply**: a direct `topfilm_gap_min_eV: 1.5384e-3` floor, at
    a measured cost of 1.24×.
-2. **Do not quote a reduction magnitude** until the site sweep lands.
+2. **Do not quote a reduction magnitude.** The site sweep landed and did not
+   converge; the magnitude depends on the quadrature (see above).
 3. Anchor the constrained search on the **best Nb-gap-compatible point found**
    (`5c1e62ff8466`) — as an incumbent, not as the geometric centre of every
    bound, and not as an interior optimum: five of its sixteen variables are on
@@ -148,6 +225,8 @@ and the change relative to the combined uncertainty.
 | 16, 32 and 64 agree | keep the 16-site contract; the 69 feasible points are usable directly |
 | 16 moves, 32 ≈ 64 | adopt 32 or 64 sites; **re-evaluate a diverse subset** of the 69 before feeding the optimizer |
 | 32 and 64 still disagree | **do not optimize.** Redesign the quadrature — probably electrode-aware stratification, since uniform Sobol converges slowly around the sharp near-electrode peak |
+
+**Outcome: the third row fired.** See the site-sweep result above.
 
 **Warm-start rules, whichever branch.** Load the 69 as **raw physical vectors**
 and re-transform them under the new bounds — never reuse old unit coordinates.

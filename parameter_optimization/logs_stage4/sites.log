@@ -1,0 +1,8 @@
+[2026-09-08 00:28:46] spatial convergence: 16 -> 32 -> 64 sites, M tier, held-out bank 9
+[2026-09-08 00:28:46] === 16 sites (128 sub-runs per candidate) ===
+[2026-09-08 01:28:47] 16 sites done
+[2026-09-08 01:28:47] === 32 sites (256 sub-runs per candidate) ===
+[2026-09-08 02:25:29] 32 sites done
+[2026-09-08 02:25:29] === 64 sites (512 sub-runs per candidate) ===
+[2026-09-08 03:21:59] 64 sites done
+[2026-09-08 03:21:59] spatial convergence finished

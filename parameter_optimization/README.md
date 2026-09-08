@@ -7,7 +7,7 @@ Al junctions, per primary event) with two different notions of "candidate".
 |---|---|---|
 | Candidate | a triplet of **real materials** (substrate / top ground film / bottom film) | a **continuous property vector** — a pseudo-material that need not exist |
 | Search | exhaustive enumeration of 18 triplets | Bayesian optimization, CMA-ES, Sobol/random baselines, LLM-agentic proposal |
-| Result | `Ge/Nb/Cu`, −36.0% vs the `Si/Nb/Cu` baseline, converged at 1e7 events/sub-run | **−70.0%** junction QPs at held-out seeds (converged). Nearest real substrate **3C-SiC recovers 76.2%** of that gain; the catalogued triplet `GaAs/Nb/Cu` recovers **44.6%** |
+| Result | `Ge/Nb/Cu`, −36.0% vs the `Si/Nb/Cu` baseline, converged at 1e7 events/sub-run | **magnitude under revision.** −70.0% at 16 sites, but the site sweep did not converge (§ below) — the number is quadrature-dependent, not yet a device average. Ranking holds; relative recoveries (3C-SiC **76.2%**, `GaAs/Nb/Cu` **44.6%** of the ideal gain) were measured on the 16-site quadrature and inherit the same caveat |
 
 > ### Validity notice — 2026-08-24
 >
@@ -78,6 +78,10 @@ Al junctions, per primary event) with two different notions of "candidate".
 | `run_stage4_optimizer_benchmark.sh` | runs that comparison — 4 methods × 3 seeds × 96 S-tier evaluations, restartable, no absolute timeouts |
 | `stage4_assemble_xl.py` | merges confirmation JSONs into the combined 1e8 table — **no simulation, no ledger** |
 | `stage4_post_xl.sh` | fail-closed runbook: check → snapshot → validate → migrate → unfreeze, with receipts |
+| [`STAGE4_P3_AND_SPATIAL_FINDINGS.md`](STAGE4_P3_AND_SPATIAL_FINDINGS.md) | the P3 device-quality decision, the Nb-gap-compatible anchor, and the **site-sweep non-convergence** result |
+| `run_stage4_sites.sh` | the nested 16→32→64 site sweep (done) |
+| `run_stage4_sites_anchor.sh` | same protocol for the Nb-gap-compatible anchor; **refuses** until the main sweep has all three stages |
+| `analyze_site_convergence.py` | applies the convergence decision rule to whichever stages exist |
 | `tests_stage4.py` | the exit-gate suite; run before any campaign |
 
 ## The formal optimizer comparison — seed 1 complete
@@ -157,9 +161,33 @@ draw was ahead. The real gain is that the result is now **attributable**.
 > **One injection site carries most of every headline reduction.** Site 11 sits
 > 0.119 mm from an electrode — inside the 0.200 mm island — and supplies 49.3%
 > of the baseline's QPs. Leave-one-site-out: the ideal target's −70.0% becomes
-> −54.3%, and **SiC's −53.3% becomes −26.2%**. The ranking is stable; the
-> **magnitudes are provisional** until a 16→32→64 site sweep (running) shows the
-> quadrature has converged.
+> −54.3%, and **SiC's −53.3% becomes −26.2%**.
+
+> ### Site sweep finished — the quadrature did NOT converge, 2026-09-08
+>
+> 16 → 32 → 64 nested Sobol sites, M tier, held-out bank 9. **Three of four
+> candidates moved far outside their error bars from 32 → 64** (baseline +33.9%,
+> ideal target **+91.9%**, SiC +11.7%, against combined SEs of 3–8%), and the
+> **ranking flipped** in the middle of the field.
+>
+> The cause is one point. Sobol is nested here, and **site 36 — which sits on top
+> of electrode 12, taking 98% of its QPs there — alone carries 30–40% of every
+> candidate's total.** Deleting just that site restores the 32-site numbers to
+> within a fraction of a point. So this is **not** Monte-Carlo noise that more
+> events would fix: more events at these sites converge to the wrong number more
+> precisely.
+>
+> **Consequences.** No optimization runs on this objective. **No reduction
+> magnitude is quoted** — the ideal target reads −70.3% / −67.5% / −53.5%
+> depending only on site count. The uniform-Sobol design is the defect: the
+> near-electrode peak lives on ~0.2 mm islands inside an 8 mm span, so uniform
+> sampling resolves it by luck. The fix is **electrode-aware stratification**
+> (near-electrode and bulk strata, area-weighted), which needs the electrode
+> layout read from the geometry.
+>
+> One candidate is stable across 32 → 64: the `bo_gp` corner (+1.9%, inside its
+> 7.9% SE). Flatness in space is itself a desirable property, and it is the only
+> ranking statement the sweep supports.
 
 **P5 finally has drift evidence**: 16 fresh baseline re-evaluations over 33 h,
 CV **0.25%** against a ~5% stochastic error — no machine or executable drift.
@@ -190,3 +218,29 @@ deferred to the checklist; architecture duplicated in the pipeline document),
 `material_catalog.yaml`), `ElasticityTensors.py` (replaced by
 `build_material_catalog.py`, which separates explicit-ID from filtered-search
 mode instead of discarding its own query).
+
+
+## Where to read the results
+
+Ordered by how current the claim is. Anything not listed here is design or
+history, not a measurement.
+
+| read this | for | status |
+|---|---|---|
+| [`STAGE4_P3_AND_SPATIAL_FINDINGS.md`](STAGE4_P3_AND_SPATIAL_FINDINGS.md) | **most current.** The P3 gap-floor decision (1.24× cost), the best Nb-gap-compatible point, and the **site-sweep non-convergence** that blocks the next campaign | 2026-09-08 |
+| [`STAGE4_OPTIMIZER_BENCHMARK_RESULTS.md`](STAGE4_OPTIMIZER_BENCHMARK_RESULTS.md) | the algorithm comparison — bo_gp/cmaes vs sobol/random, seed 1, with provenance and drift controls | seed 1 of 3 |
+| [`STAGE4_RESULTS.md`](STAGE4_RESULTS.md) | the property-vector result and the real-material projection, **with validity labels** | magnitudes now quadrature-caveated |
+| [`STAGE4_AUDIT_REMEDIATION.md`](STAGE4_AUDIT_REMEDIATION.md) | what each audit finding was and how it was fixed or gated | current |
+| [`stage4_invalidations.yaml`](stage4_invalidations.yaml) | machine-readable: which results a finding invalidated, and recorded decisions | current |
+
+Two commands rather than a document:
+
+- `python stage4_audit.py` — re-checks every headline claim against the ledger,
+  the contract and the macro templates. **This is the ground truth**; a claim in
+  a markdown file that the audit does not confirm is stale.
+- `python analyze_site_convergence.py` — recomputes the site-sweep verdict from
+  the raw result files.
+
+Raw numbers live in `results/stage4_sites_{16,32,64}.json` (the sweep),
+`results/stage4_report.json` (the benchmark) and `stage4_trials.sqlite` (every
+sub-run, with per-electrode QP counts).
