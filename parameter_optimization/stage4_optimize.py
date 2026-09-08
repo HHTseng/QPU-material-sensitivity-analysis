@@ -225,7 +225,8 @@ class Campaign:
         try:
             result = evaluate(self.contract, candidate, fidelity=self.fidelity,
                               seed_bank_id=self.args.seed_bank, ledger=led,
-                              verbose=False, resolver=self.resolver, force=force)
+                              verbose=False, resolver=self.resolver, force=force,
+                              control_replica_id=control_replica_id)
         except (ContractError, space_mod.GateError) as exc:
             return {"point": point, "status": "constraint_rejected",
                     "reason": str(exc), "candidate": candidate}

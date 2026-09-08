@@ -68,7 +68,8 @@
     ],
     "n_sites_favouring_a": 12,
     "n_sites": 16
-   }
+   },
+   "validity": "valid"
   },
   "SiC__sub_decay_high": {
    "status": "success",
@@ -105,7 +106,8 @@
     ],
     "n_sites_favouring_a": 16,
     "n_sites": 16
-   }
+   },
+   "validity": "valid"
   },
   "SiC__sub_scat_high": {
    "status": "success",
@@ -142,7 +144,8 @@
     ],
     "n_sites_favouring_a": 16,
     "n_sites": 16
-   }
+   },
+   "validity": "valid"
   },
   "SiC__sub_decayTT_low": {
    "status": "success",
@@ -179,7 +182,8 @@
     ],
     "n_sites_favouring_a": 15,
     "n_sites": 16
-   }
+   },
+   "validity": "valid"
   },
   "baseline": {
    "status": "success",
@@ -189,7 +193,8 @@
    "trial_id": "stage4_property_v1_gapfillM_6aa47f46542b",
    "relative_se": 0.02488981975730925,
    "wall_s": 358.6,
-   "cached": false
+   "cached": false,
+   "validity": "valid"
   }
  },
  "points": {

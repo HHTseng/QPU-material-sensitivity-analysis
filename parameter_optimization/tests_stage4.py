@@ -938,6 +938,21 @@ def t17_controls_are_fresh(tmpdir):
     check("T17f the recommended --baseline-every 24 yields 4 controls over a "
           "96-trial campaign, not 1", n_ctl == 4, f"{n_ctl} controls")
 
+    # The id must actually REACH the cache key, or every control collapses onto
+    # one trial row. Measured 2026-09-07: 16 controls ran genuinely fresh across
+    # the benchmark and all 16 wrote to the SAME trial_id, because
+    # `_evaluate_one` accepted `control_replica_id` and used it for the ledger
+    # record but never passed it to `evaluate()`. The values survived only in
+    # the manifests; P5's "N controls leave N inspectable rows" did not hold.
+    driver = open(os.path.join(HERE, "stage4_optimize.py")).read()
+    i = driver.index("def _evaluate_one")
+    body = driver[i:driver.index("def _record", i)]
+    check("T17g the control id is passed through to evaluate(), so each control "
+          "mints its own trial row",
+          "control_replica_id=control_replica_id" in body,
+          "present" if "control_replica_id=control_replica_id" in body else
+          "MISSING -- controls will collapse onto one row")
+
 
 def t19_engineering_objective():
     """Catches P3: a candidate winning by moving damage into an unobserved film.

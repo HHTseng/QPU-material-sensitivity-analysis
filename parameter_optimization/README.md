@@ -80,7 +80,7 @@ Al junctions, per primary event) with two different notions of "candidate".
 | `stage4_post_xl.sh` | fail-closed runbook: check → snapshot → validate → migrate → unfreeze, with receipts |
 | `tests_stage4.py` | the exit-gate suite; run before any campaign |
 
-## In flight — the formal optimizer comparison
+## The formal optimizer comparison — seed 1 complete
 
 The original campaigns cannot support an algorithm ranking: `bo_gp` completed
 **one** genuine GP acquisition (its winner came from the Sobol initialisation)
@@ -112,6 +112,36 @@ row. Until now the project had **zero** recorded controls.
 
 `./run_stage4_optimizer_benchmark.sh` — restartable; it skips campaigns already
 complete in the ledger.
+
+**Seed 1 landed 2026-09-05** (33 h, 85 slot-hours, 1452 M events). Full analysis:
+[`STAGE4_OPTIMIZER_BENCHMARK_RESULTS.md`](STAGE4_OPTIMIZER_BENCHMARK_RESULTS.md).
+
+| method | best *J* | median *J* | trials below the old best | protocol |
+|---|---:|---:|---:|---|
+| bo_gp | 5.60e-5 | **1.08e-4** | **50/96** | 69 genuine GP–EI acquisitions, 14 fits |
+| cmaes | **5.30e-5** | 1.64e-4 | 28/96 | 8 complete generations, 0 restarts |
+| sobol | 7.35e-5 | 3.62e-4 | 2/96 | 96 space-filling |
+| random | 1.02e-4 | 4.02e-4 | 1/96 | 96 draws |
+
+Both adaptive methods clearly beat the baselines, and **the margin is in
+concentration, not in the best value**: bo_gp spent 52% of its budget below the
+old campaign's best against random's 1%. **bo_gp vs cmaes is not resolved** —
+5.60e-5 vs 5.30e-5 sits inside the ±1–2e-5 replica error, which is why the
+design calls for ≥3 seeds.
+
+Against the withdrawn campaigns the corrected rerun is **~2× better** (5.3e-5 vs
+1.15e-4) — but at 4× the evaluations; at *matched* budget the old lucky Sobol
+draw was ahead. The real gain is that the result is now **attributable**.
+
+> **The winners are box corners.** bo_gp's best pins **13 of 16** variables to a
+> box wall, and both adaptive methods land on the same vertex — ground plane at
+> `T_c` ≈ 0.33 K, +374 orders of magnitude in equilibrium QP density vs Nb. The
+> algorithm ranking is valid; the material answer is not. Widening the box before
+> making the P3 device-quality decision would only find a deeper corner.
+
+**P5 finally has drift evidence**: 16 fresh baseline re-evaluations over 33 h,
+CV **0.25%** against a ~5% stochastic error — no machine or executable drift.
+The withdrawn "0.0% spread" claim measured the cache; this measures the machine.
 
 ## Shared machinery (used by both stages)
 
