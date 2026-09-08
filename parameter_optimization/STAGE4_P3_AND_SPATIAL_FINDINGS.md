@@ -29,29 +29,56 @@ floor:
 costs 24%. The best Nb-compatible design found so far (cmaes seed 1, trial
 `5c1e62ff8466`):
 
-| | unconstrained corner | **best Nb-compatible** |
+| | unconstrained corner | **best Nb-gap-compatible point found** |
 |---|---:|---:|
-| *J* | 5.30e-5 | **6.55e-5** |
-| ground-plane `T_c` | 0.33 K | **10.99 K** (Nb is 10.1) |
-| 2Δ_film / 2Δ_Al | 0.26 | **8.75** |
+| *J* (S tier) | 5.30e-5 | **6.55e-5 ± 1.24e-5** |
+| `topfilm_gap` | 5.0e-5 eV | **1.670e-3 eV** (modeled Nb: 1.5384e-3) |
+| 2Δ_film / 2Δ_Al | 0.26 | 8.75 |
 | phonon sink? | yes | **no** |
-| log₁₀(QP density / Nb) | **+374** | **−33** |
-| variables at a box wall | 13/16 | 5/16 |
+| BCS-inferred `T_c` | 0.33 K | 10.99 K |
+| log₁₀(QP proxy / Nb) | **+374** | **−33** |
+| variables at a box wall | 13/16 | **5/16** |
 
-The constrained winner is not merely acceptable — its ground plane is *better
-than Nb* on both `T_c` and equilibrium QP density, and it sits far away from the
-box corner (5 walls, not 13), so it is a more credible interior point.
+**Corrected claim, 2026-09-08.** An earlier draft called this an "interior
+point" whose ground plane "beats Nb". Both were overstated:
 
-Its mechanism is also different: `sub_c44` goes to its **lower** bound where the
-unconstrained corner drove it to the upper. Without a phonon sink next to the
-qubits, the optimizer solves the problem a different way.
+* **It is not interior.** Five of sixteen variables sit on walls —
+  `topfilm_vsound` = 6.0 (upper), `bot_ph_lifetime` = 0.5 (lower),
+  `sub_c12` = 0 (lower), `sub_c44` = 5 (lower), `sub_scat` = 1e-44 (lower).
+  Call it the **best Nb-gap-compatible point found**, not an optimum. Fewer
+  walls than the corner is a weaker statement than "interior".
+* **"Beats Nb" narrows to:** its *modeled* gap exceeds Nb's *modeled* gap, and
+  its equilibrium-QP *proxy* is lower. `T_c` = 10.99 K is a weak-coupling BCS
+  conversion applied to a **pseudo-film**, not a measured property, and its
+  particular combination of density, sound speed and phonon lifetime may
+  correspond to **no fabricable superconductor**. Nothing here identifies a
+  material.
 
-**Recommendation for the P3 decision:** impose **ground-plane `T_c` ≥ 9 K**
-(Nb-like). It is the strictest of the options, costs the same 1.24× as the
-loosest, keeps 69 already-simulated points as a warm start, and removes the
-entire class of designs whose QP density is hundreds of orders of magnitude
-worse than the film they replace. There is no evidence of a trade-off worth
-preserving between 0.33 K and 9 K.
+Its mechanism does differ from the corner's: `sub_c44` goes to its **lower**
+bound where the unconstrained corner drove it to the upper. Without a phonon
+sink beside the qubits, the optimizer solves the problem a different way — worth
+understanding before the box is widened in either direction.
+
+**Recommendation for the P3 decision (revised 2026-09-08):** impose a **direct
+gap floor**
+
+```yaml
+topfilm_gap_min_eV: 1.5384e-3     # the modeled Nb gap
+```
+
+rather than `T_c ≥ 9 K`. The gap is what the simulation actually consumes;
+inferring a `T_c` floor through weak-coupling BCS adds a conversion the model
+never uses and that does not hold for a pseudo-film. The two select the same
+points here, so nothing is lost and one modelling assumption is removed.
+
+Whichever form, the finding stands: **every floor costs the same 1.24×**, and
+there is no evidence of a trade-off worth preserving between 0.33 K and 9 K.
+
+**The 69 feasible points are a warm start only if the objective does not
+change.** They were measured on the 16-site scenario, and
+J₁₆(x) ≠ J₃₂(x) ≠ J₆₄(x). The optimizer is not multi-fidelity, so those values
+cannot be inserted into a 32- or 64-site GP as if they were observations of it.
+See the decision rule below.
 
 ---
 
@@ -102,9 +129,61 @@ the absolute yield and the ranking.
 
 ## Consequence for the next campaign
 
-1. **P3 is decided cheaply**: `T_c` ≥ 9 K, at a measured cost of 1.24×.
+1. **P3 is decided cheaply**: a direct `topfilm_gap_min_eV: 1.5384e-3` floor, at
+   a measured cost of 1.24×.
 2. **Do not quote a reduction magnitude** until the site sweep lands.
-3. The constrained widened box should be built around the **Nb-compatible**
-   point, not the unconstrained corner — it is an interior point, its ground
-   plane beats Nb, and 69 already-simulated candidates satisfy the constraint
-   and can seed the search.
+3. Anchor the constrained search on the **best Nb-gap-compatible point found**
+   (`5c1e62ff8466`) — as an incumbent, not as the geometric centre of every
+   bound, and not as an interior optimum: five of its sixteen variables are on
+   walls.
+
+## Decision rule for the site sweep
+
+Judge convergence primarily from **32 → 64**, on five quantities: absolute *J*,
+percentage reduction from baseline, candidate ranking, maximum-site leverage,
+and the change relative to the combined uncertainty.
+
+| outcome | what to do |
+|---|---|
+| 16, 32 and 64 agree | keep the 16-site contract; the 69 feasible points are usable directly |
+| 16 moves, 32 ≈ 64 | adopt 32 or 64 sites; **re-evaluate a diverse subset** of the 69 before feeding the optimizer |
+| 32 and 64 still disagree | **do not optimize.** Redesign the quadrature — probably electrode-aware stratification, since uniform Sobol converges slowly around the sharp near-electrode peak |
+
+**Warm-start rules, whichever branch.** Load the 69 as **raw physical vectors**
+and re-transform them under the new bounds — never reuse old unit coordinates.
+Add fresh Sobol points covering the newly opened directions, and record
+historical versus new observations separately. For CMA-ES the 69 are **not**
+completed generations: use them to choose an initial mean and perhaps an
+elite-based covariance, then start generation accounting from zero.
+
+If the campaign moves to 32/64 sites, re-evaluate ~16–24 diverse points from the
+69 (including the current best) at the new site count, supplement with points
+covering the widened directions, and build a fresh 32-point BO initialisation.
+
+## Gap in the running sweep, and how it is handled
+
+The sweep launched on 2026-09-08 covers the baseline, the old ideal target, SiC
+and the bo_gp low-gap corner. **It does not include the Nb-gap-compatible
+anchor**, so it cannot say whether `5c1e62ff8466` is stable under site
+refinement.
+
+The active point file is deliberately **not** being edited: changing it mid-chain
+would make the 32- and 64-site stages evaluate a different candidate set from
+the 16-site stage, destroying the comparison the sweep exists to make. The
+anchor will be run afterwards at the same 16/32/64, M-tier, held-out-bank-9
+protocol.
+
+## How to construct the new box (after the site result)
+
+1. Impose `topfilm_gap_min_eV: 1.5384e-3` — a direct gap floor, not an inferred
+   `T_c`.
+2. Re-audit the five active walls against physically credible material ranges.
+3. Widen only justified directions:
+   * higher `topfilm_vsound` **if** real candidate superconductors support it;
+   * lower `sub_scat` down to a documented physical floor;
+   * **do not** drive `sub_c44` toward zero just because the optimizer did;
+   * **do not** allow negative `sub_c12` merely because the wall was reached;
+   * **do not** lower `bot_ph_lifetime` without a measured or bracketed basis.
+4. Perturb inward and outward around those five walls under the adopted site
+   design.
+5. Use the anchor as incumbent, not as the centre of every bound.

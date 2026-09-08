@@ -145,12 +145,14 @@ draw was ahead. The real gain is that the result is now **attributable**.
 >
 > **P3 is nearly free.** Screening all 402 simulated benchmark points against
 > every candidate device-quality floor: *the same point satisfies all of them*,
-> at **1.24×** the unconstrained best. Even a fully Nb-like ground plane
-> (`T_c` ≥ 9 K) costs only 24%. The best constrained design has `T_c` = 10.99 K
-> and equilibrium QP density **33 orders of magnitude below Nb**, against the
-> unconstrained corner's **+374** — and sits at 5 box walls instead of 13.
-> **Recommendation: impose `T_c` ≥ 9 K.** It is the strictest option, costs the
-> same as the loosest, and 69 already-simulated points satisfy it.
+> at **1.24×** the unconstrained best. **Recommendation: a direct gap floor,
+> `topfilm_gap_min_eV: 1.5384e-3`** — the gap is what the simulation consumes,
+> where an inferred `T_c` floor adds a weak-coupling BCS conversion the model
+> never uses. The best point satisfying it is the **best Nb-gap-compatible point
+> found** — not an interior optimum: 5 of its 16 variables are still on walls,
+> and its "better than Nb" reading narrows to *its modeled gap exceeds Nb's
+> modeled gap and its equilibrium-QP proxy is lower*. Its BCS-inferred
+> `T_c` = 10.99 K is not a measured property of any fabricable material.
 >
 > **One injection site carries most of every headline reduction.** Site 11 sits
 > 0.119 mm from an electrode — inside the 0.200 mm island — and supplies 49.3%

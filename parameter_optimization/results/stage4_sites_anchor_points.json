@@ -1,0 +1,26 @@
+{
+ "nb_gap_compatible_anchor": {
+  "topfilm_vsound": 6.0,
+  "topfilm_gap": 0.001670366222399775,
+  "topfilm_ph_lifetime": 0.003337436812440808,
+  "topfilm_density": 15010.886904864794,
+  "bot_vsound": 3.174554206770729,
+  "bot_gap_thres": 0.00012981738953147298,
+  "bot_ph_lifetime": 0.5,
+  "bot_density": 7184.383239418074,
+  "sub_c11": 250.92689126211246,
+  "sub_c12": 0.0,
+  "sub_c44": 5.0,
+  "sub_scat": 9.99999999999994e-45,
+  "sub_decay": 6.129072648276415e-56,
+  "sub_decayTT": 0.8174135229343212,
+  "temperature": 0.028047725371660323,
+  "lattice_deg": 3.8158038553219846,
+  "sub_lattice_a": 5.431,
+  "miller": [
+   1,
+   2,
+   3
+  ]
+ }
+}
