@@ -53,5 +53,13 @@ for LEVEL in 128:32000000 256:64000000 512:128000000; do
 done
 
 say "--- convergence verdict ---"
+# PIPESTATUS, not $?: `| tee` would otherwise report tee's success and this
+# script would exit 0 after a failed convergence check. P6-8 refuses on its own
+# too, but a scheduler reading only this exit code would have seen "finished".
 $PY -u analyze_stratified_convergence.py 2>&1 | tee -a "$LOG/stratified.log"
-say "P2-4 finished"
+rc=${PIPESTATUS[0]}
+if [ "$rc" -ne 0 ]; then
+  say "P2-4 convergence FAILED (rc=$rc) -- not advancing to P6-8"
+  exit "$rc"
+fi
+say "P2-4 finished: CONVERGED"

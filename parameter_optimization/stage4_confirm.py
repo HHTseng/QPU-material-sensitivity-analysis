@@ -46,7 +46,9 @@ from stage3_trial_runner import (evaluate, find_macro_value,   # noqa: E402
 # data (see stage4_strata.py). They set the Neyman split only; a wrong value
 # costs efficiency, never correctness, because the estimator reweights by the
 # true area mass whatever the allocation turns out to be.
-PILOT_SD = {"H0": 3.815e-3, "H1": 2.769e-4, "H2": 8.325e-5, "H3": 5.776e-5}
+PILOT_SD = {"S0_junction": 2.079e-1, "S1_le_0.05": 1.734e-2,
+            "S2_le_0.20": 1.914e-3, "S3_le_0.50": 2.553e-4,
+            "S4_bulk": 1.116e-4}
 MACRO_TEMPLATE = os.environ.get(
     "SENSITIVITY_MACRO_TEMPLATE",
     os.path.join(REPO_ROOT, "sensitivity_template_beamOn1e6.mac"))
@@ -190,7 +192,12 @@ def main():
     if args.stratified:
         import stage4_strata as ST
         weights = ST.stratum_weights(contract.fixed)
-        alloc = ST.neyman_allocation(args.stratified, weights, PILOT_SD)
+        sd_path = os.path.join(HERE, "results", "stage4_pilot_sd.json")
+        pilot_sd = dict(PILOT_SD)
+        if os.path.isfile(sd_path):
+            with open(sd_path) as fh:
+                pilot_sd.update(json.load(fh))
+        alloc = ST.neyman_allocation(args.stratified, weights, pilot_sd)
         template_z = float(find_macro_value(
             MACRO_TEMPLATE, "/main/gun/setPosition").split()[2])
         design = ST.build_design(contract.fixed, alloc, template_z)
@@ -231,11 +238,17 @@ def main():
         if not r.is_observation:
             return label, {"status": r.status, "reason": r.failure_reason}, None
         v = objective(r)
+        # The FULL objective detail is persisted, not just the scalar. Without
+        # mu_h / n_h / max_node_leverage the convergence gate cannot evaluate
+        # C4 (node leverage) or C5 (per-stratum convergence), cannot name the
+        # stratum to refine, and reads missing leverage as failure -- so it can
+        # never pass, only fail closed.
         return label, {"status": r.status, "value": v.value, "se": v.se,
                        "total_qps": r.total_qps, "trial_id": r.trial_id,
                        "relative_se": v.detail.get("relative_se"),
                        "wall_s": round(time.time() - t0, 1),
-                       "cached": r.cached}, r
+                       "cached": r.cached,
+                       "detail": v.detail}, r
 
     print(f"Confirmation: {len(points)} candidate(s) at fidelity {args.fidelity} "
           f"({events:,} events each), HELD-OUT seed bank {args.seed_bank}, "

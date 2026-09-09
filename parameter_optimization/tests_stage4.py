@@ -2168,15 +2168,18 @@ def t29_stratified_quadrature(tmpdir):
           abs(sum(w.values()) - 1.0) < 1e-9 and all(v > 0 for v in w.values()),
           ", ".join(f"{k}={v:.4f}" for k, v in sorted(w.items())))
 
-    sd = {"H0": 3.815e-3, "H1": 2.769e-4, "H2": 8.325e-5, "H3": 5.776e-5}
+    sd = {"S0_junction": 2.079e-1, "S1_le_0.05": 1.734e-2, "S2_le_0.20": 1.914e-3,
+          "S3_le_0.50": 2.553e-4, "S4_bulk": 1.116e-4}
     a128 = ST.neyman_allocation(128, w, sd)
     a256 = ST.neyman_allocation(256, w, sd)
-    check("T29b Neyman allocation puts most sites where the variance is",
-          a128["H0"] > a128["H1"] + a128["H2"] + a128["H3"],
-          f"128 sites -> {a128}; uniform area would give H0={round(128 * w['H0'])}")
-    check("T29c every electrode gets explicit H0 coverage",
-          a128["H0"] >= len(fixed["electrode_x_mm"]),
-          f"H0={a128['H0']} for {len(fixed['electrode_x_mm'])} electrodes")
+    check("T29b Neyman allocation over-samples the peaked strata",
+          a128["S0_junction"] + a128["S1_le_0.05"] + a128["S2_le_0.20"]
+          > round(128 * (w["S0_junction"] + w["S1_le_0.05"] + w["S2_le_0.20"])),
+          f"128 sites -> {a128}; area-proportional would give "
+          f"S0={round(128 * w['S0_junction'])}")
+    check("T29c every junction gets explicit S0 coverage",
+          a128["S0_junction"] >= len(fixed["electrode_x_mm"]),
+          f"S0={a128['S0_junction']} for {len(fixed['electrode_x_mm'])} junctions")
 
     d128 = ST.build_design(fixed, a128, 0.259875)
     d256 = ST.build_design(fixed, a256, 0.259875)
@@ -2189,41 +2192,46 @@ def t29_stratified_quadrature(tmpdir):
           "sites(2N) extends sites(N); a refinement is a superset, not a redraw")
 
     xs = _np.asarray(fixed["electrode_x_mm"]); ys = _np.asarray(fixed["electrode_y_mm"])
-    r = ST.island_radius_mm(fixed)
+    hw, hh = ST.junction_half_extent_mm(fixed)
     bad = [i for i, (st, lab) in enumerate(zip(d128["sites_mm"], d128["stratum"]))
-           if ST.classify(st[0], st[1], xs, ys, r)[0] != lab]
+           if ST.classify(st[0], st[1], xs, ys, hw, hh)[0] != lab]
     check("T29e every site's stored label reproduces from the geometry",
           not bad, f"{len(bad)} mislabelled of {len(d128['sites_mm'])}")
 
     # The two sites that broke the uniform sweep must land on a footprint.
-    lab11 = ST.classify(-1.8819, -0.0145, xs, ys, r)
-    lab36 = ST.classify(-1.0503, 2.9749, xs, ys, r)
-    check("T29f the two sites that broke the sweep classify as on-footprint",
-          lab11[0] == "H0" and lab36[0] == "H0",
-          f"site11 -> {lab11[0]}/electrode {lab11[1]}, "
-          f"site36 -> {lab36[0]}/electrode {lab36[1]}")
+    lab11 = ST.classify(-1.8819, -0.0145, xs, ys, hw, hh)
+    lab36 = ST.classify(-1.0503, 2.9749, xs, ys, hw, hh)
+    check("T29f the two sites that broke the uniform sweep are NEAR-junction, "
+          "not on it",
+          lab11[0] != "S0_junction" and lab36[0] != "S0_junction",
+          f"site11 -> {lab11[0]} (118 um from junction 3), "
+          f"site36 -> {lab36[0]} (51 um from junction 12); the old disk called "
+          f"both 'on-footprint'")
 
-    # Coverage must not be bought with electrode CENTRES. Measured on a
-    # 64-site pilot: injecting at the exact centre yields 43x what the same
-    # footprint yields elsewhere, so centre-seeding biased mu_H0 by 24x and the
-    # objective by ~10x. The stratum mean estimates a footprint AVERAGE.
-    h0 = [(st[0], st[1], e) for st, lab, e
+    # Coverage must not be bought with junction CENTRES: a centre is the
+    # extreme of the peak this stratum exists to average over.
+    s0 = [(st[0], st[1], e) for st, lab, e
           in zip(d128["sites_mm"], d128["stratum"], d128["nearest_electrode"])
-          if lab == "H0"]
-    at_centre = sum(1 for x, y, _ in h0
-                    if float(_np.hypot(x - xs, y - ys).min()) < 1e-6)
-    inside = all(float(_np.hypot(x - xs, y - ys).min()) <= r + 1e-9
-                 for x, y, _ in h0)
-    check("T29k H0 coverage points are inside footprints, never at centres",
-          at_centre == 0 and inside and len({e for _, _, e in h0}) == len(xs),
-          f"{len(h0)} H0 sites, {at_centre} at a centre, "
-          f"{len({e for _, _, e in h0})}/{len(xs)} electrodes covered")
+          if lab == "S0_junction"]
+    at_centre = sum(1 for x, y, e in s0
+                    if abs(x - xs[e]) < 1e-9 and abs(y - ys[e]) < 1e-9)
+    inside = all(abs(x - xs[e]) <= hw + 1e-9 and abs(y - ys[e]) <= hh + 1e-9
+                 for x, y, e in s0)
+    check("T29k S0 sites are uniform inside real junctions, never at centres",
+          at_centre == 0 and inside and len({e for _, _, e in s0}) == len(xs),
+          f"{len(s0)} S0 sites, {at_centre} at a centre, "
+          f"{len({e for _, _, e in s0})}/{len(xs)} junctions covered")
 
     # --- the invariance test the plan asks for ------------------------------
-    truth = {"H0": 4.583e-3, "H1": 8.086e-4, "H2": 3.193e-4, "H3": 1.239e-4}
+    truth = {"S0_junction": 2.079e-1, "S1_le_0.05": 2.777e-2,
+             "S2_le_0.20": 3.255e-3, "S3_le_0.50": 5.893e-4,
+             "S4_bulk": 1.971e-4}
     j_true = sum(w[h] * truth[h] for h in w)
 
     def synth(alloc, events=100000, reps=4):
+        # One electrode with weight 1 and E_gun = 1 eV, so the weighted
+        # per-energy burden equals `truth` and the invariance claim is about
+        # the STRATUM algebra, not about the normalisation constants.
         labels, blocks, p = [], [], 0
         for h in ST.STRATA:
             for _ in range(alloc[h]):
@@ -2232,24 +2240,26 @@ def t29_stratified_quadrature(tmpdir):
                     blocks.append({"position": p, "replica": rep,
                                    "events": events,
                                    "total_qps": truth[h] * events,
-                                   "per_electrode_qps": None})
+                                   "per_electrode_qps": [truth[h] * events]})
                 p += 1
         res = types.SimpleNamespace(blocks=blocks)
         design = {"stratum": labels, "stratum_weights": w,
-                  "design_hash": "synthetic", "injection_law": "uniform_surface"}
+                  "design_hash": "synthetic", "injection_law": "uniform_surface",
+                  "gun_energy_eV": 1.0, "electrode_weights": [1.0],
+                  "normalization_basis": "per_injected_eV"}
         return res, design
 
-    balanced = {"H0": 20, "H1": 20, "H2": 20, "H3": 20}
-    oversamp = {"H0": 200, "H1": 20, "H2": 20, "H3": 20}
+    balanced = {h: 20 for h in ST.STRATA}
+    oversamp = dict(balanced); oversamp["S0_junction"] = 200
     rb, db = synth(balanced)
     ro, do = synth(oversamp)
     eb = O.stratified_estimate(rb, db)
     eo = O.stratified_estimate(ro, do)
 
-    check("T29g the weighted estimate is invariant to allocation",
+    check("T29g the weighted estimate is invariant to allocation (S0 x10)",
           abs(eo["J"] - eb["J"]) / eb["J"] < 1e-9
           and abs(eb["J"] - j_true) / j_true < 1e-9,
-          f"H0 oversampled 10x: J {eb['J']:.4e} -> {eo['J']:.4e} "
+          f"S0 oversampled 10x: J {eb['J']:.4e} -> {eo['J']:.4e} "
           f"(truth {j_true:.4e})")
     check("T29h the equal-site mean IS biased by the same oversampling -- "
           "which is the bug being fixed",
@@ -2260,7 +2270,8 @@ def t29_stratified_quadrature(tmpdir):
 
     fell_over = False
     try:
-        O.set_stratified_design({"stratum": ["H0"], "stratum_weights": {"H0": 0.5}})
+        O.set_stratified_design({"stratum": ["S4_bulk"],
+                                 "stratum_weights": {"S4_bulk": 0.5}})
     except ValueError:
         fell_over = True
     check("T29i unnormalised stratum weights are refused", fell_over,
@@ -2274,6 +2285,173 @@ def t29_stratified_quadrature(tmpdir):
         refused = True
     check("T29j the stratified objective refuses to run without a design",
           refused, "no silent fallback to the equal-site mean")
+
+    # The objective is named `..._per_energy`. It must not quietly report
+    # per-primary numbers, which is what a default scale of 1.0 did.
+    no_e = dict(db); no_e.pop("gun_energy_eV")
+    refused_e = False
+    try:
+        O.stratified_estimate(rb, no_e)
+    except ValueError:
+        refused_e = True
+    check("T29l a per-energy objective refuses a missing gun_energy_eV",
+          refused_e, "the earlier default of 1.0 stored per-primary values "
+                     "under a per-energy name")
+    check("T29m the estimate declares its units and weighting",
+          eb["units"] == "weighted_junction_QPs_per_injected_eV"
+          and eb["electrode_weighting"] == "predeclared"
+          and eb["R95_kind"].startswith("stratum_weighted_CVaR95_over_SITE_MEAN"),
+          f"{eb['units']}, {eb['electrode_weighting']}")
+
+
+def t30_convergence_gate(tmpdir):
+    """Catches: a convergence gate that fails open, or that cannot pass.
+
+    Watching it refuse once is evidence, not a regression gate. These four
+    cases are the ones that decide whether a four-day benchmark launches:
+    empty, one level, two levels that fail, two levels that pass.
+    """
+    import subprocess
+    import shutil
+
+    work = os.path.join(tmpdir, "gate")
+    os.makedirs(os.path.join(work, "results"), exist_ok=True)
+    for f in ("analyze_stratified_convergence.py",):
+        shutil.copy(os.path.join(HERE, f), os.path.join(work, f))
+
+    def run():
+        r = subprocess.run([sys.executable, "analyze_stratified_convergence.py"],
+                           cwd=work, capture_output=True, text=True)
+        return r.returncode, r.stdout
+
+    def write(level, rows):
+        payload = {"results": {}}
+        for name, (val, se, lev, mu) in rows.items():
+            payload["results"][name] = {
+                "status": "success", "value": val, "se": se,
+                "detail": {"max_node_leverage": lev, "mu_h": mu,
+                           "relative_se": se / val},
+            }
+        with open(os.path.join(work, "results",
+                               f"stage4_strat_{level}.json"), "w") as fh:
+            json.dump(payload, fh)
+
+    rc, _ = run()
+    check("T30a empty: the gate FAILS CLOSED", rc != 0,
+          f"rc={rc}; 'nothing to judge' must never read as 'converged'")
+
+    good_mu = {"S0_junction": 2.0e-1, "S4_bulk": 1.2e-4}
+    write(128, {"baseline": (4.00e-4, 4.0e-6, 0.04, good_mu),
+                "cand": (1.00e-4, 1.0e-6, 0.03, good_mu)})
+    rc, _ = run()
+    check("T30b one level only: the gate FAILS CLOSED", rc != 0,
+          f"rc={rc}; a single level cannot show convergence")
+
+    # Two levels that genuinely disagree.
+    write(256, {"baseline": (6.00e-4, 4.0e-6, 0.04, {"S0_junction": 4.0e-1,
+                                                     "S4_bulk": 1.2e-4}),
+                "cand": (1.02e-4, 1.0e-6, 0.03, good_mu)})
+    rc, out = run()
+    named = "S0_junction" in out
+    check("T30c two levels that disagree: FAILS and NAMES the stratum",
+          rc != 0 and named,
+          f"rc={rc}, stratum named={named}")
+
+    # Two levels that agree: must PASS, which the earlier build could never do
+    # because max_node_leverage was not persisted and read as 0 -> fail.
+    write(256, {"baseline": (4.02e-4, 4.0e-6, 0.04, good_mu),
+                "cand": (1.005e-4, 1.0e-6, 0.03, good_mu)})
+    rc, out = run()
+    check("T30d two levels that agree: the gate can actually PASS",
+          rc == 0, f"rc={rc}; a gate that can only fail is not a gate")
+
+    # C6 as declared: a swap inside the error bars is not a failure.
+    write(128, {"a": (1.000e-4, 2.0e-5, 0.04, good_mu),
+                "b": (1.010e-4, 2.0e-5, 0.04, good_mu)})
+    write(256, {"a": (1.010e-4, 2.0e-5, 0.04, good_mu),
+                "b": (1.000e-4, 2.0e-5, 0.04, good_mu)})
+    rc, out = run()
+    check("T30e C6 exempts a swap inside overlapping intervals",
+          rc == 0 and "INSIDE the uncertainty" in out,
+          "the declared rule is 'stable except where intervals overlap'")
+
+    # A swap that IS resolved must still fail.
+    write(128, {"a": (1.0e-4, 1.0e-7, 0.04, good_mu),
+                "b": (2.0e-4, 1.0e-7, 0.04, good_mu)})
+    write(256, {"a": (2.0e-4, 1.0e-7, 0.04, good_mu),
+                "b": (1.0e-4, 1.0e-7, 0.04, good_mu)})
+    rc, out = run()
+    check("T30f C6 still fails a RESOLVED swap", rc != 0,
+          "overlap is the exemption, not a blanket pass")
+
+
+def t31_geometry_matches_hit_test(tmpdir):
+    """Catches: strata built on the wrong electrode geometry.
+
+    The junction hit test in JunctionKaplanElectrode.cc is a RECTANGLE of
+    setWidth x setHeight centred on each (setXLocations, setYLocations) entry.
+    The 200 um `setIsland` belongs to WaffleElectrodeMessenger and is never
+    consulted when the location vectors are non-empty. An earlier build used a
+    200 um DISK -- 1254x the true area -- so the stratum called "on-footprint"
+    almost never contained the junction.
+    """
+    import yaml as _yaml
+    import numpy as _np
+    import stage4_strata as ST
+
+    fixed = _yaml.safe_load(open(os.path.join(HERE, "stage4_config.yaml")))["fixed"]
+    xs, ys = ST.electrode_table(fixed)
+    hw, hh = ST.junction_half_extent_mm(fixed)
+
+    check("T31a the junction half-extent comes from setWidth/setHeight",
+          abs(hw - fixed["electrode_width_um"] / 2000.0) < 1e-12
+          and abs(hh - fixed["electrode_height_um"] / 2000.0) < 1e-12,
+          f"{2 * hw * 1000:.1f} x {2 * hh * 1000:.1f} um, NOT the "
+          f"{fixed['electrode_island_um']:.0f} um waffle island")
+
+    w = ST.stratum_weights(fixed, n_mc=200_000, seed=3)
+    span = float(fixed["position_half_span_mm"])
+    exact = len(xs) * (2 * hw) * (2 * hh) / ((2 * span) ** 2)
+    check("T31b the junction mass is the EXACT rectangle area, not sampled",
+          abs(w["S0_junction"] - exact) < 1e-15
+          and abs(sum(w.values()) - 1.0) < 1e-9,
+          f"W_S0 = {w['S0_junction']:.4e} exactly; a 2e5-draw MC would be "
+          f"~50% off at this mass")
+
+    # Points inside a rectangle classify as the junction; just outside do not.
+    inside = ST.classify(float(xs[0]), float(ys[0]), xs, ys, hw, hh)
+    just_out = ST.classify(float(xs[0]) + 2 * hw, float(ys[0]), xs, ys, hw, hh)
+    old_disc = ST.classify(float(xs[0]) + 0.1, float(ys[0]), xs, ys, hw, hh)
+    check("T31c the boundary is the rectangle, not a 0.2 mm disk",
+          inside[0] == "S0_junction" and just_out[0] != "S0_junction"
+          and old_disc[0] != "S0_junction",
+          f"centre -> {inside[0]}; +{2 * hw * 1000:.0f}um -> {just_out[0]}; "
+          f"+100um (inside the old disk) -> {old_disc[0]}")
+
+    sd = json.load(open(os.path.join(HERE, "results", "stage4_pilot_sd.json"))) \
+        if os.path.isfile(os.path.join(HERE, "results", "stage4_pilot_sd.json")) \
+        else {h: 1.0 for h in ST.STRATA}
+    alloc = ST.neyman_allocation(128, w, sd)
+    design = ST.build_design(fixed, alloc, 0.259875)
+    s0 = [(st[0], st[1], e) for st, lab, e
+          in zip(design["sites_mm"], design["stratum"], design["nearest_electrode"])
+          if lab == "S0_junction"]
+    all_in = all(abs(x - xs[e]) <= hw + 1e-9 and abs(y - ys[e]) <= hh + 1e-9
+                 for x, y, e in s0)
+    at_centre = sum(1 for x, y, e in s0
+                    if abs(x - xs[e]) < 1e-9 and abs(y - ys[e]) < 1e-9)
+    check("T31d junction sites are uniform INSIDE real rectangles, not centres",
+          all_in and at_centre == 0 and len({e for _, _, e in s0}) == len(xs),
+          f"{len(s0)} S0 sites, all inside={all_in}, at centre={at_centre}, "
+          f"{len({e for _, _, e in s0})}/{len(xs)} junctions covered")
+
+    check("T31e the design records its geometry source and energy basis",
+          "setWidth" in design["geometry_source"]
+          and design["gun_energy_eV"] > 0
+          and design["normalization_basis"] == "per_injected_eV"
+          and abs(sum(design["electrode_weights"]) - 1.0) < 1e-12,
+          f"E_gun={design['gun_energy_eV']} eV, "
+          f"{len(design['electrode_weights'])} electrode weights summing to 1")
 
 
 def main():
@@ -2317,6 +2495,8 @@ def main():
         t25_watchdog_does_not_censor_by_quality(tmpdir)
         t28_trial_cap_and_censoring(tmpdir)
         t29_stratified_quadrature(tmpdir)
+        t30_convergence_gate(tmpdir)
+        t31_geometry_matches_hit_test(tmpdir)
         t15_realization_propagation(tmpdir)
         print("\nPhysics A/B (from the pilot):")
         t13_inertness_from_pilot()

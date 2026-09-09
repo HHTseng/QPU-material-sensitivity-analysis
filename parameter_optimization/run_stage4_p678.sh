@@ -67,3 +67,4 @@ else
       >> "$LOG/p8.log" 2>&1 && say "P8 done" || say "WARNING: P8 returned $?"
 fi
 say "P6-8 finished"
+exit 0

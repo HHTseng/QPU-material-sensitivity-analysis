@@ -94,6 +94,8 @@ def main():
         c1 = shift <= 0.05
         c2 = shift <= 2 * comb if comb else False
         lev = db.get("max_node_leverage")
+        if db.get("spatial_R95_site_mean") is not None:
+            pass  # reported in the table below, not a gate criterion
         c4 = (lev is not None and lev <= 0.10)
         c3 = True
         if (c, "N") in base_red and (c, "2N") in base_red:
@@ -122,16 +124,42 @@ def main():
                 print(f"        C5 stratum {h}: {ma[h]:.3e} -> {mb[h]:.3e}  "
                       f"({100 * (mb[h] / ma[h] - 1):+.1f}%)")
 
-    # C6 ranking stability
+    # C6 as DECLARED: "rankings are stable except where uncertainty intervals
+    # overlap". A bare order comparison is stricter than the rule and would fail
+    # a swap between two candidates that are statistically indistinguishable --
+    # which is exactly the case the rule exempts.
     def order(n):
         return [c for c in sorted(cands, key=lambda k: J.get((k, n)) or 9e9)
                 if J.get((c, n))]
     o1, o2 = order(N), order(N2)
-    c6 = o1 == o2
-    print(f"\n    C6 ranking {'STABLE' if c6 else 'CHANGED'}")
-    if not c6:
+    inverted = []
+    for i, a in enumerate(o1):
+        for b in o1[i + 1:]:
+            if a not in o2 or b not in o2:
+                continue
+            if o2.index(a) > o2.index(b):        # the pair swapped
+                va, vb = J[(a, N2)], J[(b, N2)]
+                sa = (levels[N2]["results"][a].get("se") or 0.0)
+                sb = (levels[N2]["results"][b].get("se") or 0.0)
+                gap = abs(va - vb)
+                pooled = (sa ** 2 + sb ** 2) ** 0.5
+                if gap > 2 * pooled:             # resolved swap -> a real failure
+                    inverted.append((a, b, gap, pooled))
+    c6 = not inverted
+    if o1 == o2:
+        print(f"\n    C6 ranking STABLE")
+    elif c6:
+        print(f"\n    C6 ranking changed, but every swap is INSIDE the "
+              f"uncertainty intervals -- passes as declared")
         print(f"       {N}: " + " < ".join(o1))
         print(f"       {N2}: " + " < ".join(o2))
+    else:
+        print(f"\n    C6 ranking CHANGED with resolved swaps")
+        print(f"       {N}: " + " < ".join(o1))
+        print(f"       {N2}: " + " < ".join(o2))
+        for a, b, gap, pooled in inverted:
+            print(f"       {a} vs {b}: separated by {gap:.3e} "
+                  f"= {gap / pooled:.1f} pooled SE")
 
     print()
     if all(verdicts) and c6 and verdicts:

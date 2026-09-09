@@ -512,17 +512,25 @@ def active_design():
 
 
 def stratified_estimate(result, design=None, gun_energy_eV=None):
-    """J = sum_h W_h * mu_h, with hierarchical-bootstrap uncertainty.
+    """J = sum_h W_h * mu_h, in weighted junction QPs per INJECTED eV.
 
-    Returns the estimate, the per-stratum means and counts, the weighted
-    leverage of the heaviest single node, and R_0.95 -- the CVaR of the
-    worst-electrode burden over sites, which is the tail term that exposes a
-    candidate lowering its mean by concentrating damage on one junction.
+    NORMALISATION, made explicit after it was found unwired:
 
-    `gun_energy_eV` normalises to QPs per deposited eV. With a fixed-energy gun
-    it is a constant factor and changes no ranking; it is carried so that a
-    later energy-spectrum run does not silently compare against per-primary
-    numbers.
+      * per-electrode QPs are combined with the design's predeclared
+        electrode-criticality weights w_e (sum to 1, uniform 1/17 for now), so
+        the reported number is a weighted MEAN over junctions. The earlier
+        version summed all 17, which is 17x larger and cannot express unequal
+        criticality later.
+      * the result is divided by gun_energy_eV, which is REQUIRED and taken
+        from the hashed design. It previously defaulted to 1.0 and every caller
+        omitted it, so an objective named `..._per_energy` stored per-primary
+        values -- exactly the silent unit mismatch it was meant to prevent.
+      * the basis is `per_injected_eV`, not per DEPOSITED eV: the simulation
+        fires a fixed-energy gun and deposited energy is not measured here.
+
+    Both changes are constant factors (x100 / 17 = x5.88 together) and move no
+    ranking, but they change the MAGNITUDE, so values are not comparable with
+    anything recorded before 2026-09-08.
     """
     design = design or _ACTIVE_DESIGN
     if design is None:
@@ -530,42 +538,67 @@ def stratified_estimate(result, design=None, gun_energy_eV=None):
             "no stratified design installed: call set_stratified_design() first")
     labels = design["stratum"]
     weights = design["stratum_weights"]
-    table, events, positions, replicas = _block_table(result)
+    e_gun = float(gun_energy_eV or design.get("gun_energy_eV") or 0.0)
+    if e_gun <= 0.0:
+        raise ValueError(
+            "gun_energy_eV is missing or non-positive; refusing to report a "
+            "per-energy objective as per-primary")
+    w_e = design.get("electrode_weights")
+
+    blocks = result.blocks
+    positions = sorted({b["position"] for b in blocks})
     if len(labels) < max(positions) + 1:
         raise ValueError(
             f"design has {len(labels)} labels but the trial reports position "
             f"{max(positions)}; the design and the scenario disagree")
 
-    per_site = {p: float(table[i].mean()) / events
-                for i, p in enumerate(positions)}
-    per_site_rep = {p: (table[i] / events).tolist()
-                    for i, p in enumerate(positions)}
+    # Weighted burden per injected eV, per (site, replica).
+    per_rep, zmax_rep = {}, {}
+    for b in blocks:
+        ev = int(b["events"])
+        pe = b.get("per_electrode_qps")
+        if pe:
+            arr = np.asarray(pe, dtype=float)
+            wv = (np.asarray(w_e, dtype=float) if w_e is not None
+                  else np.full(arr.shape, 1.0 / arr.size))
+            if wv.shape != arr.shape:
+                raise ValueError(
+                    f"electrode_weights has {wv.size} entries but the trial "
+                    f"reports {arr.size} electrodes")
+            burden = float(arr @ wv) / ev / e_gun
+            zmax_rep.setdefault(b["position"], []).append(
+                float(arr.max()) / ev / e_gun)
+        else:
+            # No per-electrode breakdown: fall back to the 17-electrode mean so
+            # the scale still matches the weighted form.
+            burden = float(b["total_qps"]) / len(w_e or [1]) / ev / e_gun
+        per_rep.setdefault(b["position"], []).append(burden)
+
+    if any(len(v) == 0 for v in per_rep.values()):
+        raise ValueError("block table has holes: an incomplete set must never be scored")
+    per_site = {p: float(np.mean(v)) for p, v in per_rep.items()}
+
     present = {}
-    for i, p in enumerate(positions):
+    for p in per_site:
         present.setdefault(labels[p], []).append(per_site[p])
     wsum = sum(weights[h] for h in present)
     mu = {h: float(np.mean(v)) for h, v in present.items()}
     j = sum(weights[h] * mu[h] for h in present) / wsum
 
-    # Weighted contribution of each node. Under the uniform design one site
-    # carried 30-40% of J; Priority 4 requires every node below 10%.
     lev = {p: (weights[labels[p]] / wsum) * per_site[p]
               / len(present[labels[p]]) / j
-           for p in per_site}
+           for p in per_site} if j else {}
     worst_node = max(lev.values()) if lev else float("nan")
 
-    # Tail protection. Worst-ELECTRODE burden per site, then the stratum-
-    # weighted mean of the upper 5%. Reported as a diagnostic, not enforced:
-    # no defensible threshold exists yet, and the Sep-8 plan says to show the
-    # Pareto pair rather than invent a scalar weight after seeing results.
-    r95 = None
-    blocks = getattr(result, "blocks", None)
-    if blocks and blocks[0].get("per_electrode_qps") is not None:
-        acc = {}
-        for b in blocks:
-            pe = np.asarray(b["per_electrode_qps"], dtype=float)
-            acc.setdefault(b["position"], []).append(pe.max() / b["events"])
-        zmax = {p: float(np.mean(v)) for p, v in acc.items()}
+    # SPATIAL tail risk, deliberately renamed. This is the stratum-weighted
+    # CVaR of the SITE-MEAN worst-electrode burden -- a hotspot diagnostic over
+    # locations. It is NOT the plan's CVaR over individual disturbance events:
+    # each replica already averages thousands of primaries, so the event-level
+    # tail is invisible here. Computing that needs per-event aggregation of the
+    # hits files and is a separate metric.
+    spatial_r95 = None
+    if zmax_rep:
+        zmax = {p: float(np.mean(v)) for p, v in zmax_rep.items()}
         pairs = sorted(((zmax[p], weights[labels[p]] / len(present[labels[p]]))
                         for p in zmax), reverse=True)
         cut, num, den = 0.05 * sum(w for _, w in pairs), 0.0, 0.0
@@ -575,25 +608,63 @@ def stratified_estimate(result, design=None, gun_energy_eV=None):
                 break
             num += val * take
             den += take
-        r95 = float(num / den) if den > 0 else None
+        spatial_r95 = float(num / den) if den > 0 else None
 
-    se, _ = _hier_bootstrap(per_site_rep, labels, weights)
-    scale = 1.0 if not gun_energy_eV else 1.0 / float(gun_energy_eV)
+    se, _ = _hier_bootstrap(per_rep, labels, weights)
+    r95_se = None
+    if zmax_rep:
+        r95_se = _hier_bootstrap_r95(zmax_rep, labels, weights, present)
+
     return {
-        "J": j * scale, "se": se * scale,
-        "relative_se": (se / j) if j else None,
-        "mu_h": {h: v * scale for h, v in mu.items()},
-        "n_h": {h: len(v) for h, v in present.items()},
-        "W_h": {h: weights[h] for h in present},
-        "weight_covered": wsum,
+        "J": j, "se": se, "relative_se": (se / j) if j else None,
+        "units": "weighted_junction_QPs_per_injected_eV",
+        "normalization_basis": design.get("normalization_basis", "per_injected_eV"),
+        "gun_energy_eV": e_gun,
+        "electrode_weighting": ("predeclared" if w_e is not None else "uniform_fallback"),
+        "mu_h": mu, "n_h": {h: len(v) for h, v in present.items()},
+        "W_h": {h: weights[h] for h in present}, "weight_covered": wsum,
         "max_node_leverage": worst_node,
-        "R95": (r95 * scale) if r95 is not None else None,
-        "naive_equal_site": float(np.mean(list(per_site.values()))) * scale,
+        "spatial_R95_site_mean": spatial_r95,
+        "spatial_R95_se": r95_se,
+        "R95_kind": "stratum_weighted_CVaR95_over_SITE_MEAN_worst_electrode "
+                    "(NOT event-level CVaR)",
+        "naive_equal_site": float(np.mean(list(per_site.values()))),
         "design_hash": design.get("design_hash"),
         "injection_law": design.get("injection_law"),
-        "gun_energy_eV": gun_energy_eV,
-        "n_sites": len(per_site), "n_replicas": len(replicas), "events": events,
+        "n_sites": len(per_site), "events": int(blocks[0]["events"]),
+        "n_replicas": max(len(v) for v in per_rep.values()),
     }
+
+
+def _hier_bootstrap_r95(zmax_rep, labels, weights, present, n_boot=500, seed=11):
+    """Uncertainty on the spatial tail metric, over the SAME weighted design.
+
+    Without it the Pareto rule -- flag a tail-risk regression only when the
+    lower bound on R95(x) - R95(baseline) exceeds zero -- cannot be applied.
+    """
+    rng = np.random.default_rng(seed)
+    by_h = {}
+    for p in zmax_rep:
+        by_h.setdefault(labels[p], []).append(p)
+    draws = np.empty(n_boot)
+    for b in range(n_boot):
+        zm = {}
+        for h, idx in by_h.items():
+            for p in rng.choice(idx, size=len(idx), replace=True):
+                reps = zmax_rep[p]
+                zm[(h, len(zm))] = float(np.mean(
+                    rng.choice(reps, size=len(reps), replace=True)))
+        pairs = sorted(((v, weights[h] / len(by_h[h])) for (h, _), v in zm.items()),
+                       reverse=True)
+        cut, num, den = 0.05 * sum(w for _, w in pairs), 0.0, 0.0
+        for val, w in pairs:
+            take = min(w, cut - den)
+            if take <= 0:
+                break
+            num += val * take
+            den += take
+        draws[b] = num / den if den > 0 else np.nan
+    return float(np.nanstd(draws, ddof=1))
 
 
 def _hier_bootstrap(per_site_rep, labels, weights, n_boot=1000, seed=7):

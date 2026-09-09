@@ -266,6 +266,11 @@ class Ledger:
                    ("proposal_source", "TEXT"),
                    ("optimizer_generation", "INTEGER"),
                    ("used_in_optimizer_update", "INTEGER"),
+                   # Full objective detail per observation (stratum means,
+                   # counts, node leverage, tail metric). Without it a
+                   # convergence gate can only see the scalar and cannot say
+                   # WHICH stratum moved, so it can fail but never diagnose.
+                   ("objective_detail", "TEXT"),
                    # Drift controls (audit P5): a non-physics replica tag that
                    # is excluded from candidate identity but recorded here, so
                    # six controls leave six inspectable rows.
@@ -567,7 +572,7 @@ class Ledger:
                              acquisition=None, proposal_source=None,
                              optimizer_generation=None,
                              used_in_optimizer_update=None,
-                             control_replica_id=None):
+                             control_replica_id=None, objective_detail=None):
         """Optimizer bookkeeping (pipeline sec 7's ledger fields).
 
         Kept separate from `set_trial_result` on purpose: the physics result and
@@ -586,12 +591,16 @@ class Ledger:
                 "optimizer_generation=COALESCE(?, optimizer_generation), "
                 "used_in_optimizer_update=COALESCE(?, used_in_optimizer_update), "
                 "control_replica_id=COALESCE(?, control_replica_id), "
+                "objective_detail=COALESCE(?, objective_detail), "
                 "updated_at=? WHERE trial_id=?",
                 (objective_name, objective_value, objective_se, optimizer, iteration,
                  acquisition, proposal_source, optimizer_generation,
                  (None if used_in_optimizer_update is None
                   else int(bool(used_in_optimizer_update))),
-                 control_replica_id, time.time(), trial_id),
+                 control_replica_id,
+                 (json.dumps(objective_detail, default=str)
+                  if isinstance(objective_detail, dict) else objective_detail),
+                 time.time(), trial_id),
             )
 
     # -- reporting ----------------------------------------------------------

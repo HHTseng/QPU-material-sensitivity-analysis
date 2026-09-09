@@ -150,8 +150,13 @@ class Campaign:
             import stage4_strata as ST
             import stage3_trial_runner as TR
             weights = ST.stratum_weights(f)
-            pilot_sd = {"H0": 3.815e-3, "H1": 2.769e-4,
-                        "H2": 8.325e-5, "H3": 5.776e-5}
+            pilot_sd = {"S0_junction": 2.079e-1, "S1_le_0.05": 1.734e-2,
+                        "S2_le_0.20": 1.914e-3, "S3_le_0.50": 2.553e-4,
+                        "S4_bulk": 1.116e-4}
+            sd_path = os.path.join(HERE, "results", "stage4_pilot_sd.json")
+            if os.path.isfile(sd_path):
+                with open(sd_path) as fh:
+                    pilot_sd.update(json.load(fh))
             alloc = ST.neyman_allocation(a.stratified, weights, pilot_sd)
             template = os.environ.get(
                 "SENSITIVITY_MACRO_TEMPLATE",
@@ -291,6 +296,7 @@ class Campaign:
                 if hasattr(self.optimizer, "provenance_of") else {})
         led.set_optimizer_record(result.trial_id, objective_name=self.args.objective,
                                  objective_value=value.value, objective_se=value.se,
+                                 objective_detail=getattr(value, "detail", None),
                                  optimizer=self.args.optimizer, iteration=iteration,
                                  acquisition=acquisition or prov.get("acquisition"),
                                  proposal_source=prov.get("proposal_source"),
