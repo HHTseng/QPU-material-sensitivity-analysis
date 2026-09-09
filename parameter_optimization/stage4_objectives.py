@@ -705,3 +705,90 @@ def _device_weighted(result):
     return ObjectiveValue(
         name="", value=est["J"], raw=float(table.sum()), se=est["se"],
         n_blocks=table.size, detail=est)
+
+
+def paired_difference_stratified(result_a, result_b, design=None):
+    """Site-matched A - B under the STRATIFIED estimator.
+
+    `paired_difference` above sums raw counts with EQUAL weight per site. That
+    is correct for a uniform design and badly wrong for this one: the
+    stratified design oversamples the junction stratum by ~5 orders of
+    magnitude relative to its area mass, so an equal-weight paired sum is
+    dominated by junction sites -- reintroducing precisely the bias the
+    weighted estimator exists to remove.
+
+    Caught 2026-09-08 by an internally inconsistent confirmation table:
+    elasticity_of_SiC reported J = 3.21e-3 against a baseline of 2.01e-3 while
+    the paired column claimed -92.1%. The scalar and the comparison were
+    measuring different quantities.
+
+    Pairing is still exploited: the difference is taken site by site and
+    replica by replica BEFORE weighting, so the site term cancels.
+    """
+    design = design or _ACTIVE_DESIGN
+    if design is None:
+        raise ValueError("paired_difference_stratified needs a design")
+    labels = design["stratum"]
+    weights = design["stratum_weights"]
+    e_gun = float(design.get("gun_energy_eV") or 0.0)
+    if e_gun <= 0.0:
+        raise ValueError("design carries no positive gun_energy_eV")
+    w_e = design.get("electrode_weights")
+
+    def burden(result):
+        out = {}
+        for b in result.blocks:
+            ev = int(b["events"])
+            pe = b.get("per_electrode_qps")
+            if pe:
+                arr = np.asarray(pe, dtype=float)
+                wv = (np.asarray(w_e, dtype=float) if w_e is not None
+                      else np.full(arr.shape, 1.0 / arr.size))
+                val = float(arr @ wv) / ev / e_gun
+            else:
+                val = float(b["total_qps"]) / len(w_e or [1]) / ev / e_gun
+            out.setdefault(b["position"], {})[b["replica"]] = val
+        return out
+
+    ba, bb = burden(result_a), burden(result_b)
+    common = sorted(set(ba) & set(bb))
+    if not common:
+        raise ValueError("cannot pair trials with disjoint site sets")
+
+    delta, by_h = {}, {}
+    for p in common:
+        reps = sorted(set(ba[p]) & set(bb[p]))
+        if not reps:
+            continue
+        delta[p] = [ba[p][r] - bb[p][r] for r in reps]
+        by_h.setdefault(labels[p], []).append(p)
+
+    wsum = sum(weights[h] for h in by_h)
+    d_j = sum(weights[h] * float(np.mean([float(np.mean(delta[p])) for p in ps]))
+              for h, ps in by_h.items()) / wsum
+
+    # Paired hierarchical bootstrap over the same weighted design.
+    rng = np.random.default_rng(23)
+    draws = np.empty(1000)
+    for i in range(1000):
+        tot = 0.0
+        for h, ps in by_h.items():
+            pick = rng.choice(ps, size=len(ps), replace=True)
+            tot += weights[h] * float(np.mean(
+                [float(np.mean(rng.choice(delta[p], size=len(delta[p]),
+                                          replace=True))) for p in pick]))
+        draws[i] = tot / wsum
+    se = float(draws.std(ddof=1))
+
+    jb = sum(weights[h] * float(np.mean(
+        [float(np.mean(list(bb[p].values()))) for p in ps]))
+        for h, ps in by_h.items()) / wsum
+    favouring = sum(1 for p in delta if float(np.mean(delta[p])) < 0)
+    return {
+        "delta_J": d_j, "se_delta_J": se,
+        "relative": (d_j / jb) if jb else None,
+        "z_paired": (d_j / se) if se else None,
+        "ci95": (d_j - 1.96 * se, d_j + 1.96 * se),
+        "n_sites": len(delta), "n_sites_favouring_a": favouring,
+        "estimator": "stratum_weighted_paired",
+    }

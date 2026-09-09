@@ -280,7 +280,13 @@ def main():
             continue
         line = f"{label:26s} {rec['value']:11.4e} {100 * (rec['relative_se'] or 0):6.1f}%"
         if base and label in trials and "baseline" in trials:
-            paired = O.paired_difference(trials[label], trials["baseline"])
+            # Under a stratified design the paired comparison MUST use the same
+            # weights as the scalar, or the two columns report different
+            # quantities and the table contradicts itself.
+            paired = (O.paired_difference_stratified(trials[label],
+                                                     trials["baseline"], design)
+                      if design else
+                      O.paired_difference(trials[label], trials["baseline"]))
             rec["paired"] = paired
             line += (f" {100 * paired['relative']:11.1f}% "
                      f"{(paired['z_paired'] or float('nan')):9.1f} "

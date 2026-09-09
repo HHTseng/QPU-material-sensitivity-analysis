@@ -2268,6 +2268,43 @@ def t29_stratified_quadrature(tmpdir):
           f"naive {eb['naive_equal_site']:.4e} -> {eo['naive_equal_site']:.4e} "
           f"({eo['naive_equal_site'] / j_true:.1f}x the truth)")
 
+    # The paired column and the scalar must measure the SAME quantity. A
+    # confirmation table once read "J = 3.21e-3 vs baseline 2.01e-3, -92.1%"
+    # because the paired difference summed sites with equal weight while the
+    # scalar was stratum-weighted.
+    hi = dict(truth); hi["S0_junction"] = truth["S0_junction"] * 3.0
+    def synth_mu(alloc, mus, events=100000, reps=4):
+        labels, blocks, p = [], [], 0
+        for h in ST.STRATA:
+            for _ in range(alloc[h]):
+                labels.append(h)
+                for rep in range(reps):
+                    blocks.append({"position": p, "replica": rep,
+                                   "events": events,
+                                   "total_qps": mus[h] * events,
+                                   "per_electrode_qps": [mus[h] * events]})
+                p += 1
+        return types.SimpleNamespace(blocks=blocks), labels
+
+    ra, labs = synth_mu(oversamp, hi)
+    rb, _ = synth_mu(oversamp, truth)
+    des = {"stratum": labs, "stratum_weights": w, "design_hash": "synthetic",
+           "injection_law": "uniform_surface", "gun_energy_eV": 1.0,
+           "electrode_weights": [1.0], "normalization_basis": "per_injected_eV"}
+    ja = O.stratified_estimate(ra, des)["J"]
+    jb = O.stratified_estimate(rb, des)["J"]
+    scalar_rel = ja / jb - 1.0
+    pw = O.paired_difference_stratified(ra, rb, des)
+    pu = O.paired_difference(ra, rb)
+    check("T29n the paired difference agrees with the scalar it accompanies",
+          abs(pw["relative"] - scalar_rel) < 1e-6,
+          f"weighted paired {100 * pw['relative']:+.3f}% vs scalar "
+          f"{100 * scalar_rel:+.3f}%")
+    check("T29o the UNWEIGHTED paired difference does NOT -- the bug being fixed",
+          abs(pu["relative"] - scalar_rel) > 0.05,
+          f"equal-site paired {100 * pu['relative']:+.1f}% vs scalar "
+          f"{100 * scalar_rel:+.3f}% under a 10x-oversampled S0")
+
     fell_over = False
     try:
         O.set_stratified_design({"stratum": ["S4_bulk"],
