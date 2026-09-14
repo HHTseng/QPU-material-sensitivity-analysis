@@ -20,7 +20,8 @@ parameters:
   sub_lattice_a: {mode: fixed, value: 5.431}
   temperature: {mode: fixed, value: 0.0}
   lattice_deg: {mode: fixed, value: 45.0}
-  miller: {mode: fixed, value: [0, 0, 1]}
+  orientation_polar_cos: {mode: fixed, value: 1.0}
+  orientation_azimuth_turns: {mode: fixed, value: 0.0}
 
 constraints:
   - name: cubic-c11-minus-c12
@@ -39,11 +40,11 @@ sampling:
   design_file: ../../parameter_optimization/results/stage4_strat_512.json
   replicas: 8
   seed:
-    algorithm: legacy-position-v1
+    algorithm: historical-position-v1
     base: 20260728
     bank_id: 9
 
-fidelity:
+event_counts:
   events_per_task: 31250
   events_total: 128000000
   gun_energy_eV: 0.010
@@ -72,12 +73,12 @@ analysis:
 search: {}
 
 build:
-  mode: legacy-unresolved
+  mode: historical-unresolved
   reason: The saved row hashes Main but does not identify every loaded library and data set.
   recorded:
     design_hash: fa659c7d860acdee
 
 provenance:
-  legacy_campaign: stage4_property_v1_strat512
-  legacy_result: parameter_optimization/results/stage4_strat_512.json
+  historical_campaign: stage4_property_v1_strat512
+  historical_result: parameter_optimization/results/stage4_strat_512.json
   status: read-only reconstruction; not launchable

@@ -3,7 +3,7 @@
 # PROVENANCE IS PER FIELD. Materials Project supplies bulk crystal structure,
 # density and elasticity. It does NOT supply superconducting gaps, phonon
 # lifetimes, or thin-film cryogenic parameters, and those must never be inferred
-# from MP bulk data (STAGE3_SMALL_MATERIAL_START.md sec 4.1).
+# from Materials Project bulk data; see material_scan/docs/results.md.
 #
 # Two measured facts from the 2026-08-13 MP pull (db 2026.04.13, mp-api 0.46.4)
 # that shape this file:

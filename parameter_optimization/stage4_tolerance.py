@@ -8,7 +8,7 @@ Answers the two questions a fabricator and the projection step both need:
 1. **Which specifications actually matter.** For each active variable, move it
    by +-delta of its box width (in the transformed coordinate, so a log-scaled
    variable moves by a factor) and measure how far the objective moves. A
-   variable whose +-delta swing stays inside the tier's ~5% stochastic noise is
+   variable whose +-delta swing stays inside the event_count's ~5% stochastic noise is
    one the fabrication does not have to control tightly -- and, equally
    important, one whose optimized value should not be quoted as if it were
    resolved.
@@ -38,21 +38,21 @@ for _p in (HERE, REPO_ROOT):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from stage3_contract import load_contract, ContractError         # noqa: E402
-from stage3_ledger import Ledger                                 # noqa: E402
+from experiment_definition import load_definition, DefinitionError         # noqa: E402
+from experiment_database import Database                                 # noqa: E402
 from stage3_trial_runner import evaluate                         # noqa: E402
 import stage4_space as S                                         # noqa: E402
 import stage4_objectives as O                                    # noqa: E402
 from stage4_optimize import candidate_payload, resolver_for, build_space  # noqa: E402
 
 
-def _refuse_if_frozen(ledger_path):
-    """Exit before touching anything if the ledger is closed to new writers."""
-    from stage3_ledger import freeze_reason, freeze_path
-    reason = freeze_reason(ledger_path)
+def _refuse_if_frozen(database_path):
+    """Exit before touching anything if the database is closed to new writers."""
+    from experiment_database import freeze_reason, freeze_path
+    reason = freeze_reason(database_path)
     if reason:
-        sys.exit(f"REFUSING TO RUN: {os.path.abspath(ledger_path)} is frozen.\n\n"
-                 f"{reason}\n\nRemove {freeze_path(ledger_path)} deliberately, "
+        sys.exit(f"REFUSING TO RUN: {os.path.abspath(database_path)} is frozen.\n\n"
+                 f"{reason}\n\nRemove {freeze_path(database_path)} deliberately, "
                  f"after snapshotting, to lift this.")
 
 
@@ -86,8 +86,8 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--manifest", default=None)
     ap.add_argument("--point", default=None, help="explicit property vector as JSON")
-    ap.add_argument("--contract", default=os.path.join(HERE, "stage4_config.yaml"))
-    ap.add_argument("--ledger", default=os.path.join(HERE, "stage4_trials.sqlite"))
+    ap.add_argument("--definition", default=os.path.join(HERE, "stage4_config.yaml"))
+    ap.add_argument("--database", default=os.path.join(HERE, "stage4_trials.sqlite"))
     ap.add_argument("--delta", type=float, default=0.1,
                     help="fraction of the box width, in transformed coordinates")
     ap.add_argument("--events", type=int, default=4000000)
@@ -104,10 +104,10 @@ def main():
                          "wall counts as an active bound (default 2%%)")
     ap.add_argument("--out", default=os.path.join(HERE, "results", "stage4_tolerance.json"))
     args = ap.parse_args()
-    _refuse_if_frozen(args.ledger)
+    _refuse_if_frozen(args.database)
 
-    contract = load_contract(args.contract)
-    space = build_space(contract)
+    definition = load_definition(args.definition)
+    space = build_space(definition)
     if args.manifest:
         with open(args.manifest) as handle:
             man = json.load(handle)
@@ -117,11 +117,11 @@ def main():
     else:
         centre = space.baseline_point()
 
-    contract.campaign_id = f"{contract.campaign_id}_{args.tag}"
-    fid = contract.decision["fidelity"]["value"]
-    contract.decision["fidelity"]["events_total_per_candidate"][fid] = args.events
-    contract.fixed["max_workers"] = max(1, args.workers // max(1, args.parallel))
-    contract.fixed["total_mem_gb"] = float(contract.fixed["total_mem_gb"]) / max(1, args.parallel)
+    definition.campaign_id = f"{definition.campaign_id}_{args.tag}"
+    fid = definition.decision["event_count"]["value"]
+    definition.decision["event_count"]["events_total_per_candidate"][fid] = args.events
+    definition.fixed["max_workers"] = max(1, args.workers // max(1, args.parallel))
+    definition.fixed["total_mem_gb"] = float(definition.fixed["total_mem_gb"]) / max(1, args.parallel)
     objective = O.get(args.objective)
     resolver = resolver_for(space)
 
@@ -131,15 +131,15 @@ def main():
 
     def led():
         if getattr(local, "l", None) is None:
-            local.l = Ledger(args.ledger)
+            local.l = Database(args.database)
         return local.l
 
     def run(label, point):
         try:
-            r = evaluate(contract, candidate_payload(point, space), fidelity=fid,
-                         seed_bank_id=args.seed_bank, ledger=led(), verbose=False,
+            r = evaluate(definition, candidate_payload(point, space), event_count=fid,
+                         seed_bank_id=args.seed_bank, database=led(), verbose=False,
                          resolver=resolver)
-        except (ContractError, S.GateError) as exc:
+        except (DefinitionError, S.GateError) as exc:
             return label, {"status": "rejected", "reason": str(exc)}, None
         if not r.is_observation:
             return label, {"status": r.status, "reason": r.failure_reason}, None
@@ -155,7 +155,7 @@ def main():
             u[i] = float(np.clip(u0[i] + sign * args.delta, 0.0, 1.0))
             if abs(u[i] - u0[i]) < 1e-9:
                 continue                       # already at that wall
-            p = space.from_unit(u, space.miller_index(centre), base=centre)
+            p = space.from_unit(u, base=centre)
             ok, why = S.precheck_cheap(p, space)
             if not ok:
                 print(f"  skip {var.name} {tag}: {why}")
@@ -223,7 +223,7 @@ def main():
         sens[var.name] = s
         noise = 2 * (centre_se / centre_v if centre_v else 0.05)
         verdict = ("--" if s is None else
-                   ("below noise: not resolved at this fidelity" if s < noise
+                   ("below noise: not resolved at this event_count" if s < noise
                     else "RESOLVED" if s > 2 * noise else "marginal"))
         best_rel, best_z, best_side = None, None, None
         for tag in ("minus", "plus"):

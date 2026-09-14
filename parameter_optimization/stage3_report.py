@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export the Stage 3 ledger to CSV and show which parameters actually varied.
+"""Export the Stage 3 database to CSV and show which parameters actually varied.
 
 Answers three questions directly from recorded data, never from memory:
 
@@ -32,7 +32,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
-from stage3_ledger import Ledger   # noqa: E402
+from experiment_database import Database   # noqa: E402
 
 # parameter_set.txt "Tune the following parameters" -> how Stage 3 varies it.
 # `via` is the decision that carries it; None means it was held fixed.
@@ -67,9 +67,9 @@ DERIVED_MAP = [
 ]
 
 
-def load_rows(ledger):
+def load_rows(database):
     rows = []
-    for r in ledger.observations():
+    for r in database.observations():
         cand = json.loads(r["candidate"])
         der = json.loads(r["derived"])
         rows.append({
@@ -155,20 +155,20 @@ def print_ranking(rows, baseline):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--ledger", default=os.path.join(HERE, "stage3_trials.sqlite"))
+    ap.add_argument("--database", default=os.path.join(HERE, "stage3_trials.sqlite"))
     ap.add_argument("--catalog", default=os.path.join(HERE, "material_catalog.yaml"))
     ap.add_argument("--csv", default=None, help="write the full per-trial export here")
     ap.add_argument("--baseline", default="Si/Nb/Cu")
     args = ap.parse_args()
 
-    with Ledger(args.ledger) as ledger:
-        rows = load_rows(ledger)
-        status = ledger.summary()
+    with Database(args.database) as database:
+        rows = load_rows(database)
+        status = database.summary()
     if not rows:
-        print(f"No scored trials in {args.ledger}")
+        print(f"No scored trials in {args.database}")
         return 1
 
-    print(f"Ledger: {args.ledger}")
+    print(f"Database: {args.database}")
     print(f"Trials by status: {status}\n")
     print_mapping(rows, args.catalog)
     print_ranking(rows, args.baseline)

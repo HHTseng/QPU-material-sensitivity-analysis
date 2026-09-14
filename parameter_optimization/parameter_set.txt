@@ -59,7 +59,7 @@ fix at 0.02: ("/main/detector_param/setWallAbs ", 0.02, [0.0,0.5]),
 # per primary event.
 #
 # CORRECTED 2026-08-24 (audit P7). This line read 1.0e-3 eV while the Stage 3 and
-# Stage 4 contracts and every macro template have used 10.0e-3 eV since the
+# Stage 4 definitions and every macro template have used 10.0e-3 eV since the
 # protocol change -- so the human-facing parameter list described a different
 # experiment from the one that ran. 10 meV is the value in stage3_config.yaml,
 # stage4_config.yaml and sensitivity_template_beamOn*.mac; `stage4_audit.py`

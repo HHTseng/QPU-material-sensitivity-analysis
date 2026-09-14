@@ -163,7 +163,7 @@ def main():
 
     print()
     if all(verdicts) and c6 and verdicts:
-        print("    => CONVERGED. Freeze this design as the production contract "
+        print("    => CONVERGED. Freeze this design as the production definition "
               "(Priority 5), then Priorities 6-8.")
         return 0
     print("    => NOT CONVERGED.")

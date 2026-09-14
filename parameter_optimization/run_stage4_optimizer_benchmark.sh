@@ -4,18 +4,18 @@
 #   ./run_stage4_optimizer_benchmark.sh            # all 4 methods x 3 seeds
 #   ./run_stage4_optimizer_benchmark.sh 1          # seed 1 only (first stage)
 #
-# 4 methods x 3 seeds x 96 S-tier evaluations = 1152 candidates = 4.6e9 primary
-# events. Restartable: every campaign resumes from the ledger, so re-running
+# 4 methods x 3 seeds x 96 4,000,000-event evaluations = 1152 candidates = 4.6e9 primary
+# events. Restartable: every campaign resumes from the database, so re-running
 # this after an interruption costs nothing for what already finished.
 #
 # WHAT IS DELIBERATELY FROZEN (Priority 0 of the recommendation): the search
-# bounds, objective, geometry, injection sites, fidelity and physics seed bank
+# bounds, objective, geometry, injection sites, event_count and physics seed bank
 # are identical across every method and seed. The optimizer is the ONLY
 # experimental variable. Do not add an engineering constraint here -- that is a
 # separate campaign with its own identity (Priority 2).
 #
-# Unlike the retired run_stage4_xl.sh this script passes NO --timeout: the
-# contract's unlimited wall clock and progress watchdog apply, so a slow
+# Unlike the retired run_property_event_comparison.sh this script passes NO --timeout: the
+# definition's unlimited wall clock and progress watchdog apply, so a slow
 # candidate is never censored for being slow (finding N6).
 set -uo pipefail
 cd "$(dirname "$0")"
@@ -73,7 +73,7 @@ PY
     $PY -u stage4_optimize.py \
       --optimizer "$METHOD" --optimizer-params "$PARAMS" \
       --trials "$TRIALS" --parallel "$PARALLEL" --workers "$WORKERS" \
-      --fidelity S --seed "$SEED" --seed-bank 0 \
+      --event-count 4000000 --seed "$SEED" --seed-bank 0 \
       --baseline-every "$BASELINE_EVERY" --tag "$TAG" \
       >> "$LOG/${TAG}.log" 2>&1 \
       && say "$TAG done" || say "WARNING: $TAG returned $?"

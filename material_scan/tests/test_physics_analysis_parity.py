@@ -1,7 +1,7 @@
 """Golden parity tests for the new scorer and stratified objective.
 
-The fixture files are small byte-for-byte extracts of completed legacy output.
-Tests deliberately do not import the legacy implementation: it was used once
+The fixture files are small byte-for-byte extracts of completed historical output.
+Tests deliberately do not import the historical implementation: it was used once
 to establish the committed answers and is not a second production dependency.
 """
 
@@ -136,7 +136,7 @@ class HitScoringParityTests(unittest.TestCase):
                 with self.subTest(path=path.name), self.assertRaises(PhysicsError):
                     self._score(path)
 
-    def test_rounding_ties_electrode_ties_time_ties_and_surface_filter_match_legacy(self) -> None:
+    def test_rounding_ties_electrode_ties_time_ties_and_surface_filter_match_historical(self) -> None:
         surface = 0.0002625
         snapshots, qps = calculate_qps(
             energy_deposited_eV=[1.5, 2.5, 0.5, 3.5, 100.0, -10.0],
@@ -163,7 +163,7 @@ class HitScoringParityTests(unittest.TestCase):
                 0.000191, [0.0], [0.0], 0.0002625,
             )
 
-    def test_qp_density_ode_matches_legacy_golden_arrays(self) -> None:
+    def test_qp_density_ode_matches_historical_golden_arrays(self) -> None:
         time_us, decoherence = calculate_xqps(
             snapshot_times_ns=[0.0, 300.0, 600.0],
             qps_by_electrode_time=[[1.0, 2.0, 0.0], [0.0, 1.0, 3.0]],
@@ -351,7 +351,7 @@ class StratifiedObjectiveParityTests(unittest.TestCase):
             with self.subTest(case=label), self.assertRaises(AnalysisError):
                 stratified_estimate(bad, design, bootstrap_draws=2, tail_bootstrap_draws=2)
 
-    def test_scalar_legacy_validation_does_not_require_electrode_vectors(self) -> None:
+    def test_scalar_historical_validation_does_not_require_electrode_vectors(self) -> None:
         blocks, design = self._small_complete_case()
         scalar_blocks = [
             Block(item.position, item.replica, item.events, item.total_qps, None, item.n_hits)

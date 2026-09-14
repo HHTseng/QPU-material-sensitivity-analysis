@@ -2,7 +2,7 @@
 
 Every objective is a function of ONE trial's (position, replica) blocks, so
 switching objective never changes what was simulated, only how it is scored.
-The name is recorded in the ledger and in the campaign manifest, so two
+The name is recorded in the database and in the campaign manifest, so two
 campaigns optimizing different objectives can never be merged by accident.
 
 Uncertainty, and why it is not Poisson
@@ -49,7 +49,7 @@ class ObjectiveValue:
 
         `log` rather than `log1p`: the objective is ~1e-4 QPs per primary event,
         where log1p(x) ~ x and the transform would do nothing. The floor is one
-        half QP over the trial's event budget -- the smallest resolvable
+        half QP over the trial's event allowance -- the smallest resolvable
         non-zero yield -- so a legitimate zero is representable without -inf.
         """
         if self.transform == "identity":
@@ -190,15 +190,15 @@ def _junction_per_primary(result):
     """Same measurement as `total_qps_per_primary`, under its accurate name.
 
     Registered so a campaign can be explicit about what is being minimised. The
-    two are numerically identical; the objective name is recorded in the ledger
-    and hashed into the contract, so they are not interchangeable mid-campaign.
+    two are numerically identical; the objective name is recorded in the database
+    and hashed into the definition, so they are not interchangeable mid-campaign.
     """
     return _total_per_primary(result)
 
 
 @register("total_qps", transform="identity")
 def _total(result):
-    """Raw junction QP count at this event budget (reporting form)."""
+    """Raw junction QP count at this event allowance (reporting form)."""
     v = _total_per_primary(result)
     return ObjectiveValue(name="", value=v.raw, raw=v.raw,
                           se=(v.se * v.detail["n_sim"] if v.se is not None else None),
@@ -271,7 +271,7 @@ def _weighted(result, alpha=1.0, beta=1.0):
     """alpha * (total per primary) + beta * (worst electrode per primary).
 
     An explicit trade-off. alpha and beta come from the campaign config and
-    therefore enter the contract hash: two campaigns with different weights are
+    therefore enter the definition hash: two campaigns with different weights are
     different campaigns, not the same one re-reported.
     """
     a = _total_per_primary(result)
@@ -406,16 +406,16 @@ def pareto_front(rows, keys, lower_is_better=None):
 
 
 def censored_value(name, worst_observed, reason, penalty=1.5):
-    """An observation for a candidate too expensive to measure at this budget.
+    """An observation for a candidate too expensive to measure at this allowance.
 
-    STAGE4_RESULTS.md §5.4 diagnosed the original watchdog's real flaw and named
+    ``material_scan/docs/results.md`` records the original time-limit flaw and
     the fix: *"because a rejection carries no objective value, the surrogate does
     not learn to avoid them. The right fix is to model failures (a feasibility
     classifier or censored-observation treatment)."* This is that treatment, in
     its simplest defensible form.
 
     A capped trial is **not** a failure and **not** a zero. It is a right-censored
-    observation: we know only that measuring it costs more than the budget
+    observation: we know only that measuring it costs more than the allowance
     allows. It is reported to the optimizer as worse than anything yet seen, so
     the surrogate learns the region is unattractive, and it is flagged
     `censored` everywhere downstream so no report can mistake it for a measured
@@ -431,7 +431,7 @@ def censored_value(name, worst_observed, reason, penalty=1.5):
         detail={"censored": True, "reason": str(reason),
                 "worst_observed": float(worst_observed), "penalty": float(penalty),
                 "value_floor": value,
-                "note": "RIGHT-CENSORED: the trial exceeded the budget, so its "
+                "note": "RIGHT-CENSORED: the trial exceeded the allowance, so its "
                         "objective is a lower bound reported as a penalty, not a "
                         "measurement. Never quote it as a result."})
 
@@ -446,7 +446,7 @@ def paired_difference(result_a, result_b):
     ta, ea, pa, _ = _block_table(result_a)
     tb, eb, pb, _ = _block_table(result_b)
     if pa != pb or ea != eb or ta.shape != tb.shape:
-        raise ValueError("cannot pair trials with different site sets or budgets")
+        raise ValueError("cannot pair trials with different site sets or allowances")
     n_sim = ea * ta.size
     delta_counts = ta - tb                       # site- and replica-matched
     site_diff = delta_counts.sum(axis=1)

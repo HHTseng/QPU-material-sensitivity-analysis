@@ -183,7 +183,7 @@ FIXED_MACRO_COMMANDS = (
     # footprints at 10 meV). The ground plane becomes an active competitor for
     # phonons, which is a regime to hold constant across candidates, not a fault.
     # Measured at 10 meV: 3.9e-4 QPs per primary event, ~10x the 1 meV rate. See
-    # parameter_optimization/STAGE3_MATERIAL_OPTIMIZATION_PIPELINE.md sec 12.5.
+    # material_scan/docs/science.md.
     #
     # minEPhonons 38.2 ueV also restores the value the v0 template shipped with;
     # 382 ueV was a later change that put a numerical cut above the physical one.

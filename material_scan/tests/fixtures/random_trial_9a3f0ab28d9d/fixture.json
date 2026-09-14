@@ -1,6 +1,6 @@
 {
   "source_trial_id": "stage4_property_v1_rand_9a3f0ab28d9d",
-  "source_ledger": "parameter_optimization/stage4_trials.sqlite",
+  "source_database": "parameter_optimization/stage4_trials.sqlite",
   "source_hits_directory": "parameter_optimization/runs/stage4_property_v1_rand/stage4_property_v1_rand_9a3f0ab28d9d/hits",
   "file_count": 32,
   "total_bytes": 19553,

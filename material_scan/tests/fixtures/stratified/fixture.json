@@ -1,6 +1,6 @@
 {
-  "source_ledger": "parameter_optimization/stage4_trials.sqlite",
-  "source_ledger_sha256_at_extraction": "603488162f459432b701e8d41acc9614d0f0535d404d53dc90f53cdf6c31d18c",
+  "source_database": "parameter_optimization/stage4_trials.sqlite",
+  "source_database_sha256_at_extraction": "603488162f459432b701e8d41acc9614d0f0535d404d53dc90f53cdf6c31d18c",
   "source_results": {
     "128": {
       "path": "parameter_optimization/results/stage4_strat_128.json",

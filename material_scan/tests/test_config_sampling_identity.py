@@ -29,8 +29,8 @@ from material_scan.sampling import (
     RecordedStratifiedDesign,
     SamplingError,
     build_recorded_plan,
-    legacy_design_hash,
-    legacy_position_seed,
+    historical_design_hash,
+    historical_position_seed,
     load_recorded_stratified_design,
 )
 
@@ -41,7 +41,7 @@ HEX_C = "c" * 64
 HEX_D = "d" * 64
 
 
-def recorded_design(prefix="S"):
+def recorded_design(prefix="sample"):
     record = {
         "sites_mm": [[-1.0, 0.0, 0.25], [0.0, 1.0, 0.25], [1.0, 0.0, 0.25]],
         "stratum": [f"{prefix}0", f"{prefix}1", f"{prefix}1"],
@@ -56,7 +56,7 @@ def recorded_design(prefix="S"):
         "normalization_basis": "per_injected_eV",
         "electrode_weights": [0.5, 0.5],
     }
-    record["design_hash"] = legacy_design_hash(record)
+    record["design_hash"] = historical_design_hash(record)
     return record
 
 
@@ -71,12 +71,19 @@ def parameter_catalog():
                 "valid_range": [1.0e-6, 1.0],
                 "source": "beam protocol",
             },
-            "miller": {
+            "orientation_polar_cos": {
                 "unit": "1",
-                "type": "choice",
-                "target": "macro:/main/detector_param/setMiller",
-                "choices": [[0, 0, 1], [1, 1, 1]],
-                "source": "cubic reduced directions",
+                "type": "float",
+                "target": "model:continuous_crystal_normal",
+                "valid_range": [-1.0, 1.0],
+                "source": "sphere polar coordinate",
+            },
+            "orientation_azimuth_turns": {
+                "unit": "turn",
+                "type": "float",
+                "target": "model:continuous_crystal_normal",
+                "valid_range": [0.0, 1.0],
+                "source": "sphere azimuth coordinate",
             },
             "sub_c44": {
                 "unit": "GPa",
@@ -105,7 +112,8 @@ def experiment(design=None):
         "purpose": "Exercise immutable configuration without simulation.",
         "parameters": {
             "gun_energy": {"mode": "fixed", "value": 0.01},
-            "miller": {"mode": "fixed", "value": [0, 0, 1]},
+            "orientation_polar_cos": {"mode": "fixed", "value": 1.0},
+            "orientation_azimuth_turns": {"mode": "fixed", "value": 0.0},
             "sub_c44": {
                 "mode": "search",
                 "bounds": [5.0, 200.0],
@@ -134,9 +142,9 @@ def experiment(design=None):
             "kind": "recorded-stratified",
             "design": design,
             "replicas": 2,
-            "seed": {"algorithm": "legacy-position-v1", "base": 20260728, "bank_id": 9},
+            "seed": {"algorithm": "historical-position-v1", "base": 20260728, "bank_id": 9},
         },
-        "fidelity": {"name": "fixture", "events_per_task": 10, "events_total": 60},
+        "event_counts": {"name": "fixture", "events_per_task": 10, "events_total": 60},
         "physics": {"realization_schema": "fixture-realization-1"},
         "analysis": {
             "objective": "device_weighted_junction_qps_per_energy",
@@ -210,14 +218,14 @@ class RecordedDesignTests(unittest.TestCase):
 
     def test_refuses_changed_record_under_stale_hash(self):
         source = recorded_design()
-        source["stratum_weights"]["S0"] = 0.30
-        source["stratum_weights"]["S1"] = 0.70
+        source["stratum_weights"]["sample0"] = 0.30
+        source["stratum_weights"]["sample1"] = 0.70
         with self.assertRaisesRegex(SamplingError, "hash mismatch"):
             RecordedStratifiedDesign.from_mapping(source)
 
     def test_old_and_new_stratum_names_coexist_with_distinct_keys(self):
         old = RecordedStratifiedDesign.from_mapping(recorded_design("H"))
-        new = RecordedStratifiedDesign.from_mapping(recorded_design("S"))
+        new = RecordedStratifiedDesign.from_mapping(recorded_design("sample"))
         self.assertNotEqual(old.recorded_hash, new.recorded_hash)
         self.assertNotEqual(old.design_key, new.design_key)
         self.assertEqual(old.n_sites, new.n_sites)
@@ -232,8 +240,8 @@ class RecordedDesignTests(unittest.TestCase):
             seed_bank_id=9,
         )
         self.assertEqual(len(plan.tasks), 6)
-        self.assertEqual(plan.tasks[0].seeds[0], legacy_position_seed(20260728, 9, 0, 0))
-        self.assertEqual(plan.tasks[-1].seeds[0], legacy_position_seed(20260728, 9, 1, 2))
+        self.assertEqual(plan.tasks[0].seeds[0], historical_position_seed(20260728, 9, 0, 0))
+        self.assertEqual(plan.tasks[-1].seeds[0], historical_position_seed(20260728, 9, 1, 2))
         self.assertEqual(sum(task.events for task in plan.tasks), 60)
         self.assertAlmostEqual(
             sum(task.node_weight for task in plan.tasks[:3]), 1.0
@@ -241,12 +249,14 @@ class RecordedDesignTests(unittest.TestCase):
 
 
 class ConfigTests(unittest.TestCase):
-    def test_nested_list_choice_is_normalized_before_membership_check(self):
+    def test_sphere_coordinates_are_range_checked(self):
         catalog = ParameterCatalog.from_mapping(parameter_catalog())
-        miller = catalog.get("miller")
-        self.assertEqual(miller.normalize_value([0, 0, 1]), (0, 0, 1))
-        with self.assertRaisesRegex(ConfigError, "not one of"):
-            miller.normalize_value([1, 0, 0])
+        polar = catalog.get("orientation_polar_cos")
+        azimuth = catalog.get("orientation_azimuth_turns")
+        self.assertEqual(polar.normalize_value(-0.25), -0.25)
+        self.assertEqual(azimuth.normalize_value(0.75), 0.75)
+        with self.assertRaisesRegex(ConfigError, "outside physical validity"):
+            polar.normalize_value(1.01)
 
     def test_three_layers_and_material_exemption_are_explicit(self):
         resolved = resolved_fixture("material")
@@ -258,7 +268,8 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(layer.value, 241.0)
         self.assertEqual(layer.origin, "material")
         self.assertEqual(layer.source, "measured SiC")
-        self.assertEqual(resolved.value("miller"), (0, 0, 1))
+        self.assertEqual(resolved.value("orientation_polar_cos"), 1.0)
+        self.assertEqual(resolved.value("orientation_azimuth_turns"), 0.0)
 
     def test_proposal_cannot_escape_experiment_box(self):
         catalog = ParameterCatalog.from_mapping(parameter_catalog())
@@ -353,11 +364,11 @@ class ConfigTests(unittest.TestCase):
 
     def test_self_consistent_hash_cannot_hide_a_changed_event_total(self):
         document = resolved_fixture().to_manifest()
-        document["fidelity"]["events_total"] += 1
+        document["event_counts"]["events_total"] += 1
         without_key = {key: value for key, value in document.items() if key != "manifest_key"}
         document["manifest_key"] = canonical_hash("resolved-experiment/v1", without_key)
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "changed-fidelity.json"
+            path = Path(directory) / "changed-event_counts.json"
             path.write_text(json.dumps(document), encoding="utf-8")
             with self.assertRaisesRegex(ConfigError, "events_total disagrees"):
                 load_resolved_experiment(path)

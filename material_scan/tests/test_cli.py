@@ -26,7 +26,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(summary["design_hash"], "fa659c7d860acdee")
         self.assertEqual(summary["tasks"], 4096)
         self.assertEqual(summary["events_total"], 128_000_000)
-        self.assertEqual(summary["build_mode"], "legacy-unresolved")
+        self.assertEqual(summary["build_mode"], "historical-unresolved")
 
     def test_freeze_round_trip_uses_no_scientific_cli_overrides(self):
         with tempfile.TemporaryDirectory() as directory:

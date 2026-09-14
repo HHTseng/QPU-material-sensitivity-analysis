@@ -1,0 +1,52 @@
+{
+  "schema": "orientation-comparison-1",
+  "completed_at": "2026-09-14",
+  "total_primaries_per_direction": 4000000,
+  "injection_sites": 16,
+  "replicas_per_site": 8,
+  "primaries_per_site_replica": 31250,
+  "seed_set": 41,
+  "completed_unique_simulations": 29,
+  "completed_site_replica_tasks": 3712,
+  "failed_simulations": 0,
+  "reference": {
+    "junction_quasiparticles_per_primary": 0.00037,
+    "standard_error": 0.00002434132288927617
+  },
+  "former_integer_directions": {
+    "directions": 13,
+    "minimum": 0.0003695,
+    "median": 0.0003765,
+    "mean": 0.00037415384615384616,
+    "maximum": 0.000377,
+    "sample_standard_deviation": 0.000003191,
+    "best_direction": [0, 1, 1]
+  },
+  "uniform_sphere_points": {
+    "directions": 16,
+    "minimum": 0.000375,
+    "median": 0.000376,
+    "mean": 0.000376,
+    "maximum": 0.0003775,
+    "sample_standard_deviation": 0.0000006055,
+    "best_point": {
+      "orientation_polar_cos": -0.366426575929,
+      "orientation_azimuth_turns": 0.676035918295
+    }
+  },
+  "comparison": {
+    "sphere_median_change_from_integer_set_percent": -0.1328,
+    "sphere_minimum_change_from_integer_set_percent": 1.4885,
+    "median_individual_relative_standard_error_percent": 6.62,
+    "directional_improvement_resolved": false
+  },
+  "detailed_local_result": {
+    "path": "results.json",
+    "sha256": "19ca40a06b889e519bb4567aeb1aa48bbefe2d3ae5312812418f610b3c27ac2d"
+  },
+  "local_sqlite_result": {
+    "path": "results.sqlite",
+    "sha256": "c2cef9c7c6cd911945a3787f41ee3dfba60c5c6bf5f42ae63a441652b492de3b",
+    "integrity_check": "ok"
+  }
+}

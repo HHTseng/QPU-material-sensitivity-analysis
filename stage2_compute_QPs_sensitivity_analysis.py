@@ -36,7 +36,7 @@ record of each Morris_i.mac configuration), the analog of Paul's SobolSequence.
 Per-sample DG(t) curves are read from the qps/*_xQPs.npz files that
 stage2_compute_QPs.py already wrote, so no ODE is recomputed.
 
-Experimental-data contract (chi^2 only): --experimental-dir must contain one
+Experimental-data definition (chi^2 only): --experimental-dir must contain one
 Paul-format curve per electrode -- a pair <stem>_DuringPulse.txt and <stem>.txt,
 each 3 rows [delay us, Delta-Gamma MHz, error MHz] -- named so that sorted
 filename order matches electrode index order. DEFAULT_EXPERIMENTAL_DIR holds
@@ -462,7 +462,7 @@ def run_chi2_analysis(results_dir, sequence, entries, exp_dir, normalize):
     # Anything short of that is a hard, deliberate placeholder: we refuse to
     # fabricate targets by reusing/mapping a mismatched set of curves. This is
     # the "let it hang there, broken, until real per-electrode data exists"
-    # contract -- swap --experimental-dir for real data to enable the method.
+    # definition -- swap --experimental-dir for real data to enable the method.
     exp_curves = load_experimental_curves(exp_dir) if os.path.isdir(exp_dir) else []
     if len(exp_curves) != n_electrodes:
         raise NotImplementedError(

@@ -446,13 +446,13 @@ class JointConstraint:
 def _validated_build(source: Any) -> Mapping[str, Any]:
     build = _mapping(source, "build", nonempty=True)
     mode = build.get("mode")
-    if mode == "legacy-unresolved":
+    if mode == "historical-unresolved":
         _reject_unknown(build, ("mode", "reason", "recorded"), "build")
         if not isinstance(build.get("reason"), str) or not build["reason"].strip():
-            raise ConfigError("legacy-unresolved build needs a non-empty reason")
+            raise ConfigError("historical-unresolved build needs a non-empty reason")
         return _freeze(build)
     if mode != "verified":
-        raise ConfigError("build.mode must be 'verified' or 'legacy-unresolved'")
+        raise ConfigError("build.mode must be 'verified' or 'historical-unresolved'")
     allowed = (
         "mode", "executable_sha256", "runtime_input_sha256", "geant4_revision",
         "g4cmp_revision", "detector_revision", "compiler", "compiler_flags",
@@ -524,7 +524,7 @@ class ExperimentSpec:
     seed_algorithm: str
     seed_base: int
     seed_bank_id: int
-    fidelity: Mapping[str, Any]
+    event_counts: Mapping[str, Any]
     physics: Mapping[str, Any]
     analysis: Mapping[str, Any]
     search: Mapping[str, Any]
@@ -560,7 +560,7 @@ class ExperimentSpec:
                     "bank_id": self.seed_bank_id,
                 },
             },
-            "fidelity": _thaw(self.fidelity),
+            "event_counts": _thaw(self.event_counts),
             "physics": _thaw(self.physics),
             "analysis": _thaw(self.analysis),
             "search": _thaw(self.search),
@@ -578,7 +578,7 @@ class ExperimentSpec:
     ) -> "ExperimentSpec":
         source = _mapping(source, "experiment")
         allowed = (
-            "schema", "id", "purpose", "parameters", "constraints", "sampling", "fidelity",
+            "schema", "id", "purpose", "parameters", "constraints", "sampling", "event_counts",
             "physics", "analysis", "search", "build", "provenance",
         )
         _reject_unknown(source, allowed, "experiment")
@@ -640,19 +640,19 @@ class ExperimentSpec:
         if not isinstance(seed["bank_id"], int) or isinstance(seed["bank_id"], bool):
             raise ConfigError("sampling.seed.bank_id must be an integer")
 
-        fidelity = _mapping(source.get("fidelity"), "fidelity", nonempty=True)
-        events = fidelity.get("events_per_task")
+        event_counts = _mapping(source.get("event_counts"), "event_counts", nonempty=True)
+        events = event_counts.get("events_per_task")
         if not isinstance(events, int) or isinstance(events, bool) or events <= 0:
-            raise ConfigError("fidelity.events_per_task must be a positive integer")
+            raise ConfigError("event_counts.events_per_task must be a positive integer")
         expected_total = design.n_sites * replicas * events
-        if "events_total" in fidelity and fidelity["events_total"] != expected_total:
+        if "events_total" in event_counts and event_counts["events_total"] != expected_total:
             raise ConfigError(
-                f"fidelity.events_total={fidelity['events_total']} disagrees with "
+                f"event_counts.events_total={event_counts['events_total']} disagrees with "
                 f"{design.n_sites} sites x {replicas} replicas x {events} = {expected_total}"
             )
         # Store the total explicitly even if the concise source omitted it.
-        fidelity_resolved = dict(fidelity)
-        fidelity_resolved["events_total"] = expected_total
+        event_counts_resolved = dict(event_counts)
+        event_counts_resolved["events_total"] = expected_total
 
         physics = _mapping(source.get("physics"), "physics", nonempty=True)
         analysis = _validated_analysis(source.get("analysis"))
@@ -670,7 +670,7 @@ class ExperimentSpec:
             seed_algorithm=str(seed["algorithm"]),
             seed_base=seed["base"],
             seed_bank_id=seed["bank_id"],
-            fidelity=_freeze(fidelity_resolved),
+            event_counts=_freeze(event_counts_resolved),
             physics=_freeze(physics),
             analysis=analysis,
             search=search,
@@ -689,7 +689,7 @@ class ResolvedExperiment:
     parameter_layers: Tuple[ResolvedParameter, ...]
     constraints: Tuple[JointConstraint, ...]
     sampling: SamplingPlan
-    fidelity: Mapping[str, Any]
+    event_counts: Mapping[str, Any]
     physics: Mapping[str, Any]
     analysis: Mapping[str, Any]
     search: Mapping[str, Any]
@@ -718,7 +718,7 @@ class ResolvedExperiment:
             },
             "constraints": [constraint.to_manifest() for constraint in self.constraints],
             "sampling": self.sampling.to_manifest(),
-            "fidelity": _thaw(self.fidelity),
+            "event_counts": _thaw(self.event_counts),
             "physics": _thaw(self.physics),
             "analysis": _thaw(self.analysis),
             "search": _thaw(self.search),
@@ -819,7 +819,7 @@ def resolve_experiment(
         sampling = build_recorded_plan(
             spec.design,
             replicas=spec.replicas,
-            events_per_task=int(spec.fidelity["events_per_task"]),
+            events_per_task=int(spec.event_counts["events_per_task"]),
             seed_base=spec.seed_base,
             seed_bank_id=spec.seed_bank_id,
             seed_algorithm=spec.seed_algorithm,
@@ -832,7 +832,7 @@ def resolve_experiment(
         parameter_layers=tuple(layers),
         constraints=spec.constraints,
         sampling=sampling,
-        fidelity=spec.fidelity,
+        event_counts=spec.event_counts,
         physics=spec.physics,
         analysis=spec.analysis,
         search=spec.search,
@@ -849,7 +849,7 @@ def load_resolved_experiment(source: Any) -> ResolvedExperiment:
     document, _ = _load_document(source)
     document = _mapping(document, "resolved experiment")
     allowed = (
-        "schema", "id", "purpose", "parameter_layers", "constraints", "sampling", "fidelity",
+        "schema", "id", "purpose", "parameter_layers", "constraints", "sampling", "event_counts",
         "physics", "analysis", "search", "build", "provenance", "catalog_key",
         "experiment_spec_key", "manifest_key",
     )
@@ -920,26 +920,26 @@ def load_resolved_experiment(source: Any) -> ResolvedExperiment:
         sampling = SamplingPlan.from_manifest(document.get("sampling", {}))
     except SamplingError as exc:
         raise ConfigError(str(exc)) from exc
-    fidelity = _mapping(document.get("fidelity"), "fidelity", nonempty=True)
+    event_counts = _mapping(document.get("event_counts"), "event_counts", nonempty=True)
     expected_total = len(sampling.tasks) * sampling.events_per_task
-    if fidelity.get("events_per_task") != sampling.events_per_task:
-        raise ConfigError("resolved fidelity events_per_task disagrees with its task plan")
-    if fidelity.get("events_total") != expected_total:
+    if event_counts.get("events_per_task") != sampling.events_per_task:
+        raise ConfigError("resolved event_counts events_per_task disagrees with its task plan")
+    if event_counts.get("events_total") != expected_total:
         raise ConfigError(
-            f"resolved fidelity events_total disagrees with its {len(sampling.tasks)} tasks"
+            f"resolved event_counts events_total disagrees with its {len(sampling.tasks)} tasks"
         )
-    gun_energy = fidelity.get("gun_energy_eV")
+    gun_energy = event_counts.get("gun_energy_eV")
     if gun_energy is not None and (
             not isinstance(gun_energy, (int, float)) or isinstance(gun_energy, bool)
             or not math.isfinite(float(gun_energy)) or float(gun_energy) <= 0.0):
-        raise ConfigError("resolved fidelity gun_energy_eV must be positive and finite")
+        raise ConfigError("resolved event_counts gun_energy_eV must be positive and finite")
     experiment = ResolvedExperiment(
         experiment_id=str(document.get("id", "")),
         purpose=str(document.get("purpose", "")),
         parameter_layers=tuple(layers),
         constraints=constraints,
         sampling=sampling,
-        fidelity=_freeze(fidelity),
+        event_counts=_freeze(event_counts),
         physics=_freeze(_mapping(document.get("physics"), "physics", nonempty=True)),
         analysis=_validated_analysis(document.get("analysis")),
         search=_validated_search(document.get("search", {})),
@@ -962,7 +962,7 @@ def write_resolved_experiment(path: Any, experiment: ResolvedExperiment) -> Path
 
     Repeating the write with the identical manifest is idempotent.  If the path
     already names different content it is refused.  A hard-link publish is used
-    because ordinary ``os.replace`` would silently overwrite the old contract.
+    because ordinary ``os.replace`` would silently overwrite the old definition.
     """
 
     destination = Path(path)

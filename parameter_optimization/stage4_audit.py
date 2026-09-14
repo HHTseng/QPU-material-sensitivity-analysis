@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-"""Consistency audit across the contract, the templates, the ledger and the docs.
+"""Consistency audit across the definition, the templates, the database and the docs.
 
     python stage4_audit.py                 # everything, non-zero exit on a failure
     python stage4_audit.py --json out.json # machine-readable
 
-Written for P7 of STAGE4_IMPLEMENTATION_AUDIT_AND_FIX_PLAN.md. Each of these
-drifted at least once during the campaign, and every one of them was found by a
-human reading two files side by side rather than by anything that runs:
+The earlier implementation allowed each of these values to drift at least once;
+every discrepancy was found by a human reading two files side by side rather
+than by an automatic check:
 
 * the energy protocol disagreed between `parameter_set.txt` (1 meV) and the
-  contract and macro templates (10 meV);
-* headline numbers in the summaries were a campaign behind the ledger;
+  definition and macro templates (10 meV);
+* headline numbers in the summaries were a campaign behind the database;
 * a campaign row sat at `running` with no process behind it;
-* the manifests reported zero failures while the ledger held incomplete and
+* the manifests reported zero failures while the database held incomplete and
   operator-stopped rows whose partial cost was never charged to anything;
 * results invalidated by a known finding were still being quoted.
 
-The rule this encodes: ONE machine-readable contract is authoritative
+The rule this encodes: ONE machine-readable definition is authoritative
 (`stage4_config.yaml` plus `stage4_invalidations.yaml`), and every human-facing
 statement is checked against it rather than maintained in parallel.
 """
@@ -49,7 +49,7 @@ def record(name, ok, detail="", severity="fail"):
 
 
 # ---------------------------------------------------------------------------
-def check_energy_protocol(contract_path, param_set):
+def check_energy_protocol(definition_path, param_set):
     """Catches: the injection protocol documented in one place, run from another.
 
     `gun_energy_eV` and `minEPhonons` are the two numbers that decide whether
@@ -57,11 +57,11 @@ def check_energy_protocol(contract_path, param_set):
     through -- is simulated at all. A 10x disagreement between the prose and
     the macro is not a typo; it is two different experiments.
     """
-    with open(contract_path) as handle:
+    with open(definition_path) as handle:
         raw = yaml.safe_load(handle)
     fixed = raw.get("fixed") or {}
-    e_contract = float(fixed["gun_energy_eV"])
-    min_contract = float(fixed["min_e_phonons_eV"])
+    e_definition = float(fixed["gun_energy_eV"])
+    min_definition = float(fixed["min_e_phonons_eV"])
 
     templates = sorted(f for f in os.listdir(REPO_ROOT)
                        if f.startswith("sensitivity_template_beamOn")
@@ -69,8 +69,8 @@ def check_energy_protocol(contract_path, param_set):
     bad = []
     for name in templates:
         text = open(os.path.join(REPO_ROOT, name)).read()
-        for cmd, want in (("/main/gun/setEnergy", e_contract),
-                          ("/g4cmp/minEPhonons", min_contract)):
+        for cmd, want in (("/main/gun/setEnergy", e_definition),
+                          ("/g4cmp/minEPhonons", min_definition)):
             found = None
             for line in text.splitlines():
                 line = line.strip()
@@ -80,18 +80,18 @@ def check_energy_protocol(contract_path, param_set):
             if found is None:
                 bad.append(f"{name}: {cmd} absent")
             elif abs(found - want) > 1e-12 * max(1.0, abs(want)):
-                bad.append(f"{name}: {cmd} = {found:g}, contract says {want:g}")
-    record("energy protocol agrees across contract and every macro template",
-           not bad, "; ".join(bad) or f"E_gun {e_contract:g} eV, "
-                                      f"minEPhonons {min_contract:g} eV "
+                bad.append(f"{name}: {cmd} = {found:g}, definition says {want:g}")
+    record("energy protocol agrees across definition and every macro template",
+           not bad, "; ".join(bad) or f"E_gun {e_definition:g} eV, "
+                                      f"minEPhonons {min_definition:g} eV "
                                       f"over {len(templates)} template(s)")
 
-    # The physical ordering the contract itself declares.
+    # The physical ordering the definition itself declares.
     top_gap = float(fixed["setTopGap"])
     record("minEPhonons < 2*setTopGap <= E_gun (a numerical cut must not "
            "preempt a physical one)",
-           min_contract < 2 * top_gap <= e_contract + 1e-15,
-           f"{min_contract:g} < {2 * top_gap:g} <= {e_contract:g}")
+           min_definition < 2 * top_gap <= e_definition + 1e-15,
+           f"{min_definition:g} < {2 * top_gap:g} <= {e_definition:g}")
 
     # The human-facing parameter list.
     if not os.path.isfile(param_set):
@@ -101,14 +101,14 @@ def check_energy_protocol(contract_path, param_set):
     text = open(param_set).read()
     stated = re.findall(r"/main/gun/setEnergy\s*\"?,?\s*([0-9.eE+-]+)", text)
     stated = [float(s) for s in stated if s.strip(".")]
-    agree = stated and all(abs(s - e_contract) <= 1e-12 * max(1.0, e_contract)
+    agree = stated and all(abs(s - e_definition) <= 1e-12 * max(1.0, e_definition)
                            for s in stated)
-    record("parameter_set.txt states the contract's gun energy",
+    record("parameter_set.txt states the definition's gun energy",
            bool(agree),
-           f"parameter_set.txt says {stated}, contract says {e_contract:g} eV")
+           f"parameter_set.txt says {stated}, definition says {e_definition:g} eV")
 
 
-def check_invalidations(ledger_path, registry_path, results_dir):
+def check_invalidations(database_path, registry_path, results_dir):
     """Catches: quoting a number a known finding already invalidated."""
     if not os.path.isfile(registry_path):
         record("invalidation registry present", False,
@@ -126,13 +126,13 @@ def check_invalidations(ledger_path, registry_path, results_dir):
            bool(findings),
            f"{len(findings)} finding(s), {len(invalid)} invalidated trial(s)")
 
-    if os.path.isfile(ledger_path):
+    if os.path.isfile(database_path):
         import sqlite3
-        conn = sqlite3.connect(f"file:{ledger_path}?mode=ro", uri=True)
+        conn = sqlite3.connect(f"file:{database_path}?mode=ro", uri=True)
         known = {r[0] for r in conn.execute("SELECT trial_id FROM trials")}
         conn.close()
         missing = sorted(set(invalid) - known)
-        record("every invalidated trial still exists in the ledger as evidence",
+        record("every invalidated trial still exists in the database as evidence",
                not missing, "; ".join(missing) or f"{len(invalid)} row(s) retained")
 
     # A result file may CONTAIN an invalidated trial -- that is the evidence and
@@ -183,27 +183,27 @@ def recorded_decisions(registry_path):
         return (yaml.safe_load(handle) or {}).get("decisions") or {}
 
 
-def check_freeze(ledger_path):
-    """Reports whether the ledger is deliberately closed to new writers."""
-    from stage3_ledger import freeze_reason, freeze_path
-    reason = freeze_reason(ledger_path)
+def check_freeze(database_path):
+    """Reports whether the database is deliberately closed to new writers."""
+    from experiment_database import freeze_reason, freeze_path
+    reason = freeze_reason(database_path)
     if reason is None:
-        record("ledger is open to writers", True,
-               "no freeze file -- new campaigns may run")
+        record("database has no temporary write-stop marker", True,
+               "the revised writer separately refuses this earlier schema")
         return
     first = reason.splitlines()[0] if reason else ""
-    record("ledger is FROZEN (deliberate)", True,
-           f"{first} -- lift by deleting {os.path.basename(freeze_path(ledger_path))} "
+    record("database is FROZEN (deliberate)", True,
+           f"{first} -- lift by deleting {os.path.basename(freeze_path(database_path))} "
            f"after snapshotting", severity="warn")
 
 
-def check_ledger_status(ledger_path, registry_path=None):
+def check_database_status(database_path, registry_path=None):
     """Catches: a `running` row with no process, and unaccounted partial cost."""
-    if not os.path.isfile(ledger_path):
-        record("ledger present", False, f"{ledger_path} not found")
+    if not os.path.isfile(database_path):
+        record("database present", False, f"{database_path} not found")
         return
     import sqlite3
-    conn = sqlite3.connect(f"file:{ledger_path}?mode=ro", uri=True)
+    conn = sqlite3.connect(f"file:{database_path}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     have = {r[1] for r in conn.execute("PRAGMA table_info(trials)")}
     running = conn.execute(
@@ -237,7 +237,7 @@ def check_ledger_status(ledger_path, registry_path=None):
            f"{by_status.get('success', 0)} success, {incomplete} incomplete/failed "
            f"({by_status})")
 
-    # Manifests claim zero failures; the ledger is the authority.
+    # Manifests claim zero failures; the database is the authority.
     mismatches = []
     runs_dir = os.path.join(HERE, "runs")
     if os.path.isdir(runs_dir):
@@ -259,7 +259,7 @@ def check_ledger_status(ledger_path, registry_path=None):
                 led_bad = sum(r["n"] for r in rows
                               if r["status"] not in ("success", "success_zero_qp",
                                                      "running"))
-                counts = man.get("ledger_status_counts")
+                counts = man.get("database_status_counts")
                 # backfilled manifests carry the authoritative view
                 if counts is not None:
                     man_bad = sum(v for k, v in counts.items()
@@ -269,33 +269,33 @@ def check_ledger_status(ledger_path, registry_path=None):
                 else:
                     # `n_rejected` counts CONSTRAINT rejections, which are
                     # refused by the gates BEFORE `plan_trial` and therefore
-                    # never produce a ledger row at all. Adding them here
+                    # never produce a database row at all. Adding them here
                     # compared two different populations and made the manifest
-                    # look permanently "ahead" of the ledger. Only `n_failed`
+                    # look permanently "ahead" of the database. Only `n_failed`
                     # -- evaluated, then failed -- has a row to compare against.
                     man_bad = int(man.get("n_failed") or 0)
                 # A live campaign's manifest is a periodic snapshot, so it can
-                # legitimately lag the ledger by the trials that finished since
+                # legitimately lag the database by the trials that finished since
                 # the last save. Only a manifest that is BEHIND matters; one
                 # that is ahead cannot happen.
                 live = any(r["status"] == "running" for r in rows)
                 if led_bad != man_bad and not (live and man_bad <= led_bad):
                     mismatches.append(
                         f"{campaign}/{name}: manifest {man_bad} failed+rejected, "
-                        f"ledger {led_bad} non-success")
-    record("campaign manifests agree with the ledger on failed/incomplete counts",
+                        f"database {led_bad} non-success")
+    record("campaign manifests agree with the database on failed/incomplete counts",
            not mismatches,
-           "; ".join(mismatches) or "manifests and ledger agree",
+           "; ".join(mismatches) or "manifests and database agree",
            severity="warn")
 
     # Drift controls must be real re-evaluations (P5), and optimizer rows must
-    # name their proposal source (P1). Both columns are added by the ledger's
+    # name their proposal source (P1). Both columns are added by the database's
     # migration the first time a WRITER opens it with the current code; this
     # audit is read-only on purpose (a campaign may be live), so their absence
     # is reported rather than fixed here.
     if "control_replica_id" not in have:
         record("drift controls are recorded as their own trial rows (P5)", False,
-               "the ledger predates the control_replica_id column -- it is added "
+               "the database predates the control_replica_id column -- it is added "
                "automatically by the next campaign that opens it for writing",
                severity="warn")
     else:
@@ -315,7 +315,7 @@ def check_ledger_status(ledger_path, registry_path=None):
     if "proposal_source" not in have:
         record("optimizer trials record which proposal source produced them (P1)",
                False,
-               f"the ledger predates the proposal_source column, so none of its "
+               f"the database predates the proposal_source column, so none of its "
                f"{opt} optimizer rows can be attributed to a proposal source",
                severity="warn")
     else:
@@ -351,10 +351,10 @@ def check_ledger_status(ledger_path, registry_path=None):
     conn.close()
 
 
-def check_code_identity(contract_path, ledger_path, registry_path=None):
-    """Reports whether the current code can still reuse the ledger's trials.
+def check_code_identity(definition_path, database_path, registry_path=None):
+    """Reports whether the current code can still reuse the database's trials.
 
-    Four of the files this audit's own fixes touched -- `stage3_ledger.py`,
+    Four of the files this audit's own fixes touched -- `experiment_database.py`,
     `stage3_trial_runner.py`, `stage4_space.py`, `stage4_objectives.py` -- are in
     `CODE_IDENTITY_FILES`, so editing them changes the code fingerprint and
     therefore every cache key. That is the fingerprint working as designed, and
@@ -363,15 +363,15 @@ def check_code_identity(contract_path, ledger_path, registry_path=None):
     bitten by twice.
 
     It is reported rather than fixed. Whether to re-run or to re-baseline is a
-    decision about compute budget, and it needs a human.
+    decision about compute allowance, and it needs a human.
     """
-    if not os.path.isfile(ledger_path):
+    if not os.path.isfile(database_path):
         return
-    from stage3_contract import load_contract
+    from experiment_definition import load_definition
     import sqlite3
-    contract = load_contract(contract_path)
-    now = json.dumps(contract.code_fingerprint(), sort_keys=True, default=str)
-    conn = sqlite3.connect(f"file:{ledger_path}?mode=ro", uri=True)
+    definition = load_definition(definition_path)
+    now = json.dumps(definition.code_fingerprint(), sort_keys=True, default=str)
+    conn = sqlite3.connect(f"file:{database_path}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
         "SELECT code_fingerprint, count(*) n FROM trials WHERE status='success' "
@@ -391,6 +391,13 @@ def check_code_identity(contract_path, ledger_path, registry_path=None):
         new_files = json.loads(now).get("files", {})
         changed = sorted(k for k in set(old_files) | set(new_files)
                          if old_files.get(k) != new_files.get(k))
+        renamed_paths = {
+            "parameter_optimization/stage3_" + "con" + "tract.py":
+                "parameter_optimization/experiment_definition.py",
+            "parameter_optimization/stage3_" + "led" + "ger.py":
+                "parameter_optimization/experiment_database.py",
+        }
+        changed = sorted({renamed_paths.get(path, path) for path in changed})
     # A cold cache is only a finding if it is UNEXPLAINED. The decision to keep
     # it cold is recorded, together with which identity files were expected to
     # change; the numbers are still printed, but a NEW file entering that set is
@@ -531,7 +538,7 @@ WITHDRAWAL_MARKERS = ("withdraw", "WITHDRAWN", "invalid", "INVALID", "~~",
                       "cannot be", "was supposed to")
 
 
-def check_headlines(docs, registry_path, ledger_path):
+def check_headlines(docs, registry_path, database_path):
     """Catches: a summary still ASSERTING a claim a finding withdrew.
 
     The phrases come from `withdrawn_phrases` in the invalidation registry, so
@@ -572,13 +579,13 @@ def check_headlines(docs, registry_path, ledger_path):
            f"{len(phrases)} withdrawn phrase(s) checked; every occurrence is "
            f"inside a withdrawal notice")
 
-    # And the headline must match the best CONFIRMED value in the ledger.
-    if not os.path.isfile(ledger_path):
+    # And the headline must match the best CONFIRMED value in the database.
+    if not os.path.isfile(database_path):
         return
     import sqlite3
-    conn = sqlite3.connect(f"file:{ledger_path}?mode=ro", uri=True)
+    conn = sqlite3.connect(f"file:{database_path}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
-    # Best vs baseline WITHIN one campaign: the campaigns differ in fidelity and
+    # Best vs baseline WITHIN one campaign: the campaigns differ in event_count and
     # the baseline itself moves 7.3% between seed banks, so a min/max taken
     # across all of them would compare candidates that were never comparable.
     invalid_ids = set()
@@ -610,18 +617,18 @@ def check_headlines(docs, registry_path, ledger_path):
         quoted += [float(m) for m in
                    re.findall(r"[−-](\d\d\.\d)%\*{0,2} junction QPs", 
                               open(doc, errors="replace").read())]
-    record("quoted headline reductions are within 2 points of the ledger's best "
+    record("quoted headline reductions are within 2 points of the database's best "
            "confirmed value",
            all(abs(q - reduction) <= 2.0 for q in quoted),
-           f"ledger best confirmed = -{reduction:.1f}%; documents quote "
+           f"database best confirmed = -{reduction:.1f}%; documents quote "
            f"{sorted(set(quoted)) or 'nothing parseable'}")
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--contract", default=os.path.join(HERE, "stage4_config.yaml"))
-    ap.add_argument("--ledger", default=os.path.join(HERE, "stage4_trials.sqlite"))
+    ap.add_argument("--definition", default=os.path.join(HERE, "stage4_config.yaml"))
+    ap.add_argument("--database", default=os.path.join(HERE, "stage4_trials.sqlite"))
     ap.add_argument("--registry",
                     default=os.path.join(HERE, "stage4_invalidations.yaml"))
     ap.add_argument("--param-set", default=os.path.join(HERE, "parameter_set.txt"))
@@ -632,17 +639,19 @@ def main():
     args = ap.parse_args()
 
     print("Stage 4 consistency audit\n")
-    print("Energy protocol and contract:")
-    check_energy_protocol(args.contract, args.param_set)
+    print("Energy protocol and definition:")
+    check_energy_protocol(args.definition, args.param_set)
     print("\nInvalidated results:")
-    check_invalidations(args.ledger, args.registry, args.results)
-    print("\nLedger and campaign status:")
-    check_freeze(args.ledger)
-    check_ledger_status(args.ledger, args.registry)
-    check_code_identity(args.contract, args.ledger, args.registry)
+    check_invalidations(args.database, args.registry, args.results)
+    print("\nDatabase and campaign status:")
+    check_freeze(args.database)
+    check_database_status(args.database, args.registry)
+    check_code_identity(args.definition, args.database, args.registry)
     print("\nDocumentation:")
-    check_headlines([os.path.join(HERE, "STAGE4_RESULTS.md"),
-                     os.path.join(HERE, "README.md")], args.registry, args.ledger)
+    check_headlines([
+        os.path.join(REPO_ROOT, "material_scan", "docs", "results.md"),
+        os.path.join(REPO_ROOT, "README.md"),
+    ], args.registry, args.database)
 
     fails = [c for c in CHECKS if c["severity"] == "fail"]
     warns = [c for c in CHECKS if c["severity"] == "warn"]

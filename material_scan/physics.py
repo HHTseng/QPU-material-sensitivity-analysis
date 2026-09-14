@@ -1,7 +1,7 @@
 """Pure hit-to-quasiparticle calculations used by material-scan analyses.
 
 The simulation writes one CSV file per site and replica.  This module reads
-those files without knowing anything about campaigns, ledgers, or directories.
+those files without knowing anything about campaigns, databases, or directories.
 Its numerical choices intentionally match the historical scorer: NumPy's
 ties-to-even rounding, the lower-index electrode on a distance tie, and the
 lower time bin on a time tie.
@@ -37,7 +37,7 @@ class PhysicsError(ValueError):
 class HitScore:
     """Scored contents of one complete hit file.
 
-    ``n_hits`` is the historical ledger quantity: the number of CSV data rows,
+    ``n_hits`` is the historical database quantity: the number of CSV data rows,
     including rows that deposit no energy on the sensor surface.
     """
 
@@ -104,7 +104,7 @@ def calculate_qps(
 
     The return shapes are ``(snapshot_count,)`` and
     ``(number_of_electrodes, snapshot_count)``.  Track weights are deliberately
-    absent because the legacy calculation did not apply them.
+    absent because the historical calculation did not apply them.
     """
 
     gap = _positive_finite(gap_eV, "gap_eV")
@@ -143,7 +143,7 @@ def calculate_qps(
     end_y = end_y[selected]
     final_time = final_time[selected]
 
-    # Match the legacy expression and np.argmin.  np.argmin returns the first
+    # Match the historical expression and np.argmin.  np.argmin returns the first
     # minimum, which fixes an exact distance tie to the lower electrode index.
     distance = (
         (1000.0 * end_x[:, None] - qx[None, :]) ** 2
@@ -254,7 +254,7 @@ def calculate_xqps(
     film_thickness_um: float,
     simulated_primaries: int,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Legacy quasiparticle-density ODE, kept as one tested implementation."""
+    """Historical quasiparticle-density ODE, kept as one tested implementation."""
 
     snapshots = np.asarray(snapshot_times_ns, dtype=np.float64)
     qps = np.asarray(qps_by_electrode_time, dtype=np.float64)

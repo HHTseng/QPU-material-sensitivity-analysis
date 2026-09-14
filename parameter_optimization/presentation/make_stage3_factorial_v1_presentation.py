@@ -337,7 +337,7 @@ def workflow_slide(slide):
         ("2", "Resolver", "density, tensor, native lattice, interfaces"),
         ("3", "Scenario", "16 sites × 2 replicas\n125k events each"),
         ("4", "Geant4/G4CMP", "32 guarded sub-runs\nper candidate"),
-        ("5", "Proof + ledger", "marker, material check,\nSQLite identities"),
+        ("5", "Proof + database", "marker, material check,\nSQLite identities"),
         ("6", "Score", "Σ junction QPs /\n4M primaries"),
     ]
     xs = [0.55, 2.68, 4.81, 6.94, 9.07, 11.20]
@@ -406,7 +406,7 @@ def build_presentation(df, cfg, trials, subruns, scenario, per_electrode, subdf)
     footer(s, 4, "G4CMP transport context: Agnese et al., arXiv:2302.05998 / FERMILAB-PUB-23-065-ND.")
 
     # 5 — workflow
-    s = prs.slides.add_slide(blank); add_bg(s); title(s, "Campaign workflow and data contract")
+    s = prs.slides.add_slide(blank); add_bg(s); title(s, "Campaign workflow and data definition")
     workflow_slide(s)
     footer(s, 5)
 
@@ -426,12 +426,12 @@ def build_presentation(df, cfg, trials, subruns, scenario, per_electrode, subdf)
         "Independent rescoring reproduces every SQLite total",
     ], 15)
     bullets(s, 6.9, 3.15, 5.55, 2.8, [
-        "CSV rebuilt byte-for-byte from the current single-campaign ledger",
+        "CSV rebuilt byte-for-byte from the current single-campaign database",
         "Each candidate: 32 × 125,000 = 4,000,000 primaries",
         "Total executed: 72,000,000 primaries",
         "Correction: the database contains 576 sub-runs, not 288",
     ], 15)
-    footer(s, 6, "Audit details: STAGE3_FACTORIAL_V1_RESULTS_REVIEW.md")
+    footer(s, 6, "Methods and results: material_scan/docs/results.md")
 
     # 7 — ranking
     s = prs.slides.add_slide(blank); add_bg(s); title(s, "Nominal ranking", "Green bars use Cu; gray bars use Au")
@@ -464,7 +464,7 @@ def build_presentation(df, cfg, trials, subruns, scenario, per_electrode, subdf)
     # 11 — code audit blockers
     s = prs.slides.add_slide(blank); add_bg(s); title(s, "Implementation review: what must change before new campaigns")
     card(s, 0.72, 1.25, 5.95, 2.1, "BLOCKER 1 — incomplete cache identity", "The cache omits the catalog, interface code, macro template, and several resolved film values. Changing Ta lifetime 0.0227 → 0.040 ns changes the macro but not the current cache payload. Lifetime brackets can silently return nominal results.", RED, 14)
-    card(s, 6.82, 1.25, 5.78, 2.1, "BLOCKER 2 — unfiltered reporting", "stage3_report.py reads every observation in the ledger. Once 32/64-position or lifetime-bracket trials are added, one CSV can mix incompatible contracts unless campaign/contract/fidelity filters are required.", RED, 14)
+    card(s, 6.82, 1.25, 5.78, 2.1, "BLOCKER 2 — unfiltered reporting", "stage3_report.py reads every observation in the database. Once 32/64-position or lifetime-bracket trials are added, one CSV can mix incompatible definitions unless campaign/definition/event_count filters are required.", RED, 14)
     card(s, 0.72, 3.68, 3.75, 2.15, "Model caveat", "Effective AMM reproduces 0.795/0.745/0.736 by construction. It is calibrated plumbing, not independent interface-physics validation.", ORANGE, 13)
     card(s, 4.78, 3.68, 3.75, 2.15, "Threshold mismatch", "Bottom gapThreshold is 180 µeV, while the Al gap is 191 µeV. The local normal-film model uses this termination scale. Prefer 191 µeV unless 180 is explicitly calibrated.", ORANGE, 13)
     card(s, 8.84, 3.68, 3.75, 2.15, "Input uncertainty", "Au lifetime is unsourced; Ta/Ti are supplied estimates. Low/nominal/high brackets are required before materials claims.", ORANGE, 13)
@@ -476,7 +476,7 @@ def build_presentation(df, cfg, trials, subruns, scenario, per_electrode, subdf)
     left = [
         "1  Archive factorial-v1 as nominal / 10 meV / 16 sites / 2 replicas",
         "2  Fix cache identity; add cache-invalidation regression tests",
-        "3  Add campaign + contract + fidelity filters to the report",
+        "3  Add campaign + definition + event_count filters to the report",
         "4  Resolve bottom threshold: 191 µeV recommended",
         "5  Run nested 32-site finalists + one Au control",
     ]
@@ -485,11 +485,11 @@ def build_presentation(df, cfg, trials, subruns, scenario, per_electrode, subdf)
         "7  Add seed banks / replicas and matched-block uncertainty",
         "8  Run low / nominal / high lifetime brackets",
         "9  Test alternate or measured interface physics",
-        "10 Confirm finalists at high event fidelity",
+        "10 Confirm finalists at high event event_count",
     ]
     bullets(s, 0.82, 1.28, 5.85, 4.9, left, 16, spacing=13)
     bullets(s, 6.88, 1.28, 5.55, 4.9, right, 16, spacing=13)
-    textbox(s, 0.9, 6.35, 11.5, 0.38, "Only expand to Bayesian optimization when the candidate space becomes larger than an exhaustive budget.", 17, TEAL, True, align=PP_ALIGN.CENTER)
+    textbox(s, 0.9, 6.35, 11.5, 0.38, "Only expand to Bayesian optimization when the candidate space becomes larger than an exhaustive allowance.", 17, TEAL, True, align=PP_ALIGN.CENTER)
     footer(s, 12)
 
     # 13 — conclusion
@@ -497,7 +497,7 @@ def build_presentation(df, cfg, trials, subruns, scenario, per_electrode, subdf)
     textbox(s, 0.82, 1.45, 11.7, 0.72, "The run is real, complete, and reproducible.", 29, WHITE, True, align=PP_ALIGN.CENTER)
     textbox(s, 1.1, 2.55, 11.1, 0.75, "Cu-bottom candidates are consistently favored in the implemented model.", 22, CYAN, True, align=PP_ALIGN.CENTER)
     textbox(s, 1.1, 3.62, 11.1, 0.75, "GaAs/Nb/Cu is the nominal winner—but effectively tied with Ge/Nb/Cu.", 22, ORANGE, True, align=PP_ALIGN.CENTER)
-    textbox(s, 1.1, 4.70, 11.1, 0.90, "Fix cache/report identity, then establish spatial, lifetime, interface, and high-fidelity stability before selecting a material stack.", 20, WHITE, True, align=PP_ALIGN.CENTER)
+    textbox(s, 1.1, 4.70, 11.1, 0.90, "Fix cache/report identity, then establish spatial, lifetime, interface, and high-event_count stability before selecting a material stack.", 20, WHITE, True, align=PP_ALIGN.CENTER)
     footer(s, 13, dark=True)
 
     # 14 — appendix table and references
@@ -512,7 +512,7 @@ def build_presentation(df, cfg, trials, subruns, scenario, per_electrode, subdf)
         "Wilen et al., Phonon downconversion to suppress correlated errors in superconducting qubits, Nature Communications 13, 6425 (2022)."
     )
     textbox(s, 0.85, 3.72, 11.7, 2.55, refs, 12.5, BLACK)
-    footer(s, 14, "Full numerical audit and ranking: STAGE3_FACTORIAL_V1_RESULTS_REVIEW.md")
+    footer(s, 14, "Full numerical summary: material_scan/docs/results.md")
 
     prs.core_properties.title = "Stage 3 Material Optimization — factorial-v1 results"
     prs.core_properties.subject = "QP-minimizing material stack screening with Geant4/G4CMP"
@@ -549,4 +549,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

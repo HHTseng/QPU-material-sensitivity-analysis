@@ -17,13 +17,13 @@ cd "$(dirname "$0")"
 PY=${PY:-$HOME/.conda/envs/G4CMP/bin/python}
 LOG=logs_stage4; mkdir -p "$LOG"
 say() { printf '[%s] %s\n' "$(date '+%F %T')" "$*" | tee -a "$LOG/sites.log"; }
-say "spatial convergence: 16 -> 32 -> 64 sites, M tier, held-out bank 9"
+say "spatial convergence: 16 -> 32 -> 64 sites, 32,000,000-event setting, held-out bank 9"
 for N in 16 32 64; do
   OUT="results/stage4_sites_${N}.json"
   if [ -f "$OUT" ]; then say "$N sites already done"; continue; fi
   say "=== $N sites ($((N*8)) sub-runs per candidate) ==="
   $PY -u stage4_confirm.py --top 0 --points-file results/stage4_sites_points.json \
-    --fidelity M --positions "$N" --seed-bank 9 --workers 96 --parallel 4 \
+    --event-count 32000000 --positions "$N" --seed-bank 9 --workers 96 --parallel 4 \
     --tag "sites${N}" --out "$OUT" >> "$LOG/sites_${N}.log" 2>&1 \
     && say "$N sites done" || say "WARNING: $N sites returned $?"
 done

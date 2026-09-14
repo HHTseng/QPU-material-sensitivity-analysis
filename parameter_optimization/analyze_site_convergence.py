@@ -33,19 +33,19 @@ def leverage(doc, label):
 
 
 def main():
-    tiers = load("results/stage4_sites_*.json")
-    tiers = {k: v for k, v in tiers.items() if k in (16, 32, 64)}
-    if not tiers:
+    event_counts = load("results/stage4_sites_*.json")
+    event_counts = {k: v for k, v in event_counts.items() if k in (16, 32, 64)}
+    if not event_counts:
         sys.exit("no site-sweep results yet")
-    counts = sorted(tiers)
-    labels = sorted({k for d in tiers.values() for k in d["results"]
+    counts = sorted(event_counts)
+    labels = sorted({k for d in event_counts.values() for k in d["results"]
                      if d["results"][k].get("value") is not None})
     print(f"Site-sweep convergence — stages present: {counts}\n")
     print(f"  {'candidate':22s}" + "".join(f"{f'{n} sites':>16s}" for n in counts))
     for lab in labels:
         row = f"  {lab:22s}"
         for n in counts:
-            r = tiers[n]["results"].get(lab, {})
+            r = event_counts[n]["results"].get(lab, {})
             v = r.get("value")
             row += f"{(f'{v:.4e}' if v else '--'):>16s}"
         print(row)
@@ -58,18 +58,18 @@ def main():
                 continue
             row = f"  {lab:22s}"
             for n in counts:
-                r = tiers[n]["results"]
+                r = event_counts[n]["results"]
                 v, b = r.get(lab, {}).get("value"), r.get(base, {}).get("value")
                 row += f"{(f'{100*(v-b)/b:+.1f}%' if v and b else '--'):>16s}"
             print(row)
-    if 32 in tiers and 64 in tiers:
+    if 32 in event_counts and 64 in event_counts:
         print("\n  DECISION (judged on 32 -> 64):")
         worst = 0.0
         for lab in labels:
-            a = tiers[32]["results"].get(lab, {}).get("value")
-            b = tiers[64]["results"].get(lab, {}).get("value")
-            sa = tiers[32]["results"].get(lab, {}).get("relative_se") or 0
-            sb = tiers[64]["results"].get(lab, {}).get("relative_se") or 0
+            a = event_counts[32]["results"].get(lab, {}).get("value")
+            b = event_counts[64]["results"].get(lab, {}).get("value")
+            sa = event_counts[32]["results"].get(lab, {}).get("relative_se") or 0
+            sb = event_counts[64]["results"].get(lab, {}).get("relative_se") or 0
             if not (a and b):
                 continue
             shift = abs(b - a) / a
@@ -77,10 +77,10 @@ def main():
             worst = max(worst, shift)
             print(f"    {lab:22s} shift {100*shift:5.1f}%  combined error {100*comb:5.1f}%  "
                   f"{'within noise' if shift <= comb else 'RESOLVED SHIFT'}")
-        r16 = 16 in tiers
+        r16 = 16 in event_counts
         print(f"\n    worst 32->64 shift: {100*worst:.1f}%")
         if worst <= 0.05:
-            print("    => 32 and 64 agree. If 16 also agrees, keep the 16-site contract")
+            print("    => 32 and 64 agree. If 16 also agrees, keep the 16-site definition")
             print("       and the 69 feasible points are usable directly; otherwise adopt")
             print("       32/64 and re-evaluate a diverse subset first.")
         else:

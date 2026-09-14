@@ -30,7 +30,7 @@ BANK=9
 say "=========================================================================="
 say "P2-4  electrode-aware stratified quadrature + nested convergence"
 say "  points : $POINTS  (+ baseline)"
-say "  design : Neyman allocation over H0..H3, every electrode covered"
+say "  design : Neyman allocation over S0_junction..S4_bulk (rectangle geometry)"
 say "  levels : 128 -> 256 -> 512 sites at 31250 events/sub-run"
 say "=========================================================================="
 
@@ -41,7 +41,7 @@ for LEVEL in 128:32000000 256:64000000 512:128000000; do
   if [ -f "$OUT" ]; then say "$N sites already done -- skipping"; continue; fi
   say "=== $N stratified sites, $((N*8)) sub-runs, $EV events/candidate ==="
   $PY -u stage4_confirm.py --top 0 --points-file "$POINTS" \
-      --fidelity L --stratified "$N" --events "$EV" --seed-bank "$BANK" \
+      --event-count 320000000 --stratified "$N" --events "$EV" --seed-bank "$BANK" \
       --workers 96 --parallel 5 --tag "strat${N}" --out "$OUT" \
       >> "$LOG/stratified_${N}.log" 2>&1 \
     && say "$N sites done" || {

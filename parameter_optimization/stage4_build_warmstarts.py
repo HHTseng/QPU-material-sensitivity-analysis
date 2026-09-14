@@ -4,7 +4,7 @@
 THE RULE THIS FILE ENFORCES
 ---------------------------
 Old objective values are NEVER imported. J_16, J_32, J_64 and J_stratified are
-four different quantities; the optimizer is single-fidelity, so inserting an old
+four different quantities; the optimizer is single-event_count, so inserting an old
 value as an observation of the new objective would poison the GP with a number
 that was never measured. What carries over is the RAW PHYSICAL VECTOR, which is
 re-transformed under the current bounds -- never the old unit coordinates, which
@@ -27,7 +27,7 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-from stage3_contract import load_contract          # noqa: E402
+from experiment_definition import load_definition          # noqa: E402
 from stage4_optimize import build_space            # noqa: E402
 import stage4_space as S                           # noqa: E402
 
@@ -44,15 +44,15 @@ def gap_ok(space, point, floor_eV):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=24)
-    ap.add_argument("--contract", default=os.path.join(HERE, "stage4_config.yaml"))
+    ap.add_argument("--definition", default=os.path.join(HERE, "stage4_config.yaml"))
     ap.add_argument("--gap-floor", type=float, default=1.5384e-3,
                     help="direct modeled-gap floor in eV (Sep-8 plan 3.1)")
     ap.add_argument("--out", default=os.path.join(HERE, "results",
                                                   "stage4_p6_points.json"))
     args = ap.parse_args()
 
-    contract = load_contract(args.contract)
-    space = build_space(contract)
+    definition = load_definition(args.definition)
+    space = build_space(definition)
 
     pool = {}
     for name in ("stage4_strat_points.json", "stage4_sites_points.json",
@@ -63,7 +63,7 @@ def main():
                 for k, v in json.load(fh).items():
                     pool.setdefault(k, v)
 
-    # Every point the benchmark actually simulated, read from the LEDGER's
+    # Every point the benchmark actually simulated, read from the DATABASE's
     # `candidate` column -- the report only carries the promotion shortlist, and
     # selecting warm starts from the shortlist would inherit the ranking that
     # the failed quadrature produced.
@@ -83,7 +83,7 @@ def main():
             if isinstance(vec, dict) and "topfilm_gap" in vec:
                 pool.setdefault(f"led_{str(tid)[-10:]}", vec)
         con.close()
-        print(f"ledger contributed {len(rows)} completed trials")
+        print(f"database contributed {len(rows)} completed trials")
 
     feasible = {k: v for k, v in pool.items()
                 if k in MANDATORY or gap_ok(space, v, args.gap_floor)}

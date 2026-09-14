@@ -1,11 +1,10 @@
 """Stage 4 property space: decision variables, transforms, hard gates, resolver.
 
-Stage 3 selected among *real material triplets*; the property values travelled
-as a linked bundle from the catalog. Stage 4 opens the second interpretation of
-`STAGE3_MATERIAL_OPTIMIZATION_PIPELINE.md` sec 3.2: the tunable properties
-themselves are the decision variables, inside a physically constrained box. The
-result is a property *target*, and a pseudo-material need not exist -- which is
-exactly why `stage4_project_material.py` exists.
+The earlier material study selected real material triplets whose property
+values travelled as linked records. This study instead searches the tunable
+properties inside physically supported ranges. The result is a property target;
+a corresponding real material need not exist. See
+``material_scan/docs/science.md``.
 
 Three things this module owns:
 
@@ -22,7 +21,7 @@ Three things this module owns:
    design points mid-run on the first material branch, leaving a zero-byte hits
    file (Fisher exact p = 4.3e-18).
 
-3. **The resolver.** `resolve(contract, candidate) -> (resolved, derived)`,
+3. **The resolver.** `resolve(definition, candidate) -> (resolved, derived)`,
    shaped exactly like the Stage 3 catalog resolver so the audited evaluator in
    `stage3_trial_runner.py` runs a pseudo-material through the same path --
    same planned identities, same cache key, same completeness rule.
@@ -32,7 +31,7 @@ lattice record with the scanned fields overridden**. `dyn` (third-order
 elasticity), the Tamura LDOS/STDOS/FTDOS mode fractions, `Debye`, and the
 charge-carrier block stay at Si's values. `Debye` and the lattice constant are
 *measured* inert for this objective (see MODULE NOTES below); `dyn` and the DOS
-fractions are held fixed by the parameter contract and belong in the reported
+fractions are held fixed by the parameter definition and belong in the reported
 limitations.
 
 MODULE NOTES -- what is deliberately not scanned
@@ -107,7 +106,7 @@ SUBSTRATE_CARRIERS = {
 # ---------------------------------------------------------------------------
 # Candidate realization -- how a property vector becomes a simulable material.
 #
-# P0 of STAGE4_IMPLEMENTATION_AUDIT_AND_FIX_PLAN.md: the projection step used to
+# The corrected-material audit found that the projection step used to
 # attach `point["substrate_carrier"]` as a loose extra dict key, and every
 # downstream normaliser (`Space.complete`, `candidate_payload`,
 # `stage4_confirm.collect_points`) silently dropped it -- so six projection runs
@@ -116,7 +115,7 @@ SUBSTRATE_CARRIERS = {
 # The fix is to stop relying on arbitrary extra keys: PHYSICS DECISION VARIABLES
 # and MATERIAL REALIZATION METADATA are now different things with different
 # lifetimes. The realization travels as one explicit, versioned, validated block
-# under `_realization`, is preserved by every normaliser, and enters the ledger
+# under `_realization`, is preserved by every normaliser, and enters the database
 # payload -- and therefore the cache key.
 #
 # Modes:
@@ -140,7 +139,7 @@ DEFAULT_CARRIER = "G4_Si"
 # free decision only in pseudo mode. In the two real-material modes they are read
 # from the lattice record and are exempt from the search box -- clipping a real
 # material into the box is what produced the "SiC C44 = 241 GPa clipped to 200"
-# caveat in STAGE4_RESULTS.md sec 4.3.
+# error summarized in ``material_scan/docs/results.md``.
 SUBSTRATE_MATERIAL_VARIABLES = ("sub_c11", "sub_c12", "sub_c44", "sub_scat",
                                 "sub_decay", "sub_decayTT", "sub_lattice_a")
 
@@ -242,7 +241,7 @@ def _catalog_substrate(name):
 def normalize_realization(candidate, strict=True):
     """Validated realization block for a candidate. Never returns None.
 
-    Accepts the versioned `_realization` block, and -- for the ledger rows and
+    Accepts the versioned `_realization` block, and -- for the database rows and
     point files written before this envelope existed -- a bare top-level
     `substrate_carrier`, which it migrates rather than ignores.
     """
@@ -400,7 +399,7 @@ BOTTOM_FILM_CARRIER = "G4_Cu"
 BASE_LATTICE_MAP = "Si"
 PSEUDO_LATTICE_NAME = "PseudoCubic"
 
-# Fixed film fields that the parameter contract does not open (thicknesses, QP
+# Fixed film fields that the parameter definition does not open (thicknesses, QP
 # limits, the top-film lifetime slope, the bottom-film gap).
 FIXED_TOP_FILM = {"ph_lifetime_slope": 0.29, "qp_limit": 3, "thickness_um": 0.075}
 FIXED_BOTTOM_FILM = {"gap_eV": 0.0, "qp_limit": 3, "thickness_um": 1.0,
@@ -408,38 +407,50 @@ FIXED_BOTTOM_FILM = {"gap_eV": 0.0, "qp_limit": 3, "thickness_um": 1.0,
 
 
 # ---------------------------------------------------------------------------
-# Orientation: integer Miller triples only.
+# Continuous crystal-normal direction.
 #
-# G4LatticePhysical::SetMillerOrientation(G4int h, G4int k, G4int l, G4double)
-# takes INTEGERS. A Fibonacci-sphere direction cannot be represented and would
-# truncate toward zero -- so orientation is a finite categorical design, exactly
-# as the Stage 3 record concluded.
+# G4CMP accepts integer Miller triples.  A point on the sphere is therefore
+# converted to a large primitive integer triple before the macro is written.
+# With the scale below, the angular quantisation is below 2e-4 degrees while
+# remaining far inside a signed 32-bit integer.  Optimizers and their kernels
+# always use the original sphere coordinates, never the integer approximation.
 # ---------------------------------------------------------------------------
-def cubic_symmetry_reduced_millers(max_index=3):
-    """Unique directions under the cubic point group, sorted by |(h,k,l)|.
-
-    Two directions are equivalent if one is a signed permutation of the other,
-    so the canonical form is the sorted tuple of absolute values. Antipodal
-    duplicates go with them.
-    """
-    seen, out = set(), []
-    for h in range(0, max_index + 1):
-        for k in range(0, max_index + 1):
-            for l in range(0, max_index + 1):
-                if h == k == l == 0:
-                    continue
-                if math.gcd(math.gcd(h, k), l) != 1:      # (0,0,2) == (0,0,1)
-                    continue
-                key = tuple(sorted((h, k, l)))
-                if key in seen:
-                    continue
-                seen.add(key)
-                out.append(key)
-    out.sort(key=lambda t: (t[0] ** 2 + t[1] ** 2 + t[2] ** 2, t))
-    return [list(t) for t in out]
+ORIENTATION_INTEGER_SCALE = 1_000_000
+ORIENTATION_POLAR_COS = "orientation_polar_cos"
+ORIENTATION_AZIMUTH_TURNS = "orientation_azimuth_turns"
 
 
-MILLER_SET = cubic_symmetry_reduced_millers(3)
+def sphere_to_miller(polar_cos, azimuth_turns, scale=ORIENTATION_INTEGER_SCALE):
+    """Convert two sphere coordinates to a primitive integer direction."""
+    z = float(polar_cos)
+    turn = float(azimuth_turns)
+    if not math.isfinite(z) or not -1.0 <= z <= 1.0:
+        raise GateError("G-orientation", f"polar cosine {z!r} is outside [-1, 1]")
+    if not math.isfinite(turn):
+        raise GateError("G-orientation", "azimuth must be finite")
+    turn %= 1.0
+    radius = math.sqrt(max(0.0, 1.0 - z * z))
+    phi = 2.0 * math.pi * turn
+    unit = (radius * math.cos(phi), radius * math.sin(phi), z)
+    integer = [int(round(scale * value)) for value in unit]
+    if integer == [0, 0, 0]:
+        raise GateError("G-orientation", "sphere direction quantised to zero")
+    divisor = math.gcd(math.gcd(abs(integer[0]), abs(integer[1])), abs(integer[2]))
+    return [value // max(1, divisor) for value in integer]
+
+
+def miller_to_sphere(miller):
+    """Map an existing integer Miller direction to the two sphere coordinates."""
+    if not isinstance(miller, (list, tuple)) or len(miller) != 3:
+        raise GateError("G-orientation", "Miller direction must contain three numbers")
+    h, k, l = (float(value) for value in miller)
+    if not all(math.isfinite(value) for value in (h, k, l)):
+        raise GateError("G-orientation", "Miller direction must be finite")
+    norm = math.sqrt(h * h + k * k + l * l)
+    if norm == 0.0:
+        raise GateError("G-orientation", "Miller direction cannot be zero")
+    turn = math.atan2(k, h) / (2.0 * math.pi)
+    return l / norm, turn % 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -564,6 +575,15 @@ VARIABLES = [
              "Rotation of the crystal about the Miller axis. 90 deg is the cubic "
              "period about a <001> axis."),
 
+    Variable(ORIENTATION_POLAR_COS, "1", 1.0, -1.0, 1.0, "linear",
+             "model:continuous_crystal_normal",
+             "Cosine of the polar angle of the crystal normal. Uniform draws in "
+             "this coordinate and azimuth are uniform on the sphere."),
+    Variable(ORIENTATION_AZIMUTH_TURNS, "turn", 0.0, 0.0, 1.0, "linear",
+             "model:continuous_crystal_normal",
+             "Azimuth of the crystal normal in turns. Zero and one are the same "
+             "direction; the Bayesian kernel uses a periodic sphere embedding."),
+
     # Inert-by-construction; written for provenance and used by the projection
     # metric, excluded from the active search until the A/B proves otherwise.
     Variable("sub_lattice_a", "Ang", 5.431, 3.0, 10.0, "linear",
@@ -579,19 +599,20 @@ VARIABLES_BY_NAME = {v.name: v for v in VARIABLES}
 
 
 class Space:
-    """The searchable box: active continuous variables + the Miller categorical."""
+    """The searchable box, including two continuous sphere coordinates."""
 
-    def __init__(self, variables=None, millers=None, include_inactive=False,
-                 constraints=None):
+    def __init__(self, variables=None, include_inactive=False, constraints=None):
         variables = variables if variables is not None else VARIABLES
         self.all_variables = list(variables)
         self.variables = [v for v in self.all_variables if v.active or include_inactive]
         self.names = [v.name for v in self.variables]
-        self.millers = [list(m) for m in (millers if millers is not None else MILLER_SET)]
         self.n_cont = len(self.variables)
-        self.n_cat = len(self.millers)
+        self.orientation_columns = (
+            self.names.index(ORIENTATION_POLAR_COS),
+            self.names.index(ORIENTATION_AZIMUTH_TURNS),
+        )
         # Engineering constraints (audit P3). Empty by default, so a campaign
-        # that declares none behaves exactly as before. Declared in the contract
+        # that declares none behaves exactly as before. Declared in the definition
         # under `space.constraints`, and therefore hashed with it: a campaign
         # run with a T_c floor is a different campaign, not the same one
         # re-reported.
@@ -600,7 +621,9 @@ class Space:
     # -- points -------------------------------------------------------------
     def baseline_point(self):
         p = {v.name: v.baseline for v in self.all_variables}
-        p["miller"] = [0, 0, 1]
+        p["miller"] = sphere_to_miller(
+            p[ORIENTATION_POLAR_COS], p[ORIENTATION_AZIMUTH_TURNS]
+        )
         return p
 
     def complete(self, point):
@@ -612,9 +635,22 @@ class Space:
         normaliser that keeps only the variable table silently converts every
         real-material request back into the Si-carried default.
         """
+        has_sphere = ORIENTATION_POLAR_COS in point or ORIENTATION_AZIMUTH_TURNS in point
         out = {v.name: float(point.get(v.name, v.baseline)) for v in self.all_variables}
-        miller = point.get("miller", [0, 0, 1])
-        out["miller"] = [int(x) for x in miller]
+        if has_sphere:
+            out[ORIENTATION_AZIMUTH_TURNS] %= 1.0
+            out["miller"] = sphere_to_miller(
+                out[ORIENTATION_POLAR_COS], out[ORIENTATION_AZIMUTH_TURNS]
+            )
+        elif "miller" in point:
+            out[ORIENTATION_POLAR_COS], out[ORIENTATION_AZIMUTH_TURNS] = miller_to_sphere(
+                point["miller"]
+            )
+            out["miller"] = [int(x) for x in point["miller"]]
+        else:
+            out["miller"] = sphere_to_miller(
+                out[ORIENTATION_POLAR_COS], out[ORIENTATION_AZIMUTH_TURNS]
+            )
         real = point.get(REALIZATION_KEY) if isinstance(point, dict) else None
         if real is None and isinstance(point, dict) and point.get("substrate_carrier"):
             real = normalize_realization(point)
@@ -626,25 +662,20 @@ class Space:
         return np.array([v.to_unit(float(point[v.name])) for v in self.variables],
                         dtype=float)
 
-    def miller_index(self, point):
-        target = [int(x) for x in point["miller"]]
-        for i, m in enumerate(self.millers):
-            if m == target:
-                return i
-        raise GateError("G-orientation", f"miller {target} is not in the allowed set")
-
-    def from_unit(self, u, miller_index=0, base=None):
+    def from_unit(self, u, base=None):
         point = dict(base) if base else self.baseline_point()
         for v, uu in zip(self.variables, np.asarray(u, dtype=float).ravel()):
             point[v.name] = v.from_unit(uu)
-        point["miller"] = list(self.millers[int(miller_index) % self.n_cat])
+        point[ORIENTATION_AZIMUTH_TURNS] %= 1.0
+        point["miller"] = sphere_to_miller(
+            point[ORIENTATION_POLAR_COS], point[ORIENTATION_AZIMUTH_TURNS]
+        )
         return point
 
     def sample(self, rng, n=1):
         """Uniform draws in the transformed box (log where declared)."""
         u = rng.random((n, self.n_cont))
-        idx = rng.integers(0, self.n_cat, size=n)
-        return [self.from_unit(u[i], idx[i]) for i in range(n)]
+        return [self.from_unit(u[i]) for i in range(n)]
 
     def clip(self, point):
         out = dict(point)
@@ -671,8 +702,8 @@ class Space:
         for v in self.variables:
             rows.append(f"{v.name:22s} {v.unit:6s} {v.baseline:11.4g} {v.low:11.4g} "
                         f"{v.high:11.4g}  {v.scale}")
-        rows.append(f"{'miller':22s} {'':6s} {'[0,0,1]':>11s}  categorical, "
-                    f"{self.n_cat} symmetry-reduced directions")
+        rows.append("crystal normal: two continuous sphere coordinates; the macro "
+                    "receives a high-resolution primitive Miller approximation")
         return "\n".join(rows)
 
 
@@ -817,7 +848,7 @@ def check_engineering_constraints(point, constraints):
     which this objective can see (audit P3). A campaign that cares about the
     trade-off declares the floor here instead of discovering it afterwards.
 
-    Empty by default. Every limit is opt-in and hashed with the contract.
+    Empty by default. Every limit is opt-in and hashed with the definition.
     """
     if not constraints:
         return True, None
@@ -847,7 +878,7 @@ def precheck(point, space=None, carrier="G4_Si", realization=None,
              density_kg_m3=None):
     """Cheap feasibility test for an optimizer proposal.
 
-    Returns (ok, reason). Pure Python, no Geant4, no contract -- so an optimizer
+    Returns (ok, reason). Pure Python, no Geant4, no definition -- so an optimizer
     can reject and re-propose thousands of times per second.
 
     `realization` decides whether the search box is a hard constraint. For a
@@ -858,14 +889,13 @@ def precheck(point, space=None, carrier="G4_Si", realization=None,
     The physics gates G1-G4 still apply to every mode.
     """
     space = space or DEFAULT_SPACE
-    point = space.complete(point)
+    try:
+        point = space.complete(point)
+    except GateError as exc:
+        return False, str(exc)
     ok, bad = space.in_bounds(point, exempt=box_exempt_variables(realization))
     if not ok:
         return False, "; ".join(bad)
-    try:
-        space.miller_index(point)
-    except GateError as exc:
-        return False, str(exc)
     # G7 -- the bottom film must not gate harder than the junction it feeds.
     if not 0 < float(point["bot_gap_thres"]) <= 2 * 191.0e-6 + 1e-12:
         return False, f"[G7] bot_gap_thres={point['bot_gap_thres']:g} eV not in (0, 2*setTopGap]"
@@ -883,16 +913,16 @@ def precheck(point, space=None, carrier="G4_Si", realization=None,
 # ---------------------------------------------------------------------------
 # Resolver -- the shape stage3_trial_runner.evaluate() consumes
 # ---------------------------------------------------------------------------
-def resolve(contract, candidate, space=None):
-    """resolve(contract, candidate) -> (resolved, derived)
+def resolve(definition, candidate, space=None):
+    """resolve(definition, candidate) -> (resolved, derived)
 
     `candidate` is a plain dict of natural-unit property values plus `miller`,
-    i.e. exactly what the optimizer proposes and what the ledger stores.
+    i.e. exactly what the optimizer proposes and what the database stores.
 
-    Raises ContractError/GateError, both of which the driver records as
+    Raises DefinitionError/GateError, both of which the driver records as
     `constraint_rejected` -- never as an observation, never as zero QPs.
     """
-    from stage3_contract import ContractError
+    from experiment_definition import DefinitionError
 
     space = space or DEFAULT_SPACE
     point = space.complete(candidate)
@@ -978,8 +1008,8 @@ def resolve(contract, candidate, space=None):
     # G5/G6 -- excitation chain and regime. topfilm_gap is a decision variable
     # now, so the regime flag varies across candidates and must be checked per
     # candidate rather than once per campaign.
-    gate = contract.check_excitation_thresholds(top_film_gap_eV=top["gap_eV"])
-    declared = contract.fixed.get("ground_plane_active_absorber", True)
+    gate = definition.check_excitation_thresholds(top_film_gap_eV=top["gap_eV"])
+    declared = definition.fixed.get("ground_plane_active_absorber", True)
     if bool(gate["ground_plane_active_absorber"]) != bool(declared):
         raise GateError(
             "G6",
@@ -1020,8 +1050,8 @@ def resolve(contract, candidate, space=None):
             "realization_substitutions": substituted,
             "box_exempt_variables": list(box_exempt_variables(realization)),
         })
-    if not isinstance(contract, object):        # pragma: no cover - typing guard
-        raise ContractError("contract expected")
+    if not isinstance(definition, object):        # pragma: no cover - typing guard
+        raise DefinitionError("definition expected")
     return {"substrate": sub, "top_film": top, "bottom_film": bot}, derived
 
 
@@ -1085,10 +1115,8 @@ def comparison_features(point, derived=None, carrier="G4_Si"):
 
 if __name__ == "__main__":
     space = DEFAULT_SPACE
-    print(f"Stage 4 property space: {space.n_cont} continuous + 1 categorical "
-          f"({space.n_cat} directions)\n")
+    print(f"Stage 4 property space: {space.n_cont} continuous variables\n")
     print(space.describe())
-    print("\nMiller set:", space.millers)
     base = space.baseline_point()
     ok, reason = precheck(base)
     print(f"\nbaseline feasible: {ok} {reason or ''}")

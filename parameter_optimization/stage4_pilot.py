@@ -7,7 +7,7 @@ and none of them can be assumed:
 1. **Determinism.** The same property vector with the same seed bank must give
    the SAME objective. If it does not, the cache is meaningless and so is every
    paired comparison.
-2. **Noise.** The spread across seed banks at the screening fidelity, measured
+2. **Noise.** The spread across seed banks at the screening event_count, measured
    two ways -- between whole banks, and from the within-site replica spread.
    The v2 record predicts ~5.0% (Poisson x 2.3, Fano ~ 5); this checks it on a
    pseudo-material rather than assuming it transfers.
@@ -36,19 +36,19 @@ for _p in (HERE, REPO_ROOT):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from stage3_contract import load_contract                       # noqa: E402
-from stage3_ledger import Ledger                                # noqa: E402
+from experiment_definition import load_definition                       # noqa: E402
+from experiment_database import Database                                # noqa: E402
 from stage3_trial_runner import evaluate                        # noqa: E402
 import stage4_space as S                                        # noqa: E402
 import stage4_objectives as O                                   # noqa: E402
 from stage4_optimize import candidate_payload, resolver_for     # noqa: E402
 
 
-def run(contract, point, space, ledger, seed_bank, force=False, label=""):
+def run(definition, point, space, database, seed_bank, force=False, label=""):
     cand = candidate_payload(point, space)
     t0 = time.time()
-    r = evaluate(contract, cand, fidelity=contract.decision["fidelity"]["value"],
-                 seed_bank_id=seed_bank, ledger=ledger, verbose=False, force=force,
+    r = evaluate(definition, cand, event_count=definition.decision["event_count"]["value"],
+                 seed_bank_id=seed_bank, database=database, verbose=False, force=force,
                  resolver=resolver_for(space))
     wall = time.time() - t0
     if not r.is_observation:
@@ -68,8 +68,8 @@ def run(contract, point, space, ledger, seed_bank, force=False, label=""):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--contract", default=os.path.join(HERE, "stage4_config.yaml"))
-    ap.add_argument("--ledger", default=os.path.join(HERE, "stage4_trials.sqlite"))
+    ap.add_argument("--definition", default=os.path.join(HERE, "stage4_config.yaml"))
+    ap.add_argument("--database", default=os.path.join(HERE, "stage4_trials.sqlite"))
     ap.add_argument("--events", type=int, default=4000000)
     ap.add_argument("--workers", type=int, default=16)
     ap.add_argument("--total-mem-gb", type=float, default=60.0)
@@ -78,25 +78,25 @@ def main():
     ap.add_argument("--out", default=os.path.join(HERE, "results", "stage4_pilot.json"))
     args = ap.parse_args()
 
-    contract = load_contract(args.contract)
-    contract.campaign_id = "stage4_pilot"
-    fid = contract.decision["fidelity"]["value"]
-    contract.decision["fidelity"]["events_total_per_candidate"][fid] = args.events
-    contract.fixed.update(max_workers=args.workers, total_mem_gb=args.total_mem_gb,
+    definition = load_definition(args.definition)
+    definition.campaign_id = "stage4_pilot"
+    fid = definition.decision["event_count"]["value"]
+    definition.decision["event_count"]["events_total_per_candidate"][fid] = args.events
+    definition.fixed.update(max_workers=args.workers, total_mem_gb=args.total_mem_gb,
                           sample_timeout_s=args.timeout)
     space = S.DEFAULT_SPACE
     base = space.baseline_point()
     out = {"events_total_per_candidate": args.events, "workers": args.workers,
-           "fidelity": fid}
+           "event_count": fid}
 
     print(f"Stage 4 pilot: {args.events:,} events per candidate "
-          f"({contract.fixed['n_positions']} sites x {contract.fixed['n_replicas']} "
-          f"replicas x {contract.events_per_sub_run(fid):,}), {args.workers} workers\n")
+          f"({definition.fixed['n_positions']} sites x {definition.fixed['n_replicas']} "
+          f"replicas x {definition.events_per_sub_run(fid):,}), {args.workers} workers\n")
 
-    with Ledger(args.ledger) as led:
+    with Database(args.database) as led:
         print("1. Determinism -- same vector, same seed bank, forced re-run")
-        a = run(contract, base, space, led, args.banks[0], force=True, label="baseline run 1")
-        b = run(contract, base, space, led, args.banks[0], force=True, label="baseline run 2")
+        a = run(definition, base, space, led, args.banks[0], force=True, label="baseline run 1")
+        b = run(definition, base, space, led, args.banks[0], force=True, label="baseline run 2")
         det = (a and b and a["total_qps"] == b["total_qps"]
                and a["per_electrode"] == b["per_electrode"])
         print(f"   -> {'PASS' if det else 'FAIL'}: identical objective under identical seeds")
@@ -105,7 +105,7 @@ def main():
         print("\n2. Noise -- independent seed banks at the same vector")
         banks = {}
         for bank in args.banks:
-            r = run(contract, base, space, led, bank, label=f"seed bank {bank}")
+            r = run(definition, base, space, led, bank, label=f"seed bank {bank}")
             if r:
                 banks[bank] = r
         out["seed_banks"] = banks
@@ -125,7 +125,7 @@ def main():
         for name, alt in (("sub_lattice_a", 6.5), ("temperature", 0.1)):
             p = dict(base)
             p[name] = alt
-            r = run(contract, p, space, led, args.banks[0],
+            r = run(definition, p, space, led, args.banks[0],
                     label=f"{name} = {alt}")
             if r and a:
                 same = (r["total_qps"] == a["total_qps"]

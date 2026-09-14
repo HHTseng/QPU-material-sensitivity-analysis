@@ -1,8 +1,9 @@
-"""Small, fail-closed core for reproducible material-scan experiments.
+"""Validated core for reproducible material-property experiments.
 
-The legacy Stage 3/4 runtime remains untouched while this package is validated.
-This first slice only resolves immutable experiment inputs and identities; it
-does not launch Geant4 or open a production ledger.
+The package resolves complete experiment inputs, records stable identities,
+checks earlier results, and analyzes completed simulations. Direct Geant4
+launch remains disabled until macro and lattice rendering match the checked
+compatibility implementation.
 """
 
 from .config import (
@@ -34,8 +35,8 @@ from .sampling import (
     SamplingError,
     SamplingPlan,
     build_recorded_plan,
-    legacy_design_hash,
-    legacy_position_seed,
+    historical_design_hash,
+    historical_position_seed,
     load_recorded_stratified_design,
 )
 
@@ -57,8 +58,8 @@ __all__ = [
     "build_recorded_plan",
     "canonical_hash",
     "canonical_json",
-    "legacy_design_hash",
-    "legacy_position_seed",
+    "historical_design_hash",
+    "historical_position_seed",
     "load_experiment_spec",
     "load_parameter_catalog",
     "load_recorded_stratified_design",

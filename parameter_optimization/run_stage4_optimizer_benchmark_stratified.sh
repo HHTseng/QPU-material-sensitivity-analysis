@@ -47,7 +47,7 @@ PY
       --optimizer "$METHOD" --optimizer-params "$PARAMS" \
       --objective "$OBJ" --stratified "$NSITES" --warm-start "$WARM" \
       --trials "$TRIALS" --parallel "$PARALLEL" --workers "$WORKERS" \
-      --fidelity S --seed "$SEED" --seed-bank 0 \
+      --event-count 4000000 --seed "$SEED" --seed-bank 0 \
       --baseline-every "$BASELINE_EVERY" --tag "$TAG" \
       >> "$LOG/${TAG}.log" 2>&1 \
       && say "$TAG done" || say "WARNING: $TAG returned $?"

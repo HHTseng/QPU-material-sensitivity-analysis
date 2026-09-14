@@ -19,7 +19,7 @@ Two independent limits, both enforced here:
                    runaway by definition (healthy is ~0.07 GB); kill just it.
     aggregate   -- total RSS across all sample process trees must stay under
                    TOTAL_GB; if it does not, kill the largest offender first
-                   and keep killing until back under budget.
+                   and keep killing until back under allowance.
 
 Killing targets the whole process group. Killing the bash wrapper alone leaves
 an orphaned `Main` spinning at 100% CPU (same finding as above).
@@ -49,9 +49,9 @@ def _descendants(root_pid):
     grows is a grandchild of the pid we hold; walking the tree is required.
     """
     seen = [root_pid]
-    frontier = [root_pid]
-    while frontier:
-        pid = frontier.pop()
+    fronevent_count = [root_pid]
+    while fronevent_count:
+        pid = fronevent_count.pop()
         try:
             task_dir = f"/proc/{pid}/task"
             for tid in os.listdir(task_dir):
@@ -63,7 +63,7 @@ def _descendants(root_pid):
                 for kid in kids:
                     if kid not in seen:
                         seen.append(kid)
-                        frontier.append(kid)
+                        fronevent_count.append(kid)
         except OSError:
             continue
     return seen
@@ -156,7 +156,7 @@ class MemoryGuard:
                         )
                     self.unregister(pid)
 
-            # Aggregate limit: kill largest-first until back under budget.
+            # Aggregate limit: kill largest-first until back under allowance.
             if total > self.total_bytes:
                 for rss, pid, label in sorted(usage, reverse=True):
                     if total <= self.total_bytes:
@@ -164,7 +164,7 @@ class MemoryGuard:
                     if kill_group(pid):
                         self._report(
                             label, pid, rss,
-                            f"aggregate RSS budget {self.total_bytes / 1024 ** 3:.0f} GB exceeded "
+                            f"aggregate RSS allowance {self.total_bytes / 1024 ** 3:.0f} GB exceeded "
                             f"(total was {total / 1024 ** 3:.1f} GB)",
                         )
                         total -= rss

@@ -2,18 +2,18 @@
 """Stage 4 campaign driver: search the property space for minimum QP generation.
 
     python stage4_optimize.py --optimizer bo_gp --objective total_qps_per_primary \\
-        --trials 80 --batch 4 --parallel 4 --fidelity S --tag pilot
+        --trials 80 --batch 4 --parallel 4 --event-count 4000000 --tag pilot
 
 One driver for every optimizer and every objective, because the comparison
-between them is only meaningful if nothing else differs: same contract, same 16
-injection sites, same seed bank, same evaluator, same ledger.
+between them is only meaningful if nothing else differs: same definition, same 16
+injection sites, same seed bank, same evaluator, same database.
 
 What this file is responsible for, and what it refuses to do:
 
 * It dispatches candidates and records results. It never decides that a failed
   simulation was a zero, never scores an incomplete scenario set, and never
   hands the optimizer an observation that did not come from a completed trial.
-* It re-loads its own history from the ledger on restart, so a campaign can be
+* It re-loads its own history from the database on restart, so a campaign can be
   stopped and resumed around another user's load on the machine.
 * It periodically re-evaluates the frozen baseline as a control. If the
   baseline moves, something in the machine or the code moved, and the campaign
@@ -37,10 +37,10 @@ for _p in (HERE, REPO_ROOT):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from stage3_contract import load_contract, ContractError          # noqa: E402
-from stage3_ledger import (Ledger, STATUS_SUCCESS, STATUS_SUCCESS_ZERO,  # noqa: E402
+from experiment_definition import load_definition, DefinitionError          # noqa: E402
+from experiment_database import (Database, STATUS_SUCCESS, STATUS_SUCCESS_ZERO,  # noqa: E402
                            STATUS_TIMEOUT)
-from stage3_trial_runner import evaluate, _blocks_from_ledger     # noqa: E402
+from stage3_trial_runner import evaluate, _blocks_from_database     # noqa: E402
 import stage4_space as space_mod                                  # noqa: E402
 import stage4_objectives as objectives                            # noqa: E402
 import stage4_optimizers as optimizers                            # noqa: E402
@@ -48,7 +48,7 @@ import stage4_llm  # noqa: F401,E402  (registers llm_agent / llm_bo)
 
 
 class _Row:
-    """Minimal stand-in for a TrialResult when replaying the ledger."""
+    """Minimal stand-in for a TrialResult when replaying the database."""
 
     def __init__(self, blocks, total_qps, candidate):
         self.blocks = blocks
@@ -56,9 +56,9 @@ class _Row:
         self.candidate = candidate
 
 
-def build_space(contract):
-    """Space from the contract's `space` section, so bounds are hashed with it."""
-    spec = (contract.raw or {}).get("space") or {}
+def build_space(definition):
+    """Space from the definition's `space` section, so bounds are hashed with it."""
+    spec = (definition.raw or {}).get("space") or {}
     variables = []
     overrides = spec.get("variables") or {}
     active_only = spec.get("active")
@@ -71,19 +71,22 @@ def build_space(contract):
             v.name, v.unit, float(o.get("baseline", v.baseline)),
             float(o.get("low", v.low)), float(o.get("high", v.high)),
             o.get("scale", v.scale), v.target, v.doc, active=active))
-    millers = spec.get("millers") or contract.decision["orientation"]["allowed_miller"]
-    return space_mod.Space(variables, millers=[list(m) for m in millers],
-                           constraints=spec.get("constraints") or {})
+    if "millers" in spec or "orientation" in definition.decision:
+        raise ValueError(
+            "discrete Miller choices are no longer accepted; use the two "
+            "continuous orientation coordinates"
+        )
+    return space_mod.Space(variables, constraints=spec.get("constraints") or {})
 
 
 def resolver_for(space):
-    def _resolve(contract, candidate):
-        return space_mod.resolve(contract, candidate, space=space)
+    def _resolve(definition, candidate):
+        return space_mod.resolve(definition, candidate, space=space)
     return _resolve
 
 
 def candidate_payload(point, space):
-    """What goes into the ledger and the cache key: values only, no rationale.
+    """What goes into the database and the cache key: values only, no rationale.
 
     The realization block is part of the candidate's IDENTITY, not decoration:
     the same property vector carried by G4_Si (2330 kg/m3) and by
@@ -105,13 +108,13 @@ def candidate_payload(point, space):
 class Campaign:
     def __init__(self, args):
         self.args = args
-        self.contract = load_contract(args.contract)
-        self.space = build_space(self.contract)
+        self.definition = load_definition(args.definition)
+        self.space = build_space(self.definition)
         self.objective = objectives.get(args.objective)
         self.objective_params = json.loads(args.objective_params or "{}")
         self._apply_overrides()
-        self.ledger_path = args.ledger
-        self.campaign_id = self.contract.campaign_id
+        self.database_path = args.database
+        self.campaign_id = self.definition.campaign_id
         self.resolver = resolver_for(self.space)
         self.local = threading.local()
         self.lock = threading.Lock()
@@ -137,12 +140,12 @@ class Campaign:
 
     # -- setup --------------------------------------------------------------
     def _apply_overrides(self):
-        a, f = self.args, self.contract.fixed
+        a, f = self.args, self.definition.fixed
         if a.tag:
-            self.contract.campaign_id = f"{self.contract.campaign_id}_{a.tag}"
+            self.definition.campaign_id = f"{self.definition.campaign_id}_{a.tag}"
         if a.positions:
             f["n_positions"] = a.positions
-        # Electrode-aware stratified quadrature. Built from the contract's own
+        # Electrode-aware stratified quadrature. Built from the definition's own
         # electrode table and carried in `fixed`, so it reaches build_scenario()
         # and is hashed into every cache key -- a stratified campaign can never
         # collide with a uniform one at the same site count.
@@ -176,14 +179,14 @@ class Campaign:
             f["n_replicas"] = a.replicas
         if a.timeout:
             f["sample_timeout_s"] = a.timeout
-        fid = a.fidelity or self.contract.decision["fidelity"]["value"]
-        self.contract.decision["fidelity"]["value"] = fid
+        fid = a.event_count or self.definition.decision["event_count"]["value"]
+        self.definition.decision["event_count"]["value"] = fid
         if a.events:
-            self.contract.decision["fidelity"]["events_total_per_candidate"][fid] = a.events
-        self.fidelity = fid
+            self.definition.decision["event_count"]["events_total_per_candidate"][fid] = a.events
+        self.event_count = fid
         self.events_total = int(
-            self.contract.decision["fidelity"]["events_total_per_candidate"][fid])
-        # Workers and the memory budget are split across concurrently evaluated
+            self.definition.decision["event_count"]["events_total_per_candidate"][fid])
+        # Workers and the memory allowance are split across concurrently evaluated
         # candidates: each evaluate() runs its own pool and its own guard, and a
         # guard only sees the sub-runs it started.
         total_workers = a.workers or int(f.get("max_workers", 32))
@@ -191,35 +194,35 @@ class Campaign:
         f["total_mem_gb"] = float(a.total_mem_gb or f.get("total_mem_gb", 200)) / max(1, a.parallel)
         self.total_workers = total_workers
         # The objective's meaning is part of the campaign identity, so it is
-        # hashed with the contract rather than living only in a CLI flag.
-        self.contract.raw.setdefault("stage4", {})
-        self.contract.raw["stage4"].update({
+        # hashed with the definition rather than living only in a CLI flag.
+        self.definition.raw.setdefault("stage4", {})
+        self.definition.raw["stage4"].update({
             "objective": self.args.objective,
             "objective_params": self.objective_params,
             "space_id": "stage4_property_v1",
         })
 
-    def ledger(self):
-        if getattr(self.local, "ledger", None) is None:
-            self.local.ledger = Ledger(self.ledger_path)
-        return self.local.ledger
+    def database(self):
+        if getattr(self.local, "database", None) is None:
+            self.local.database = Database(self.database_path)
+        return self.local.database
 
     # -- history ------------------------------------------------------------
     def resume(self):
         """Replay this campaign's completed trials into the optimizer.
 
-        Only rows whose contract hash AND objective match are replayed: a
+        Only rows whose definition hash AND objective match are replayed: a
         campaign re-run with different bounds or a different objective is a
         different campaign, and merging them would corrupt the surrogate.
         """
-        led = self.ledger()
+        led = self.database()
         # Campaign identity here on purpose: a campaign re-run with different
         # bounds or a different objective is a different campaign and merging
         # their histories would corrupt the surrogate -- even though the two may
         # legitimately SHARE cached simulations (finding N2).
-        want_contract = self.contract.campaign_contract_hash()
-        rows = [r for r in led.observations(self.contract.campaign_id)
-                if r["contract_hash"] == want_contract
+        want_definition = self.definition.campaign_definition_hash()
+        rows = [r for r in led.observations(self.definition.campaign_id)
+                if r["definition_hash"] == want_definition
                 and (r["objective_name"] in (None, self.args.objective))]
         rows.sort(key=lambda r: r["created_at"])
         replayed = 0
@@ -227,7 +230,7 @@ class Campaign:
             candidate = json.loads(row["candidate"])
             if candidate.get("_space") != "stage4_property_v1":
                 continue
-            blocks = _blocks_from_ledger(led, row["trial_id"], row["events_per_sub_run"])
+            blocks = _blocks_from_database(led, row["trial_id"], row["events_per_sub_run"])
             if not blocks:
                 continue
             value = self.objective(_Row(blocks, row["total_qps"], candidate),
@@ -245,19 +248,19 @@ class Campaign:
             self.events_used += int(row["events_total"])
             replayed += 1
         if replayed:
-            print(f"Resumed {replayed} completed trial(s) from {self.ledger_path}")
+            print(f"Resumed {replayed} completed trial(s) from {self.database_path}")
         return replayed
 
     # -- evaluation ---------------------------------------------------------
     def _evaluate_one(self, point, iteration, force=False, control_replica_id=None):
         candidate = candidate_payload(point, self.space)
-        led = self.ledger()
+        led = self.database()
         try:
-            result = evaluate(self.contract, candidate, fidelity=self.fidelity,
-                              seed_bank_id=self.args.seed_bank, ledger=led,
+            result = evaluate(self.definition, candidate, event_count=self.event_count,
+                              seed_bank_id=self.args.seed_bank, database=led,
                               verbose=False, resolver=self.resolver, force=force,
                               control_replica_id=control_replica_id)
-        except (ContractError, space_mod.GateError) as exc:
+        except (DefinitionError, space_mod.GateError) as exc:
             return {"point": point, "status": "constraint_rejected",
                     "reason": str(exc), "candidate": candidate}
         if not result.is_observation:
@@ -307,7 +310,7 @@ class Campaign:
                 "trial_id": result.trial_id, "cached": result.cached}
 
     def _record(self, rec, best_seen):
-        """Fold one finished trial into the optimizer, the ledger and the log."""
+        """Fold one finished trial into the optimizer, the database and the log."""
         improved = False
         if rec.get("value") is not None:
             self.optimizer.tell(rec["point"], rec["value"])
@@ -317,7 +320,7 @@ class Campaign:
             if rec.get("trial_id") and hasattr(self.optimizer, "provenance_of"):
                 after = self.optimizer.provenance_of(rec["point"])
                 if after.get("used_in_optimizer_update") is not None:
-                    self.ledger().set_optimizer_record(
+                    self.database().set_optimizer_record(
                         rec["trial_id"],
                         used_in_optimizer_update=after["used_in_optimizer_update"])
             self.history.append({"trial_id": rec.get("trial_id"), "point": rec["point"],
@@ -371,7 +374,7 @@ class Campaign:
         stochastic repeat distribution instead.
         """
         replica = len(self.baseline_controls) + 1
-        control_id = f"{self.contract.campaign_id}#control{replica:02d}"
+        control_id = f"{self.definition.campaign_id}#control{replica:02d}"
         point = self.space.baseline_point()
         t0 = time.time()
         rec = self._evaluate_one(point, iteration, force=True,
@@ -381,7 +384,7 @@ class Campaign:
                  "cached": bool(rec.get("cached")), "wall_s": round(time.time() - t0, 1),
                  "host": socket.gethostname(), "workers": self.total_workers,
                  "code_fingerprint": {
-                     k: self.contract.code_fingerprint().get(k)
+                     k: self.definition.code_fingerprint().get(k)
                      for k in ("git_revision", "main_exe_sha256")},
                  "timestamp": time.time(), "value": None}
         if rec.get("value") is not None:
@@ -410,22 +413,22 @@ class Campaign:
     # -- main loop ----------------------------------------------------------
     def run(self):
         a = self.args
-        print(f"Campaign {self.contract.campaign_id} | optimizer {a.optimizer} | "
+        print(f"Campaign {self.definition.campaign_id} | optimizer {a.optimizer} | "
               f"objective {a.objective}")
-        print(f"  space: {self.space.n_cont} continuous + {self.space.n_cat} orientations")
-        print(f"  fidelity {self.fidelity}: {self.events_total:,} events per candidate "
-              f"({self.contract.fixed['n_positions']} sites x "
-              f"{self.contract.fixed['n_replicas']} replicas x "
-              f"{self.contract.events_per_sub_run(self.fidelity):,})")
+        print(f"  space: {self.space.n_cont} continuous variables")
+        print(f"  event_count {self.event_count}: {self.events_total:,} events per candidate "
+              f"({self.definition.fixed['n_positions']} sites x "
+              f"{self.definition.fixed['n_replicas']} replicas x "
+              f"{self.definition.events_per_sub_run(self.event_count):,})")
         print(f"  {a.parallel} candidate(s) at a time x "
-              f"{self.contract.fixed['max_workers']} sub-run workers = "
-              f"{a.parallel * self.contract.fixed['max_workers']} cores, "
-              f"{self.contract.fixed['total_mem_gb']:.0f} GB budget each")
+              f"{self.definition.fixed['max_workers']} sub-run workers = "
+              f"{a.parallel * self.definition.fixed['max_workers']} cores, "
+              f"{self.definition.fixed['total_mem_gb']:.0f} GB allowance each")
         if hasattr(self.optimizer, "llm_report"):
             rep = self.optimizer.llm_report()
             print(f"  LLM: {'available' if rep['available'] else 'UNAVAILABLE'} -- "
                   f"{rep['detail']}")
-        print(f"  ledger {self.ledger_path}")
+        print(f"  database {self.database_path}")
 
         self.resume()
         best_seen = min([h["value"].value for h in self.history], default=None)
@@ -444,9 +447,9 @@ class Campaign:
             while True:
                 if stop_reason is None:
                     if a.max_hours and (time.time() - self.started) / 3600 > a.max_hours:
-                        stop_reason = f"wall-clock budget {a.max_hours} h exhausted"
+                        stop_reason = f"wall-clock allowance {a.max_hours} h exhausted"
                     elif a.max_events and self.events_used >= a.max_events:
-                        stop_reason = f"event budget {a.max_events:,} exhausted"
+                        stop_reason = f"event allowance {a.max_events:,} exhausted"
                     elif a.patience and stagnant >= a.patience:
                         stop_reason = (f"no improvement beyond {a.tolerance:.0%} for "
                                        f"{stagnant} completions")
@@ -498,7 +501,7 @@ class Campaign:
                         self.baseline_control(self.optimizer.iteration)
                     self.save_manifest()
                 if len(self.history) >= target:
-                    stop_reason = stop_reason or "trial budget reached"
+                    stop_reason = stop_reason or "trial allowance reached"
                     if not inflight:
                         break
         finally:
@@ -512,16 +515,16 @@ class Campaign:
 
     # -- output -------------------------------------------------------------
     def manifest_path(self):
-        d = os.path.join(HERE, "runs", self.contract.campaign_id)
+        d = os.path.join(HERE, "runs", self.definition.campaign_id)
         os.makedirs(d, exist_ok=True)
         return os.path.join(d, f"campaign_{self.args.optimizer}_{self.args.objective}.json")
 
-    def _ledger_status_counts(self):
-        """{status: n} for this campaign, straight from the ledger."""
+    def _database_status_counts(self):
+        """{status: n} for this campaign, straight from the database."""
         try:
-            rows = self.ledger().conn.execute(
+            rows = self.database().conn.execute(
                 "SELECT status, count(*) n FROM trials WHERE campaign_id=? "
-                "GROUP BY status", (self.contract.campaign_id,)).fetchall()
+                "GROUP BY status", (self.definition.campaign_id,)).fetchall()
             return {r["status"]: r["n"] for r in rows}
         except Exception as exc:                             # noqa: BLE001
             return {"error": f"{type(exc).__name__}: {exc}"}
@@ -529,15 +532,15 @@ class Campaign:
     def save_manifest(self):
         bp, bv = self.optimizer.best()
         payload = {
-            "campaign_id": self.contract.campaign_id,
-            "contract_hash": self.contract.campaign_contract_hash(),
-            "simulation_identity_hash": self.contract.simulation_identity_hash(),
-            "contract_path": self.args.contract,
+            "campaign_id": self.definition.campaign_id,
+            "definition_hash": self.definition.campaign_definition_hash(),
+            "simulation_identity_hash": self.definition.simulation_identity_hash(),
+            "definition_path": self.args.definition,
             "optimizer": self.args.optimizer,
             "optimizer_state": self.optimizer.state(),
             "objective": self.args.objective,
             "objective_params": self.objective_params,
-            "fidelity": self.fidelity,
+            "event_count": self.event_count,
             "events_total_per_candidate": self.events_total,
             "seed": self.args.seed,
             "seed_bank": self.args.seed_bank,
@@ -554,12 +557,12 @@ class Campaign:
                                  if hasattr(self.optimizer, "provenance_counts") else {}),
             "n_incomplete_or_failed": self.n_failed,
             "n_constraint_rejected": self.n_rejected,
-            # Counted from the LEDGER, not from the in-process counters. A
+            # Counted from the DATABASE, not from the in-process counters. A
             # campaign killed by the operator or the scheduler leaves rows the
             # driver never observed, so the manifests used to report zero
-            # failures while the ledger held incomplete and operator-stopped
+            # failures while the database held incomplete and operator-stopped
             # trials whose partial cost was charged to nothing (audit P7).
-            "ledger_status_counts": self._ledger_status_counts(),
+            "database_status_counts": self._database_status_counts(),
             "best": ({"point": {k: v for k, v in bp.items() if not k.startswith("_")},
                       "value": bv.value, "se": bv.se, "raw_total_qps": bv.raw,
                       "detail": bv.detail} if bp else None),
@@ -581,7 +584,7 @@ class Campaign:
     def report(self):
         bp, bv = self.optimizer.best()
         print("\n" + "=" * 78)
-        print(f"Campaign {self.contract.campaign_id} [{self.args.optimizer}] finished: "
+        print(f"Campaign {self.definition.campaign_id} [{self.args.optimizer}] finished: "
               f"{len(self.history)} observations, {self.n_rejected} gate rejections, "
               f"{self.n_failed} failures, {self.events_used / 1e6:.0f}e6 events, "
               f"{(time.time() - self.started) / 60:.0f} min")
@@ -611,8 +614,8 @@ class Campaign:
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--contract", default=os.path.join(HERE, "stage4_config.yaml"))
-    ap.add_argument("--ledger", default=os.path.join(HERE, "stage4_trials.sqlite"))
+    ap.add_argument("--definition", default=os.path.join(HERE, "stage4_config.yaml"))
+    ap.add_argument("--database", default=os.path.join(HERE, "stage4_trials.sqlite"))
     ap.add_argument("--optimizer", default="bo_gp", choices=optimizers.available()
                     + ["llm_agent", "llm_bo"])
     ap.add_argument("--objective", default="total_qps_per_primary")
@@ -627,9 +630,9 @@ def main():
     ap.add_argument("--workers", type=int, default=None,
                     help="TOTAL sub-run workers across all concurrent candidates")
     ap.add_argument("--total-mem-gb", type=float, default=None)
-    ap.add_argument("--fidelity", default=None, choices=(None, "S", "M", "L"))
+    ap.add_argument("--event-count", default=None, choices=(None, "4000000", "32000000", "320000000"))
     ap.add_argument("--events", type=int, default=None,
-                    help="override events per candidate for this fidelity")
+                    help="override events per candidate for this event_count")
     ap.add_argument("--positions", type=int, default=None)
     ap.add_argument("--stratified", type=int, default=None, metavar="N",
                     help="electrode-aware stratified design of N sites; implies "
@@ -639,7 +642,7 @@ def main():
                          "PHYSICAL vectors only -- old objective values are "
                          "never imported, because J_16 and J_stratified are "
                          "different quantities and this optimizer is "
-                         "single-fidelity.")
+                         "single-event_count.")
     ap.add_argument("--replicas", type=int, default=None)
     ap.add_argument("--timeout", type=float, default=None, help="per sub-run seconds")
     ap.add_argument("--seed", type=int, default=1, help="optimizer seed (not physics)")
@@ -657,7 +660,7 @@ def main():
                          "TRIALS (0 = never). Each control executes fresh under "
                          "its own control_replica_id, is excluded from the "
                          "optimizer's observations and from the event-efficiency "
-                         "curve, and leaves its own inspectable ledger row.")
+                         "curve, and leaves its own inspectable database row.")
     ap.add_argument("--llm-model", default=None)
     ap.add_argument("--llm-host", default=None)
     args = ap.parse_args()

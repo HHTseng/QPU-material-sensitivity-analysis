@@ -16,10 +16,10 @@ from .config import (
     resolve_experiment,
     write_resolved_experiment,
 )
-from .legacy import (
+from .historical import (
     GitTree,
-    LegacyError,
-    LegacyLedger,
+    HistoricalError,
+    HistoricalDatabase,
     build_inventory,
     write_inventory_sqlite,
 )
@@ -63,7 +63,7 @@ def _check(arguments: argparse.Namespace) -> int:
         "sites": spec.design.n_sites,
         "replicas": spec.replicas,
         "tasks": spec.design.n_sites * spec.replicas,
-        "events_total": spec.fidelity["events_total"],
+        "events_total": spec.event_counts["events_total"],
         "fixed_parameters": sum(item.mode == "fixed" for item in spec.parameters),
         "search_parameters": sum(item.mode == "search" for item in spec.parameters),
         "build_mode": spec.build["mode"],
@@ -81,21 +81,21 @@ def _freeze(arguments: argparse.Namespace) -> int:
     return 0
 
 
-def _legacy_summary(arguments: argparse.Namespace) -> int:
-    source = Path(arguments.ledger)
+def _historical_summary(arguments: argparse.Namespace) -> int:
+    source = Path(arguments.database)
     before = (source.stat().st_mtime_ns, source.stat().st_size)
-    with LegacyLedger(source) as ledger:
-        report = dict(ledger.integrity_report())
+    with HistoricalDatabase(source) as database:
+        report = dict(database.integrity_report())
         report["path"] = str(source.resolve())
-        report["active_trials"] = len(ledger.active_trials())
+        report["active_trials"] = len(database.active_trials())
         report["rows"] = {
-            table: sum(1 for _ in ledger.rows(table))
-            for table in ledger.tables
+            table: sum(1 for _ in database.rows(table))
+            for table in database.tables
         }
         report["foreign_key_violations"] = len(report["foreign_key_violations"])
     after = (source.stat().st_mtime_ns, source.stat().st_size)
     if before != after:
-        raise LegacyError("legacy ledger changed during a read-only command")
+        raise HistoricalError("historical database changed during a read-only command")
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0
 
@@ -176,9 +176,9 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--output", required=True)
         command.set_defaults(action=action)
 
-    command = commands.add_parser("legacy-summary", help="inspect an old ledger read-only")
-    command.add_argument("ledger")
-    command.set_defaults(action=_legacy_summary)
+    command = commands.add_parser("history-summary", help="inspect an old database read-only")
+    command.add_argument("database")
+    command.set_defaults(action=_historical_summary)
 
     command = commands.add_parser("inventory", help="write a checksum inventory to a new SQLite file")
     command.add_argument("root")
@@ -206,7 +206,7 @@ def _parser() -> argparse.ArgumentParser:
     command.add_argument("--sha256")
     command.set_defaults(action=_recover)
 
-    command = commands.add_parser("store-doctor", help="check a revised ledger read-only")
+    command = commands.add_parser("store-doctor", help="check a revised database read-only")
     command.add_argument("store")
     command.set_defaults(action=_store_doctor)
 
@@ -221,7 +221,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     arguments = parser.parse_args(argv)
     try:
         return int(arguments.action(arguments))
-    except (ArchiveError, ConfigError, LegacyError, SchemaError, OSError, ValueError) as error:
+    except (ArchiveError, ConfigError, HistoricalError, SchemaError, OSError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
 

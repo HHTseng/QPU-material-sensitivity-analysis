@@ -1,6 +1,6 @@
 """Stage 4 optimizer registry -- interchangeable search strategies.
 
-Every optimizer implements the same ask/tell contract, so switching one for
+Every optimizer implements the same ask/tell definition, so switching one for
 another changes nothing else in the campaign and all of them can be compared on
 identical axes (best-so-far objective versus cumulative simulated events):
 
@@ -67,10 +67,9 @@ def available():
 class BaseOptimizer:
     """History bookkeeping shared by every strategy.
 
-    Internally a candidate is (u, c): u in the unit hypercube of the ACTIVE
-    continuous variables, c the index of the Miller direction. Natural units
-    exist only at the boundary, so an optimizer can never accidentally treat a
-    log-scaled variable as linear.
+    Internally a candidate is one vector in the unit hypercube of the active
+    continuous variables. Natural units exist only at the boundary, so an
+    optimizer cannot accidentally treat a log-scaled variable as linear.
     """
 
     optimizer_name = "base"
@@ -80,7 +79,7 @@ class BaseOptimizer:
         self.rng = np.random.default_rng(seed)
         self.seed = seed
         self.max_resample = max_resample
-        self.U, self.C, self.Y, self.SIG = [], [], [], []
+        self.U, self.Y, self.SIG = [], [], []
         self.points, self.values = [], []
         self.rejected = []
         self.pending = []                     # asked, not yet told
@@ -100,7 +99,6 @@ class BaseOptimizer:
     def tell(self, point, value):
         u = self.space.to_unit(self.space.complete(point))
         self.U.append(u)
-        self.C.append(self.space.miller_index(self.space.complete(point)))
         self.Y.append(value.surrogate_y())
         sigma = value.surrogate_sigma()
         self.SIG.append(sigma if sigma is not None else float("nan"))
@@ -113,7 +111,7 @@ class BaseOptimizer:
         """A gate rejection or a simulation failure. NEVER an observation.
 
         Recorded so the campaign report can show what each optimizer spent its
-        budget on: a strategy that "wins" by proposing points that fail cheaply
+        allowance on: a strategy that "wins" by proposing points that fail cheaply
         must be visible, not silently flattering.
         """
         self.rejected.append({"point": dict(point), "reason": str(reason),
@@ -127,8 +125,7 @@ class BaseOptimizer:
 
     def _key(self, point):
         p = self.space.complete(point)
-        return (tuple(round(float(p[n]), 12) for n in self.space.names),
-                tuple(p["miller"]))
+        return tuple(round(float(p[n]), 12) for n in self.space.names)
 
     # -- provenance ---------------------------------------------------------
     def _tag(self, point, source, **extra):
@@ -180,8 +177,8 @@ class BaseOptimizer:
         return self.points[i], self.values[i]
 
     # -- proposals ----------------------------------------------------------
-    def _make_point(self, u, c):
-        return self.space.from_unit(np.clip(u, 0.0, 1.0), c)
+    def _make_point(self, u):
+        return self.space.from_unit(np.clip(u, 0.0, 1.0))
 
     def _feasible(self, point):
         return precheck_cheap(point, self.space)[0]
@@ -192,8 +189,7 @@ class BaseOptimizer:
         while len(out) < n and tries < self.max_resample * max(1, n):
             tries += 1
             u = self.rng.random(self.space.n_cont)
-            c = int(self.rng.integers(self.space.n_cat))
-            p = self._make_point(u, c)
+            p = self._make_point(u)
             if self._feasible(p) and not self._is_duplicate(p):
                 out.append(p)
         if len(out) < n:
@@ -210,14 +206,12 @@ class BaseOptimizer:
         while looking like progress.
         """
         u = self.space.to_unit(self.space.complete(point))
-        c = self.space.miller_index(self.space.complete(point))
-        for uu, cc in zip(self.U, self.C):
-            if cc == c and np.max(np.abs(uu - u)) < tol:
+        for uu in self.U:
+            if np.max(np.abs(uu - u)) < tol:
                 return True
         for p in self.pending:
             pu = self.space.to_unit(self.space.complete(p))
-            if (self.space.miller_index(self.space.complete(p)) == c
-                    and np.max(np.abs(pu - u)) < tol):
+            if np.max(np.abs(pu - u)) < tol:
                 return True
         return False
 
@@ -270,16 +264,14 @@ class RandomSearch(BaseOptimizer):
 class SobolSearch(BaseOptimizer):
     """Scrambled Sobol design; also the shared initial design for the others.
 
-    Balance is only guaranteed at powers of two, so the engine is advanced in
-    powers of two and the categorical dimension is assigned round-robin rather
-    than sampled -- a uniform draw over 13 directions would leave some
-    orientations unvisited in a 64-point design.
+    The two crystal-direction coordinates are ordinary continuous columns in
+    the design, with polar cosine and azimuth giving uniform sphere coverage.
     """
 
     def __init__(self, space=None, seed=0, **kw):
         super().__init__(space, seed=seed, **kw)
         self.engine = qmc.Sobol(d=self.space.n_cont, scramble=True, seed=seed)
-        self._cat_cursor = 0
+        self._design_cursor = 0
 
     def _ask(self, n):
         out = []
@@ -287,11 +279,10 @@ class SobolSearch(BaseOptimizer):
         while len(out) < n and guard < 64 * max(1, n):
             guard += 1
             u = self.engine.random(1)[0]
-            c = self._cat_cursor % self.space.n_cat
-            p = self._make_point(u, c)
+            p = self._make_point(u)
             if self._feasible(p) and not self._is_duplicate(p):
-                out.append(self._tag(p, "sobol_init", design_index=self._cat_cursor))
-                self._cat_cursor += 1
+                out.append(self._tag(p, "sobol_init", design_index=self._design_cursor))
+                self._design_cursor += 1
         if len(out) < n:
             out.extend(self._tag(p, "random_filler",
                                  reason="Sobol engine could not produce a feasible, "
@@ -304,7 +295,7 @@ class SobolSearch(BaseOptimizer):
 # Gaussian process
 # ---------------------------------------------------------------------------
 class GaussianProcess:
-    """Matern-5/2 (ARD) x categorical-overlap GP with heteroscedastic noise.
+    """Matern-5/2 ARD GP with a periodic unit-sphere orientation kernel.
 
     Written out rather than imported because the G4CMP environment has numpy and
     scipy only. Three choices worth stating:
@@ -314,58 +305,79 @@ class GaussianProcess:
       diagonal carries real information instead of one global nugget absorbing
       both model error and count noise. A small fitted jitter remains, because
       the sigma estimate itself is noisy with two replicas.
-    * **Categorical orientation gets an overlap kernel** (correlation rho
-      between different Miller directions, fitted), not one-hot coordinates.
-      One-hot in a Matern kernel asserts that all directions are equidistant in
-      a metric the physics does not have.
+    * **Orientation uses its geometry.** The two searched sphere coordinates
+      are embedded as ``(x,y,z)``. The x/y pair shares one fitted length scale,
+      z has another, the azimuth seam closes, and azimuth becomes irrelevant at
+      either pole. The other inputs keep independent fitted length scales.
     * **Analytic gradients.** Finite differences over 19 hyperparameters would
       cost 20 Choleskys per gradient step and dominate the campaign's wall time
       once n reaches a few hundred.
     """
 
-    def __init__(self, jitter=1e-8):
+    def __init__(self, jitter=1e-8, sphere_columns=None):
         self.jitter = jitter
+        self.sphere_columns = tuple(sphere_columns) if sphere_columns is not None else None
         self.theta = None
         self.fitted = False
 
     # -- kernel -------------------------------------------------------------
-    @staticmethod
-    def _sqdist_scaled(A, B, ell):
-        Aw, Bw = A / ell, B / ell
-        d2 = (np.sum(Aw ** 2, axis=1)[:, None] + np.sum(Bw ** 2, axis=1)[None, :]
-              - 2.0 * Aw @ Bw.T)
-        return np.maximum(d2, 0.0)
+    def _distance_parts(self, A, B, ell):
+        """Squared-distance contribution for each fitted length scale."""
+        A = np.atleast_2d(np.asarray(A, dtype=float))
+        B = np.atleast_2d(np.asarray(B, dtype=float))
+        parts = []
+        sphere = set(self.sphere_columns or ())
+        for column in range(A.shape[1]):
+            if column in sphere:
+                continue
+            difference = A[:, column][:, None] - B[:, column][None, :]
+            parts.append((column, difference * difference / (ell[column] ** 2)))
+        if self.sphere_columns is not None:
+            polar_column, azimuth_column = self.sphere_columns
+
+            def embed(values):
+                z = 2.0 * values[:, polar_column] - 1.0
+                radius = np.sqrt(np.maximum(0.0, 1.0 - z * z))
+                phi = 2.0 * math.pi * values[:, azimuth_column]
+                return radius * np.cos(phi), radius * np.sin(phi), z
+
+            ax, ay, az = embed(A)
+            bx, by, bz = embed(B)
+            equatorial = ((ax[:, None] - bx[None, :]) ** 2
+                          + (ay[:, None] - by[None, :]) ** 2)
+            polar = (az[:, None] - bz[None, :]) ** 2
+            parts.append((azimuth_column, equatorial / (ell[azimuth_column] ** 2)))
+            parts.append((polar_column, polar / (ell[polar_column] ** 2)))
+        parts.sort(key=lambda item: item[0])
+        return [part for _, part in parts]
+
+    def _sqdist_scaled(self, A, B, ell):
+        parts = self._distance_parts(A, B, ell)
+        return np.maximum(np.sum(parts, axis=0), 0.0)
 
     def _matern(self, A, B, ell):
         r = np.sqrt(self._sqdist_scaled(A, B, ell))
         s5r = math.sqrt(5.0) * r
         return (1.0 + s5r + (5.0 / 3.0) * r ** 2) * np.exp(-s5r), r
 
-    def _cat_factor(self, ca, cb, rho):
-        same = (np.asarray(ca)[:, None] == np.asarray(cb)[None, :])
-        return np.where(same, 1.0, rho)
-
     def _unpack(self, theta):
         d = self.X.shape[1]
         log_sf2 = theta[0]
         log_ell = theta[1:1 + d]
         log_sn2 = theta[1 + d]
-        logit_rho = theta[2 + d]
-        rho = 1.0 / (1.0 + math.exp(-logit_rho))
-        return math.exp(log_sf2), np.exp(log_ell), math.exp(log_sn2), rho
+        return math.exp(log_sf2), np.exp(log_ell), math.exp(log_sn2)
 
     def _build(self, theta):
-        sf2, ell, sn2, rho = self._unpack(theta)
+        sf2, ell, sn2 = self._unpack(theta)
         m, r = self._matern(self.X, self.X, ell)
-        cat = self._cat_factor(self.C, self.C, rho)
-        K = sf2 * m * cat
+        K = sf2 * m
         K[np.diag_indices_from(K)] += self.noise + sn2 + self.jitter
-        return K, m, r, cat, sf2, ell, sn2, rho
+        return K, m, r, sf2, ell, sn2
 
     # -- likelihood ---------------------------------------------------------
     def _nll(self, theta):
         try:
-            K, m, r, cat, sf2, ell, sn2, rho = self._build(theta)
+            K, m, r, sf2, ell, sn2 = self._build(theta)
             L = np.linalg.cholesky(K)
         except np.linalg.LinAlgError:
             return 1e10, np.zeros_like(theta)
@@ -377,28 +389,28 @@ class GaussianProcess:
         W = np.outer(alpha, alpha) - Kinv                # dNLL/dK = -0.5 W
         grad = np.zeros_like(theta)
 
-        Ksig = sf2 * m * cat                             # signal part
+        Ksig = sf2 * m                                   # signal part
         grad[0] = -0.5 * np.sum(W * Ksig)                # d/dlog sf2
 
         s5r = math.sqrt(5.0) * r
-        pref = sf2 * (5.0 / 3.0) * (1.0 + s5r) * np.exp(-s5r) * cat
-        for i in range(self.X.shape[1]):
-            diff2 = (self.X[:, i][:, None] - self.X[:, i][None, :]) ** 2
-            dK = pref * diff2 / (ell[i] ** 2)            # d/dlog ell_i
+        pref = sf2 * (5.0 / 3.0) * (1.0 + s5r) * np.exp(-s5r)
+        for i, distance_part in enumerate(self._distance_parts(self.X, self.X, ell)):
+            dK = pref * distance_part                    # d/dlog ell_i
             grad[1 + i] = -0.5 * np.sum(W * dK)
 
         dK_sn2 = np.eye(len(self.y)) * sn2
         grad[1 + self.X.shape[1]] = -0.5 * np.sum(W * dK_sn2)
 
-        same = (np.asarray(self.C)[:, None] == np.asarray(self.C)[None, :])
-        dK_rho = np.where(same, 0.0, sf2 * m) * (rho * (1.0 - rho))
-        grad[2 + self.X.shape[1]] = -0.5 * np.sum(W * dK_rho)
         return nll, grad
 
-    def fit(self, X, C, y, noise_var=None, n_restarts=3, rng=None):
+    def fit(self, X, y, noise_var=None, n_restarts=3, rng=None):
         rng = rng or np.random.default_rng(0)
         self.X = np.atleast_2d(np.asarray(X, dtype=float))
-        self.C = np.asarray(C, dtype=int)
+        if self.sphere_columns is not None:
+            if len(self.sphere_columns) != 2 or len(set(self.sphere_columns)) != 2:
+                raise ValueError("sphere_columns must name two different columns")
+            if min(self.sphere_columns) < 0 or max(self.sphere_columns) >= self.X.shape[1]:
+                raise ValueError("sphere column is outside the input array")
         y = np.asarray(y, dtype=float)
         self.y_mean = float(y.mean())
         self.y_std = float(y.std()) or 1.0
@@ -417,15 +429,14 @@ class GaussianProcess:
 
         bounds = ([(math.log(1e-3), math.log(1e3))]                 # log sf2
                   + [(math.log(0.02), math.log(20.0))] * d          # log ell
-                  + [(math.log(1e-8), math.log(10.0))]              # log sn2
-                  + [(-6.0, 6.0)])                                  # logit rho
+                  + [(math.log(1e-8), math.log(10.0))])             # log sn2
         best = None
-        starts = [np.array([0.0] + [math.log(0.5)] * d + [math.log(1e-3), 1.0])]
+        starts = [np.array([0.0] + [math.log(0.5)] * d + [math.log(1e-3)])]
         for _ in range(max(0, n_restarts - 1)):
             starts.append(np.array(
                 [rng.normal(0.0, 1.0)]
                 + list(np.log(rng.uniform(0.1, 3.0, size=d)))
-                + [math.log(10 ** rng.uniform(-6, -1)), rng.normal(1.0, 1.5)]))
+                + [math.log(10 ** rng.uniform(-6, -1))]))
         for x0 in starts:
             x0 = np.clip(x0, [b[0] for b in bounds], [b[1] for b in bounds])
             try:
@@ -446,12 +457,11 @@ class GaussianProcess:
         return self
 
     # -- prediction ---------------------------------------------------------
-    def predict(self, Xs, Cs, return_std=True):
-        sf2, ell, sn2, rho = self._unpack(self.theta)
+    def predict(self, Xs, return_std=True):
+        sf2, ell, sn2 = self._unpack(self.theta)
         Xs = np.atleast_2d(np.asarray(Xs, dtype=float))
-        Cs = np.asarray(Cs, dtype=int)
         m, _ = self._matern(Xs, self.X, ell)
-        Ks = sf2 * m * self._cat_factor(Cs, self.C, rho)
+        Ks = sf2 * m
         mu = Ks @ self.alpha
         mu = mu * self.y_std + self.y_mean
         if not return_std:
@@ -461,7 +471,7 @@ class GaussianProcess:
         var = np.maximum(var, 1e-12) * (self.y_std ** 2)
         return mu, np.sqrt(var)
 
-    def reset_data(self, X, C, y, noise_var):
+    def reset_data(self, X, y, noise_var):
         """Rebuild on this data with the CURRENT hyperparameters.
 
         Used before each asynchronous proposal: fantasies for in-flight points
@@ -469,7 +479,6 @@ class GaussianProcess:
         time would cost more than it buys.
         """
         self.X = np.atleast_2d(np.asarray(X, dtype=float))
-        self.C = np.asarray(C, dtype=int)
         y = np.asarray(y, dtype=float)
         self.y = (y - self.y_mean) / self.y_std
         noise = np.asarray(noise_var, dtype=float) / (self.y_std ** 2)
@@ -482,7 +491,7 @@ class GaussianProcess:
         self.alpha = np.linalg.solve(self.L.T, np.linalg.solve(self.L, self.y))
         return self
 
-    def add_fantasy(self, x, c, y_value, noise_value):
+    def add_fantasy(self, x, y_value, noise_value):
         """Constant-liar update: append a believed observation, refactorize.
 
         Hyperparameters are NOT refitted -- the point of the liar is to
@@ -490,7 +499,6 @@ class GaussianProcess:
         pretend new information arrived.
         """
         self.X = np.vstack([self.X, np.atleast_2d(x)])
-        self.C = np.append(self.C, int(c))
         self.y = np.append(self.y, (y_value - self.y_mean) / self.y_std)
         self.noise = np.append(self.noise, noise_value / (self.y_std ** 2))
         K, *_ = self._build(self.theta)
@@ -535,7 +543,6 @@ class GPBayesOpt(BaseOptimizer):
 
     def _on_tell(self, point, value):
         self.init_design.U = self.U
-        self.init_design.C = self.C
         # Every reported point enters the GP's training set on the next refit,
         # whatever proposed it -- unlike CMA-ES, where only a complete
         # generation contributes to the update.
@@ -543,9 +550,8 @@ class GPBayesOpt(BaseOptimizer):
 
     def _refit(self):
         noise = np.array(self.SIG, dtype=float) ** 2
-        self.gp = GaussianProcess().fit(
-            np.array(self.U), np.array(self.C), np.array(self.Y),
-            noise_var=noise, rng=self.rng)
+        self.gp = GaussianProcess(sphere_columns=self.space.orientation_columns).fit(
+            np.array(self.U), np.array(self.Y), noise_var=noise, rng=self.rng)
         self._fits += 1
         return self.gp
 
@@ -567,20 +573,19 @@ class GPBayesOpt(BaseOptimizer):
                             + self.rng.normal(0, 0.08, size=(k, self.space.n_cont)),
                             0.0, 1.0)
             U = np.vstack([U[:n - k], local])
-        C = self.rng.integers(0, self.space.n_cat, size=len(U))
         keep = [i for i in range(len(U))
-                if precheck_cheap(self._make_point(U[i], C[i]), self.space)[0]]
-        return U[keep], C[keep]
+                if precheck_cheap(self._make_point(U[i]), self.space)[0]]
+        return U[keep]
 
-    def _polish(self, u0, c, best):
+    def _polish(self, u0, best):
         def neg_ei(u):
-            mu, sd = self.gp.predict(np.clip(u, 0, 1)[None, :], [c])
+            mu, sd = self.gp.predict(np.clip(u, 0, 1)[None, :])
             return -float(expected_improvement(mu, sd, best, self.xi)[0])
         res = minimize(neg_ei, u0, method="L-BFGS-B",
                        bounds=[(0.0, 1.0)] * self.space.n_cont,
                        options={"maxiter": 60})
         u = np.clip(res.x, 0, 1)
-        if precheck_cheap(self._make_point(u, c), self.space)[0]:
+        if precheck_cheap(self._make_point(u), self.space)[0]:
             return u, -float(res.fun)
         return u0, -neg_ei(u0)
 
@@ -623,8 +628,8 @@ class GPBayesOpt(BaseOptimizer):
             # Drop any fantasies left over from the previous ask before adding
             # this ask's; otherwise an asynchronous campaign accumulates beliefs
             # it never tested.
-            self.gp.reset_data(np.array(self.U), np.array(self.C),
-                               np.array(self.Y), np.array(self.SIG, dtype=float) ** 2)
+            self.gp.reset_data(np.array(self.U), np.array(self.Y),
+                               np.array(self.SIG, dtype=float) ** 2)
 
         out = []
         median_noise = float(np.nanmedian(np.array(self.SIG, dtype=float) ** 2))
@@ -636,42 +641,41 @@ class GPBayesOpt(BaseOptimizer):
         for p in self.pending:
             try:
                 u_p = self.space.to_unit(self.space.complete(p))
-                c_p = self.space.miller_index(self.space.complete(p))
             except Exception:                                   # noqa: BLE001
                 continue
-            mu_p, _ = self.gp.predict(u_p[None, :], [c_p])
-            self.gp.add_fantasy(u_p, c_p, float(mu_p[0]), median_noise)
+            mu_p, _ = self.gp.predict(u_p[None, :])
+            self.gp.add_fantasy(u_p, float(mu_p[0]), median_noise)
         for _ in range(n):
-            mu_obs, _ = self.gp.predict(np.array(self.U), np.array(self.C))
+            mu_obs, _ = self.gp.predict(np.array(self.U))
             best = float(np.min(mu_obs))
-            U, C = self._candidate_pool(np.array(self.U[int(np.argmin(mu_obs))]))
+            U = self._candidate_pool(np.array(self.U[int(np.argmin(mu_obs))]))
             if len(U) == 0:
                 out.extend(self._tag(p, "random_filler",
                                      reason="acquisition candidate pool empty "
                                             "after the cheap feasibility filter")
                            for p in self._random_feasible(1))
                 continue
-            mu, sd = self.gp.predict(U, C)
+            mu, sd = self.gp.predict(U)
             ei = expected_improvement(mu, sd, best, self.xi)
             order = np.argsort(-ei)[:max(1, self.n_polish)]
             cands = []
             for idx in order:
-                u_p, ei_p = self._polish(U[idx], int(C[idx]), best)
-                cands.append((ei_p, u_p, int(C[idx])))
+                u_p, ei_p = self._polish(U[idx], best)
+                cands.append((ei_p, u_p))
             cands.sort(key=lambda t: -t[0])
             chosen = None
-            for ei_p, u_p, c_p in cands:
-                p = self._make_point(u_p, c_p)
+            for ei_p, u_p in cands:
+                p = self._make_point(u_p)
                 if not self._is_duplicate(p):
-                    chosen = (ei_p, u_p, c_p, p)
+                    chosen = (ei_p, u_p, p)
                     break
             if chosen is None:
                 p = self._random_feasible(1)[0]
-                chosen = (0.0, self.space.to_unit(p), self.space.miller_index(p), p)
+                chosen = (0.0, self.space.to_unit(p), p)
                 self._tag(p, "random_filler",
                           reason="every acquisition maximiser candidate duplicated "
                                  "an evaluated or pending point")
-            ei_p, u_p, c_p, p = chosen
+            ei_p, u_p, p = chosen
             self.last_acquisition[self._key(p)] = float(ei_p)
             if self._provenance.get(self._key(p), {}).get("proposal_source") \
                     != "random_filler":
@@ -679,8 +683,8 @@ class GPBayesOpt(BaseOptimizer):
                           n_observations_at_proposal=self.n_observations)
             out.append(p)
             # Constant liar so the rest of the batch does not pile onto the same peak.
-            mu_p, _ = self.gp.predict(u_p[None, :], [c_p])
-            self.gp.add_fantasy(u_p, c_p, float(mu_p[0]), median_noise)
+            mu_p, _ = self.gp.predict(u_p[None, :])
+            self.gp.add_fantasy(u_p, float(mu_p[0]), median_noise)
         return out
 
     def acquisition_of(self, point):
@@ -711,9 +715,8 @@ class CMAES(BaseOptimizer):
     * the incumbent is re-proposed periodically, so drift in the machine or a
       lucky early draw becomes visible instead of being locked in.
 
-    Orientation is categorical and CMA-ES is not: the direction is drawn from a
-    softmax over each direction's observed mean, with a floor, so a promising
-    orientation is exploited without the others being abandoned.
+    Crystal direction is represented by the same two continuous sphere
+    coordinates as every other method.
     """
 
     def __init__(self, space=None, seed=0, popsize=None, sigma0=0.3,
@@ -791,23 +794,6 @@ class CMAES(BaseOptimizer):
         self.restarts += 1
         self._gens_without_gain = 0
 
-    def _sample_category(self):
-        if not self.values:
-            return int(self.rng.integers(self.space.n_cat))
-        means = np.full(self.space.n_cat, np.nan)
-        for c in range(self.space.n_cat):
-            ys = [y for y, cc in zip(self.Y, self.C) if cc == c]
-            if ys:
-                means[c] = np.mean(ys)
-        if np.all(np.isnan(means)):
-            return int(self.rng.integers(self.space.n_cat))
-        filled = np.where(np.isnan(means), np.nanmax(means), means)
-        scale = np.nanstd(filled) or 1.0
-        logits = -(filled - np.nanmin(filled)) / scale
-        p = np.exp(logits - logits.max())
-        p = 0.85 * p / p.sum() + 0.15 / self.space.n_cat     # exploration floor
-        return int(self.rng.choice(self.space.n_cat, p=p / p.sum()))
-
     def _draw(self):
         try:
             A = np.linalg.cholesky(self.Cov + 1e-12 * np.eye(self.d))
@@ -823,11 +809,11 @@ class CMAES(BaseOptimizer):
         for _ in range(self.max_resample):
             z = self.rng.standard_normal(self.d)
             u = np.clip(self.mean + self.sigma * (A @ z), 0.0, 1.0)
-            p = self._make_point(u, self._sample_category())
+            p = self._make_point(u)
             if self._feasible(p) and not self._is_duplicate(p):
                 return u, p
         u = np.clip(self.mean + self.sigma * self.rng.standard_normal(self.d) * 0.3, 0, 1)
-        return u, self._make_point(u, self._sample_category())
+        return u, self._make_point(u)
 
     def _ask(self, n):
         out = []
@@ -851,8 +837,7 @@ class CMAES(BaseOptimizer):
                 bp, _ = self.best()
                 u = np.clip(self.space.to_unit(bp)
                             + self.rng.normal(0, 1e-4, self.d), 0, 1)
-                c = self.space.miller_index(self.space.complete(bp))
-                p = self._make_point(u, c)
+                p = self._make_point(u)
                 source = "cma_incumbent_reeval"
             else:
                 u, p = self._draw()
@@ -956,8 +941,7 @@ def _register_optuna():
                 trial = self.study.ask()
                 u = np.array([trial.suggest_float(v.name, 0.0, 1.0)
                               for v in self.space.variables])
-                c = trial.suggest_int("miller", 0, self.space.n_cat - 1)
-                p = self._make_point(u, c)
+                p = self._make_point(u)
                 if self._feasible(p) and not self._is_duplicate(p):
                     self._trials[self._key(p)] = trial
                     out.append(p)
@@ -990,7 +974,7 @@ def missing_adapters():
             ("tpe_optuna", "optuna",
              "tree-structured Parzen estimator baseline for mixed spaces"),
             ("botorch_qnei", "botorch",
-             "qLogNoisyEI and multi-fidelity KG; needs torch"),
+             "qLogNoisyEI and multi-event_count KG; needs torch"),
     ):
         if name not in OPTIMIZERS:
             out[name] = (f"pip install {package}  "

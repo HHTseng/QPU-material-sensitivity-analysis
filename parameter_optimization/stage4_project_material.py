@@ -291,7 +291,7 @@ def rank(target_features, candidates, feature_spec, weights=None, top=10,
     one list, so a candidate missing `scat`, `decay` and `decayTT` -- the three
     strongest optimization directions in this space -- could outrank a
     fully-characterised one purely by being unmeasured. The nearest substrates
-    in STAGE4_RESULTS.md sec 4.1 were all 4/7 and were printed alongside 7/7
+    in material_scan/docs/results.md were all 4/7 and were printed alongside 7/7
     rows without a visible penalty.
 
     Coverage now sorts FIRST (most features matched first), distance second.
@@ -354,7 +354,7 @@ def nearest_carrier(density_kg_m3, tolerance=0.03):
     accepts only a NIST material NAME, so a real material can be simulated at
     its own density only if some NIST material happens to sit within tolerance.
     The deviation is returned either way and is reported, never hidden: at 3% in
-    density the derived speeds move by 1.5%, which is inside the tier's ~5%
+    density the derived speeds move by 1.5%, which is inside the event_count's ~5%
     stochastic error but is still a stated approximation.
     """
     best, best_dev = None, float("inf")
@@ -596,21 +596,21 @@ def realizable_point(target_point, substrate, top, bottom, space=None,
     return point, clipped
 
 
-def verify(points, contract_path, ledger_path, events, workers, parallel,
+def verify(points, definition_path, database_path, events, workers, parallel,
            seed_bank, tag, timeout=None):
     """Simulate the projected triplets and the ideal target under held-out seeds."""
     import threading
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    from stage3_contract import load_contract
-    from stage3_ledger import Ledger
+    from experiment_definition import load_definition
+    from experiment_database import Database
     from stage3_trial_runner import evaluate
     import stage4_objectives as O
     from stage4_optimize import candidate_payload, resolver_for
 
-    contract = load_contract(contract_path)
-    contract.campaign_id = f"{contract.campaign_id}_{tag}"
-    fid = contract.decision["fidelity"]["value"]
-    contract.decision["fidelity"]["events_total_per_candidate"][fid] = events
+    definition = load_definition(definition_path)
+    definition.campaign_id = f"{definition.campaign_id}_{tag}"
+    fid = definition.decision["event_count"]["value"]
+    definition.decision["event_count"]["events_total_per_candidate"][fid] = events
     # Finding N4: this used to divide workers and memory by `parallel` and then
     # iterate SEQUENTIALLY, so `--parallel 2` gave each candidate half the
     # machine while the other half sat idle -- a straight 2x slowdown dressed up
@@ -618,31 +618,31 @@ def verify(points, contract_path, ledger_path, events, workers, parallel,
     # the split is only applied when there is really more than one in flight.
     parallel = max(1, int(parallel))
     n_slots = min(parallel, max(1, len(points)))
-    contract.fixed["max_workers"] = max(1, workers // n_slots)
-    contract.fixed["total_mem_gb"] = float(contract.fixed["total_mem_gb"]) / n_slots
+    definition.fixed["max_workers"] = max(1, workers // n_slots)
+    definition.fixed["total_mem_gb"] = float(definition.fixed["total_mem_gb"]) / n_slots
     # `timeout` is the ABSOLUTE limit and defaults to unlimited; the stall
-    # detector from the contract does the real work (see stage4_config.yaml).
+    # detector from the definition does the real work (see stage4_config.yaml).
     if timeout is not None:
-        contract.fixed["sample_timeout_s"] = timeout
+        definition.fixed["sample_timeout_s"] = timeout
     space = S.DEFAULT_SPACE
     results = {}
     print(f"  {n_slots} candidate(s) at a time x "
-          f"{contract.fixed['max_workers']} sub-run workers "
-          f"= {n_slots * contract.fixed['max_workers']} cores")
+          f"{definition.fixed['max_workers']} sub-run workers "
+          f"= {n_slots * definition.fixed['max_workers']} cores")
 
-    # One ledger connection per thread: sqlite3 objects are not shareable
+    # One database connection per thread: sqlite3 objects are not shareable
     # across threads, which is why stage4_confirm.py does the same.
     local = threading.local()
 
     def led():
         if getattr(local, "l", None) is None:
-            local.l = Ledger(ledger_path)
+            local.l = Database(database_path)
         return local.l
 
     def run_one(label, point):
         try:
-            r = evaluate(contract, candidate_payload(point, space), fidelity=fid,
-                         seed_bank_id=seed_bank, ledger=led(), verbose=False,
+            r = evaluate(definition, candidate_payload(point, space), event_count=fid,
+                         seed_bank_id=seed_bank, database=led(), verbose=False,
                          resolver=resolver_for(space))
         except Exception as exc:                           # noqa: BLE001
             return label, {"status": "rejected", "reason": str(exc)}
@@ -709,8 +709,8 @@ def main():
     ap.add_argument("--verify", action="store_true")
     ap.add_argument("--verify-top", type=int, default=3)
     ap.add_argument("--verify-events", type=int, default=4000000)
-    ap.add_argument("--contract", default=os.path.join(HERE, "stage4_config.yaml"))
-    ap.add_argument("--ledger", default=os.path.join(HERE, "stage4_trials.sqlite"))
+    ap.add_argument("--definition", default=os.path.join(HERE, "stage4_config.yaml"))
+    ap.add_argument("--database", default=os.path.join(HERE, "stage4_trials.sqlite"))
     ap.add_argument("--workers", type=int, default=16)
     ap.add_argument("--parallel", type=int, default=1)
     ap.add_argument("--seed-bank", type=int, default=9,
@@ -945,7 +945,7 @@ def main():
               f"{args.verify_events:,} events, HELD-OUT seed bank {args.seed_bank}")
         for triplet, why in notes.items():
             print(f"  note {triplet}: {why}")
-        results = verify(points, args.contract, args.ledger, args.verify_events,
+        results = verify(points, args.definition, args.database, args.verify_events,
                          args.workers, args.parallel, args.seed_bank, args.tag,
                          args.timeout)
         out["verification"] = {"results": results, "notes": notes,
@@ -955,7 +955,7 @@ def main():
         base = None
         try:
             base_point = space.baseline_point()
-            base_res = verify({"baseline": base_point}, args.contract, args.ledger,
+            base_res = verify({"baseline": base_point}, args.definition, args.database,
                               args.verify_events, args.workers, args.parallel,
                               args.seed_bank, args.tag, args.timeout)
             base = base_res.get("baseline", {}).get("value")

@@ -1,4 +1,4 @@
-"""One recorded ask/tell interface for the validated legacy optimizers.
+"""One recorded ask/tell interface for the validated historical optimizers.
 
 The numerical implementations are intentionally not rewritten during the
 structural change.  This adapter records the complete operation transcript, so
@@ -35,9 +35,9 @@ def _canonical(value: Any) -> str:
     return json.dumps(_plain(value), sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
-def _legacy_module():
-    legacy_dir = Path(__file__).resolve().parents[1] / "parameter_optimization"
-    path = str(legacy_dir)
+def _historical_module():
+    historical_dir = Path(__file__).resolve().parents[1] / "parameter_optimization"
+    path = str(historical_dir)
     if path not in sys.path:
         sys.path.insert(0, path)
     import stage4_optimizers  # type: ignore
@@ -78,7 +78,7 @@ class SearchController:
         space: Any = None,
         options: Mapping[str, Any] | None = None,
     ) -> None:
-        module = _legacy_module()
+        module = _historical_module()
         self.method = str(method)
         self.seed = int(seed)
         self.options = dict(options or {})
@@ -131,14 +131,14 @@ class SearchController:
         )
 
     def checkpoint(self) -> dict[str, Any]:
-        legacy_path = Path(_legacy_module().__file__).resolve()
+        historical_path = Path(_historical_module().__file__).resolve()
         return {
             "schema": self.SCHEMA,
             "method": self.method,
             "seed": self.seed,
             "options": _plain(self.options),
             "scheduler_policy": self.scheduler_policy,
-            "legacy_implementation_sha256": hashlib.sha256(legacy_path.read_bytes()).hexdigest(),
+            "historical_implementation_sha256": hashlib.sha256(historical_path.read_bytes()).hexdigest(),
             "events": _plain(self.events),
             "state_summary": _plain(self.optimizer.state()),
         }
@@ -153,8 +153,8 @@ class SearchController:
             space=space,
             options=dict(record.get("options") or {}),
         )
-        current_hash = restored.checkpoint()["legacy_implementation_sha256"]
-        if record.get("legacy_implementation_sha256") != current_hash:
+        current_hash = restored.checkpoint()["historical_implementation_sha256"]
+        if record.get("historical_implementation_sha256") != current_hash:
             raise SearchReplayError("optimizer implementation hash changed")
 
         for event in record.get("events", []):
@@ -183,4 +183,4 @@ class SearchController:
 def available() -> list[str]:
     """Names exposed by the pinned compatibility implementation."""
 
-    return list(_legacy_module().available())
+    return list(_historical_module().available())

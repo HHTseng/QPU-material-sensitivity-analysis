@@ -9,10 +9,10 @@ Three things it will not do, because each would overstate the result:
 * It does not print a Poisson z. The counts are overdispersed (measured Fano
   ~ 5), so a Poisson interval is optimistic by ~2.3x. Comparisons use the
   replica-based error already carried by each objective value.
-* It does not merge campaigns that used different objectives, contracts or
+* It does not merge campaigns that used different objectives, definitions or
   fidelities. Those are different experiments.
 * It does not call the best screening trial a result. The promotion list it
-  prints is the input to a higher-fidelity confirmation run with HELD-OUT
+  prints is the input to a higher-event_count confirmation run with HELD-OUT
   seeds, which is a separate step.
 """
 
@@ -29,7 +29,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 # The converged v2 material study, for context. Same objective, same 16 sites,
-# same seed bank, 3.2e8 events per candidate (tier L).
+# same seed bank, 3.2e8 events per candidate (320,000,000-event setting).
 V2_REFERENCE = {
     "Si/Nb/Cu (v2 baseline)": 3.900e-4,
     "Ge/Nb/Cu (v2 best)": 2.494e-4,
@@ -54,7 +54,7 @@ def load_manifests(root, pattern):
 def best_so_far(trials):
     """Best-so-far against cumulative PAID trials.
 
-    A trial replayed from the ledger on restart counts: it cost its events, just
+    A trial replayed from the database on restart counts: it cost its events, just
     in an earlier process. Only a true cache hit -- the same vector re-proposed
     inside one campaign, e.g. the baseline control -- is free, and manifests
     written before 2026-08-21 conflate the two, which slightly overcounts.
@@ -77,7 +77,7 @@ def summarize(man):
         "optimizer": man.get("optimizer"),
         "objective": man.get("objective"),
         "campaign": man.get("campaign_id"),
-        "fidelity": man.get("fidelity"),
+        "event_count": man.get("event_count"),
         "events_per_candidate": man.get("events_total_per_candidate"),
         "n": len(values),
         "rejected": man.get("n_rejected", 0),
@@ -95,7 +95,7 @@ def summarize(man):
         "baseline_controls": man.get("baseline_controls") or [],
         "baseline_control_values": man.get("baseline_control_values"),
         "proposal_sources": man.get("proposal_sources") or {},
-        "ledger_status_counts": man.get("ledger_status_counts") or {},
+        "database_status_counts": man.get("database_status_counts") or {},
         "llm": man.get("llm"),
     }
 
@@ -141,7 +141,7 @@ def main():
     ap.add_argument("--top", type=int, default=10, help="candidates to promote")
     ap.add_argument("--csv", default=None)
     ap.add_argument("--plot", action="store_true")
-    ap.add_argument("--ledger", default=os.path.join(HERE, "stage4_trials.sqlite"),
+    ap.add_argument("--database", default=os.path.join(HERE, "stage4_trials.sqlite"),
                     help="joined for per-trial wall time; a cheap objective is not "
                          "free if it costs 10x the CPU")
     ap.add_argument("--out", default=os.path.join(HERE, "results", "stage4_report.json"))
@@ -154,10 +154,10 @@ def main():
 
     rows = [summarize(m) for m in mans]
     objectives = {r["objective"] for r in rows}
-    fidelities = {r["fidelity"] for r in rows}
+    fidelities = {r["event_count"] for r in rows}
     print("Stage 4 campaign report")
     print(f"  {len(mans)} campaign(s); objective(s) {sorted(objectives)}; "
-          f"fidelity {sorted(fidelities)}")
+          f"event_count {sorted(fidelities)}")
     if len(objectives) > 1:
         print("  NOTE: campaigns with different objectives are listed but NOT compared.")
 
@@ -238,7 +238,7 @@ def main():
         if len(promote) >= args.top:
             break
     print(f"\nTop {len(promote)} screening candidates (promote these to a higher "
-          f"fidelity with HELD-OUT seeds; screening rank is not a result):")
+          f"event_count with HELD-OUT seeds; screening rank is not a result):")
     print(f"  {'#':>2s} {'optimizer':10s} {'objective':>11s} {'+-':>9s} {'vs base':>8s}  trial")
     for i, t in enumerate(promote, 1):
         vs = (f"{100 * (t['value'] - baseline) / baseline:+7.1f}%" if baseline else "   --")
@@ -247,7 +247,7 @@ def main():
               f"{str(t.get('trial_id'))[-12:]}")
 
     if baseline:
-        print("\nContext -- the converged v2 REAL-material study (tier L, same sites/seeds):")
+        print("\nContext -- the converged v2 REAL-material study (320,000,000-event setting, same sites/seeds):")
         for name, v in sorted(V2_REFERENCE.items(), key=lambda kv: kv[1]):
             print(f"  {name:28s} {v:.4e}  ({100 * (v - V2_REFERENCE['Si/Nb/Cu (v2 baseline)']) / V2_REFERENCE['Si/Nb/Cu (v2 baseline)']:+6.1f}% vs its own baseline)")
         print("  NOTE: v2 numbers are at 3.2e8 events per candidate; Stage 4 screening "
@@ -256,12 +256,12 @@ def main():
     # Cost. Simulation time is not constant across this space: a candidate that
     # absorbs less and lives longer takes more CPU per event, which is the same
     # direction as a low objective. If the two are strongly correlated the
-    # campaign is spending its budget disproportionately on its own favourites,
+    # campaign is spending its allowance disproportionately on its own favourites,
     # and a cost-aware acquisition would be the next thing to add.
     runtimes = {}
-    if args.ledger and os.path.isfile(args.ledger):
+    if args.database and os.path.isfile(args.database):
         import sqlite3
-        conn = sqlite3.connect(args.ledger)
+        conn = sqlite3.connect(args.database)
         conn.row_factory = sqlite3.Row
         for row in conn.execute("SELECT trial_id, runtime_s FROM trials"):
             runtimes[row["trial_id"]] = row["runtime_s"]

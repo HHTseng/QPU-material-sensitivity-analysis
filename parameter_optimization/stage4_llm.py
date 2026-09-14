@@ -5,7 +5,7 @@ result is trustworthy: the model is a **proposal generator inside a validated
 loop**, never an authority. Every proposal passes the same hard gates, is
 simulated by the same evaluator, and is scored by the same objective as a
 proposal from Sobol or from the GP. The model never reports a number it did not
-get from a simulation, and nothing it says enters the ledger except its
+get from a simulation, and nothing it says enters the database except its
 proposals and its stated rationale.
 
 Two registered strategies:
@@ -75,7 +75,7 @@ PHYSICS_NOTES = """\
   2.494e-4, i.e. -36%: slower, denser, and better."""
 
 SCHEMA_HINT = """\
-{"candidates": [{"values": {"<variable>": <number>, ..., "miller": [h,k,l]},
+{"candidates": [{"values": {"<variable>": <number>, ...},
                  "rationale": "<one sentence, <=200 chars>"}]}"""
 
 
@@ -131,8 +131,6 @@ def variable_block(space):
         rows.append(f"- {v.name} [{v.unit or 'dimensionless'}]: bounds "
                     f"[{v.low:g}, {v.high:g}], {v.scale} scale, baseline "
                     f"{v.baseline:g}. {v.doc.splitlines()[0]}")
-    rows.append(f"- miller: one of {[list(m) for m in space.millers]} "
-                f"(integer crystal direction; baseline [0,0,1])")
     return "\n".join(rows)
 
 
@@ -192,9 +190,8 @@ def _compact(point):
     parts = []
     for k, v in point.items():
         if k == "miller":
-            parts.append(f"miller={list(v)}")
-        else:
-            parts.append(f"{k}={float(v):.4g}")
+            continue
+        parts.append(f"{k}={float(v):.4g}")
     return " ".join(parts)
 
 
@@ -259,18 +256,6 @@ def parse_candidates(raw, space):
             stats["malformed"] += 1
             errors.append(f"candidate {i}: missing or non-numeric {missing}")
             continue
-        miller = values.get("miller", [0, 0, 1])
-        try:
-            miller = [int(x) for x in miller]
-        except (TypeError, ValueError):
-            miller = [0, 0, 1]
-            clipped.append("miller -> [0,0,1]")
-        if miller not in space.millers:
-            allowed = space.millers
-            miller = min(allowed, key=lambda m: sum((a - b) ** 2
-                                                    for a, b in zip(m, miller)))
-            clipped.append(f"miller -> {miller}")
-        point["miller"] = miller
         if clipped:
             stats["clipped"] += 1
             errors.append(f"candidate {i}: out of bounds, clipped: {clipped}")
@@ -441,7 +426,6 @@ class LLMGuidedBO(_LLMMixin, GPBayesOpt):
         if self.gp is None or (self.n_observations % self.refit_every == 0):
             self._refit()
         U = np.array([self.space.to_unit(self.space.complete(p)) for p in pool])
-        C = np.array([self.space.miller_index(self.space.complete(p)) for p in pool])
         out = []
         median_noise = float(np.nanmedian(np.array(self.SIG, dtype=float) ** 2))
         if not np.isfinite(median_noise):
@@ -450,9 +434,9 @@ class LLMGuidedBO(_LLMMixin, GPBayesOpt):
         for _ in range(n):
             if not alive:
                 break
-            mu_obs, _ = self.gp.predict(np.array(self.U), np.array(self.C))
+            mu_obs, _ = self.gp.predict(np.array(self.U))
             best = float(np.min(mu_obs))
-            mu, sd = self.gp.predict(U[alive], C[alive])
+            mu, sd = self.gp.predict(U[alive])
             ei = expected_improvement(mu, sd, best, self.xi)
             k = int(np.argmax(ei))
             idx = alive.pop(k)
@@ -460,7 +444,7 @@ class LLMGuidedBO(_LLMMixin, GPBayesOpt):
             self.last_acquisition[self._key(p)] = float(ei[k])
             self._tag(p, "llm_gp_ei", acquisition=float(ei[k]), gp_fit=self._fits)
             out.append(p)
-            self.gp.add_fantasy(U[idx], int(C[idx]), float(mu[k]), median_noise)
+            self.gp.add_fantasy(U[idx], float(mu[k]), median_noise)
         if len(out) < n:
             out.extend(GPBayesOpt._ask(self, n - len(out)))
         return out

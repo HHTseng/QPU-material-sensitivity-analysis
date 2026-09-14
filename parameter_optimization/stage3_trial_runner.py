@@ -1,12 +1,12 @@
 """Stage 3 single-candidate trial evaluator.
 
-    evaluate(contract, candidate, fidelity, seed_bank_id) -> TrialResult
+    evaluate(definition, candidate, event_count, seed_bank_id) -> TrialResult
 
 This is the Stage 3 orchestration layer, not another mode inside the Morris
 runner. It reuses the parts of the existing harness that are candidate-agnostic
 -- macro generation helpers, the derived-speed calculation, the memory guard,
 and the Stage 2 QP scoring -- and adds what optimization needs: planned
-identities, a cache key, a restartable ledger, and a strict completeness rule.
+identities, a cache key, a restartable database, and a strict completeness rule.
 
 Scope of this slice: **Si/Nb/Cu baseline only.** There is deliberately no
 material science here. `resolve_candidate()` raises for anything else and names
@@ -25,8 +25,8 @@ Rules that are not negotiable, and why:
   against whatever happens to be on disk.
 
 Usage:
-    python stage3_trial_runner.py --contract stage3_config.yaml
-    python stage3_trial_runner.py --contract stage3_config.yaml --replay   # exit check
+    python stage3_trial_runner.py --definition stage3_config.yaml
+    python stage3_trial_runner.py --definition stage3_config.yaml --replay   # exit check
 """
 
 import argparse
@@ -54,9 +54,9 @@ for _p in (HERE, REPO_ROOT):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from stage3_contract import load_contract, ContractError            # noqa: E402
-from stage3_ledger import (                                          # noqa: E402
-    Ledger, compute_cache_key,
+from experiment_definition import load_definition, DefinitionError            # noqa: E402
+from experiment_database import (                                          # noqa: E402
+    Database, compute_cache_key,
     STATUS_SUCCESS, STATUS_SUCCESS_ZERO, STATUS_TIMEOUT, STATUS_MEMORY_KILLED,
     STATUS_MACRO_ABORTED, STATUS_SIM_FAILED, STATUS_TEARDOWN_SEGV,
     STATUS_CORRUPT, STATUS_INCOMPLETE_SET, STATUS_RUNNING,
@@ -222,7 +222,7 @@ class TrialResult:
     status: str
     candidate: dict
     derived: dict
-    fidelity: str
+    event_count: str
     events_total: int
     events_per_sub_run: int
     n_positions: int
@@ -245,7 +245,7 @@ class TrialResult:
 # --------------------------------------------------------------------------
 # Resolver (baseline-only slice)
 # --------------------------------------------------------------------------
-def resolve_candidate(contract, candidate, debye_override_THz=None):
+def resolve_candidate(definition, candidate, debye_override_THz=None):
     """Resolve one (substrate, top film, bottom film) triplet.
 
     Every value the simulation consumes is derived here from the candidate's own
@@ -257,7 +257,7 @@ def resolve_candidate(contract, candidate, debye_override_THz=None):
                               (top, TOP_FILMS, "top_ground_film"),
                               (bot, BOTTOM_FILMS, "bottom_film")):
         if name not in table:
-            raise ContractError(
+            raise DefinitionError(
                 f"{what}={name!r} has no material record (available: {sorted(table)}). "
                 f"A record needs, at minimum: Geant4 material name and density, "
                 f"G4CMP lattice map, elastic constants with a declared convention, "
@@ -269,7 +269,7 @@ def resolve_candidate(contract, candidate, debye_override_THz=None):
     for layer, name, record in (("substrate", sub, s_rec), ("top_ground_film", top, t_rec),
                                 ("bottom_film", bot, b_rec)):
         if record.get("enabled") is False:
-            raise ContractError(
+            raise DefinitionError(
                 f"{layer}={name!r} is in the catalog but disabled: "
                 f"{record.get('enabled_blocked_by', 'no reason recorded')}. "
                 f"Supply the missing value with provenance and set enabled: true. "
@@ -292,13 +292,13 @@ def resolve_candidate(contract, candidate, debye_override_THz=None):
     for layer, (record, fields) in required.items():
         absent = [f for f in fields if record.get(f) is None]
         if absent:
-            raise ContractError(
+            raise DefinitionError(
                 f"{layer} record is incomplete: missing {absent}. Resolution fails "
                 f"rather than borrowing another material's value for the gap."
             )
 
     if s_rec.get("config_mode") != "native_g4cmp":
-        raise ContractError(
+        raise DefinitionError(
             f"substrate {sub!r} declares config_mode="
             f"{s_rec.get('config_mode')!r}; only 'native_g4cmp' is supported. A "
             f"curated override must supply a coherent record for EVERY active "
@@ -310,7 +310,7 @@ def resolve_candidate(contract, candidate, debye_override_THz=None):
     # density must agree with it, not merely with a catalog.
     g4_name = s_rec["g4_material"]
     if g4_name not in G4_MATERIAL_DENSITY_KG_M3:
-        raise ContractError(
+        raise DefinitionError(
             f"no verified Geant4 density for {g4_name!r}. Measure it from a live "
             f"run before using this material; a table value may disagree with the "
             f"NIST material Geant4 actually builds."
@@ -319,7 +319,7 @@ def resolve_candidate(contract, candidate, debye_override_THz=None):
     expected_density = s_rec["expected_density_kg_m3"]
     density_dev = abs(g4_density - expected_density) / expected_density
     if density_dev > DENSITY_TOLERANCE:
-        raise ContractError(
+        raise DefinitionError(
             f"{sub}: Geant4 {g4_name} density {g4_density} kg/m3 differs from the "
             f"record's {expected_density} kg/m3 by {density_dev:.2%} (> "
             f"{DENSITY_TOLERANCE:.1%}). G4CMP would use the Geant4 value while the "
@@ -332,7 +332,7 @@ def resolve_candidate(contract, candidate, debye_override_THz=None):
     vsound, vtrans = harness.derive_cubic_sound_speeds(
         s_rec["c11_GPa"], s_rec["c12_GPa"], s_rec["c44_GPa"], density=density)
     if not 0 < vtrans < vsound:
-        raise ContractError(
+        raise DefinitionError(
             f"{sub}: derived speeds violate 0 < vtrans < vsound "
             f"(vsound={vsound:.1f}, vtrans={vtrans:.1f}); G4CMP's group-velocity "
             f"map assumes v_L > v_T and would index off the end of its table."
@@ -348,7 +348,7 @@ def resolve_candidate(contract, candidate, debye_override_THz=None):
     }
     worst = max(speed_dev.values())
     if worst > DERIVED_SPEED_TOLERANCE:
-        raise ContractError(
+        raise DefinitionError(
             f"{sub}: derived speeds disagree with the native lattice record by "
             f"{worst:.2%} (> {DERIVED_SPEED_TOLERANCE:.1%}).\n"
             f"  derived: vsound={vsound:.1f} vtrans={vtrans:.1f}\n"
@@ -378,10 +378,10 @@ def resolve_candidate(contract, candidate, debye_override_THz=None):
              "density_kg_m3": b_rec.get("density_kg_m3")},
             si_for_model)
     except InterfaceModelError as exc:
-        raise ContractError(f"{sub}: interface model failed: {exc}") from exc
+        raise DefinitionError(f"{sub}: interface model failed: {exc}") from exc
     for key, value in abs_values.items():
         if not 0.0 <= value <= 1.0:
-            raise ContractError(f"{sub}: {key}={value} outside [0,1]")
+            raise DefinitionError(f"{sub}: {key}={value} outside [0,1]")
 
     derived = {
         "substrate_density_kg_m3": density,
@@ -412,29 +412,29 @@ def resolve_candidate(contract, candidate, debye_override_THz=None):
         # key and the two arms can never collide.
         derived["debye_override_THz"] = debye_override_THz
 
-    contract.check_excitation_thresholds(top_film_gap_eV=t_rec["gap_eV"])
+    definition.check_excitation_thresholds(top_film_gap_eV=t_rec["gap_eV"])
     return {"substrate": s_rec, "top_film": t_rec, "bottom_film": b_rec}, derived
 
 
 # --------------------------------------------------------------------------
 # Scenario (injection sites)
 # --------------------------------------------------------------------------
-def build_scenario(contract, template_z_mm):
+def build_scenario(definition, template_z_mm):
     """Ordered injection-site set. Identical for every candidate by construction.
 
     Two designs are supported. The default is the historical uniform scrambled
-    Sobol draw. If the contract carries `stratified_design`, that explicit
+    Sobol draw. If the definition carries `stratified_design`, that explicit
     electrode-aware design is used instead -- see stage4_strata.py for why the
     uniform draw does not converge. The design travels inside the returned
     scenario, so it is hashed into the cache key and a stratified trial can
     never collide with a uniform one at the same site count.
     """
-    explicit = contract.fixed.get("stratified_design")
+    explicit = definition.fixed.get("stratified_design")
     if explicit:
         sites = [tuple(s) for s in explicit["sites_mm"]]
-        n_expect = int(contract.fixed["n_positions"])
+        n_expect = int(definition.fixed["n_positions"])
         if len(sites) != n_expect:
-            raise ContractError(
+            raise DefinitionError(
                 f"stratified_design carries {len(sites)} sites but n_positions "
                 f"is {n_expect}; the two must agree or the sub-run grid is wrong")
         return {
@@ -448,11 +448,11 @@ def build_scenario(contract, template_z_mm):
             "injection_law": explicit["injection_law"],
             "design_hash": explicit["design_hash"],
         }
-    n = int(contract.fixed["n_positions"])
+    n = int(definition.fixed["n_positions"])
     if n < 1:
-        raise ContractError("n_positions must be >= 1")
+        raise DefinitionError("n_positions must be >= 1")
     if n > 1 and (n & (n - 1)):
-        raise ContractError(
+        raise DefinitionError(
             f"n_positions={n} is not a power of two; a scrambled Sobol set is only "
             f"balanced at powers of two and an unbalanced site set biases the "
             f"device average."
@@ -460,16 +460,16 @@ def build_scenario(contract, template_z_mm):
     if n == 1:
         sites = [None]
     else:
-        engine = qmc.Sobol(d=2, scramble=True, seed=int(contract.fixed["position_seed"]))
-        span = float(contract.fixed["position_half_span_mm"])
+        engine = qmc.Sobol(d=2, scramble=True, seed=int(definition.fixed["position_seed"]))
+        span = float(definition.fixed["position_half_span_mm"])
         sites = [(round(float(u[0]) * 2 * span - span, 6),
                   round(float(u[1]) * 2 * span - span, 6),
                   template_z_mm) for u in engine.random(n)]
     return {
         "sites_mm": sites,
-        "weights": contract.fixed.get("position_weights", "uniform"),
-        "position_seed": int(contract.fixed["position_seed"]),
-        "half_span_mm": float(contract.fixed["position_half_span_mm"]),
+        "weights": definition.fixed.get("position_weights", "uniform"),
+        "position_seed": int(definition.fixed["position_seed"]),
+        "half_span_mm": float(definition.fixed["position_half_span_mm"]),
     }
 
 
@@ -485,7 +485,7 @@ def candidate_seed(seed_base, seed_bank_id, candidate_key, replica, position):
     Caveat against over-claiming: two candidates with different material
     parameters consume different numbers of draws, so their streams decorrelate
     after the first divergent event. The pairing is free and cannot hurt, but
-    the variance reduction is unmeasured -- do not budget for it.
+    the variance reduction is unmeasured -- do not allowance for it.
     """
     raw = (int(seed_base) + int(seed_bank_id) * 7_919_003
            + int(replica) * 10_007 + int(position) * 101)
@@ -495,7 +495,7 @@ def candidate_seed(seed_base, seed_bank_id, candidate_key, replica, position):
 # --------------------------------------------------------------------------
 # Macro / lattice generation
 # --------------------------------------------------------------------------
-def _write_lattice_config(contract, resolved, derived, dest_dir):
+def _write_lattice_config(definition, resolved, derived, dest_dir):
     """Write the candidate's lattice config.
 
     `native_g4cmp` mode copies the material's own complete G4CMP record
@@ -517,7 +517,7 @@ def _write_lattice_config(contract, resolved, derived, dest_dir):
     base = derived.get("base_lattice_map", lattice)
     src = os.path.join(harness.G4CMP_SOURCE_CRYSTALMAPS, base, "config.txt")
     if not os.path.isfile(src):
-        raise ContractError(f"No G4CMP lattice map for {base!r}: {src}")
+        raise DefinitionError(f"No G4CMP lattice map for {base!r}: {src}")
     with open(src) as handle:
         lines = handle.readlines()
 
@@ -531,7 +531,7 @@ def _write_lattice_config(contract, resolved, derived, dest_dir):
         for prefix in forced:
             for line in lines:
                 if line.strip().startswith(prefix) and "15 THz" in line and prefix == "Debye":
-                    raise ContractError(
+                    raise DefinitionError(
                         f"native {lattice} config unexpectedly carries Si's Debye 15 THz")
 
     for key, value in (("vsound ", derived["vsound_m_s"]), ("vtrans ", derived["vtrans_m_s"])):
@@ -605,11 +605,11 @@ def _verify_runtime_material(log_path, expected_g4_name, expected_density_kg_m3)
     return True, f"{observed_name} at {observed_density} g/cm3", observed_density
 
 
-def _write_sub_run_macro(contract, resolved, derived, template, macro_path,
+def _write_sub_run_macro(definition, resolved, derived, template, macro_path,
                          hits_file, done_marker, site, seed, events):
     with open(template) as handle:
         lines = handle.readlines()
-    f = contract.fixed
+    f = definition.fixed
     t, b = resolved["top_film"], resolved["bottom_film"]
 
     settings = [
@@ -659,13 +659,14 @@ def _write_sub_run_macro(contract, resolved, derived, template, macro_path,
         ("/main/electrode_param/setHeight ", f["electrode_height_um"]),
         ("/main/electrode_param/setIsland ", f"{f['electrode_island_um']} um"),
         ("/main/electrode_param/setIslandSpacing ", f"{f['electrode_island_spacing_um']} um"),
-        ("/main/detector_param/setLatticeDeg ", contract.decision["orientation"]["lattice_deg"]),
+        ("/main/detector_param/setLatticeDeg ",
+         (definition.decision.get("orientation") or {}).get("lattice_deg", 45.0)),
     ]
     for command, value in settings:
         lines = replace_line(lines, command, f"{command}{value}",
                              allow_commented=True, required=True)
 
-    miller = contract.decision["orientation"]["miller"]
+    miller = (definition.decision.get("orientation") or {}).get("miller", [0, 0, 1])
     lines = replace_line(lines, "/main/detector_param/setMiller ",
                          "/main/detector_param/setMiller " + " ".join(str(int(v)) for v in miller),
                          allow_commented=True, required=True)
@@ -676,7 +677,7 @@ def _write_sub_run_macro(contract, resolved, derived, template, macro_path,
                          "/main/electrode_param/setYLocations "
                          + ", ".join(f"{v:.6f}" for v in f["electrode_y_mm"]), required=True)
     # Stage 4: per-candidate commands (orientation, temperature) that the fixed
-    # block above wrote from the contract default. Applied last so the candidate
+    # block above wrote from the definition default. Applied last so the candidate
     # wins, and re-checked below by the unit-hygiene gate.
     for command, value in sorted((derived.get("macro_overrides") or {}).items()):
         lines = replace_line(lines, command, f"{command}{value}",
@@ -695,7 +696,7 @@ def _write_sub_run_macro(contract, resolved, derived, template, macro_path,
 
     bad = validate_macro_lines(lines)
     if bad:
-        raise ContractError(
+        raise DefinitionError(
             f"generated macro would abort: {bad[:3]}. A malformed command makes "
             f"Geant4 emit a warning, skip /run/beamOn and EXIT 0 -- 3,200 "
             f"'successful' sub-runs with no hits file were produced that way once. "
@@ -756,7 +757,7 @@ def _run_one(sub_run, lattice_root, timeout_s, guard, logs_dir,
     exactly the candidates the optimizer prefers. It censors on candidate
     quality. Measured: `best_random` at 1e8 events/sub-run lost all 32 sub-runs
     to a 41.7 h limit, ~1300 core-hours that produced nothing, while the
-    baseline (three times the QP yield) finished the same tier in 8.3 h.
+    baseline (three times the QP yield) finished the same event_count in 8.3 h.
     Set it to 0 for no wall-clock limit; the run is still physically bounded by
     `/g4cmp/phononBounces`.
 
@@ -920,7 +921,7 @@ def _run_one(sub_run, lattice_root, timeout_s, guard, logs_dir,
                     if trial_deadline is not None and now >= trial_deadline:
                         _kill("the TRIAL-level cap was reached; this sub-run is "
                               "censored, not failed -- the candidate is recorded "
-                              "as too expensive to measure at this budget")
+                              "as too expensive to measure at this allowance")
                     else:
                         _kill(f"exceeded the absolute wall-clock limit {timeout_s:g}s")
                     return
@@ -974,12 +975,12 @@ def _run_one(sub_run, lattice_root, timeout_s, guard, logs_dir,
     return STATUS_SUCCESS, rc, runtime, None
 
 
-def _score_one(contract, hits_path):
+def _score_one(definition, hits_path):
     """Score a single sub-run's hits file. Returns (per_electrode, n_hits)."""
     if not os.path.exists(hits_path) or os.path.getsize(hits_path) == 0:
-        raise ContractError(f"scoring an incomplete set: {os.path.basename(hits_path)}")
+        raise DefinitionError(f"scoring an incomplete set: {os.path.basename(hits_path)}")
     rec = pd.read_csv(hits_path).reset_index(drop=True)
-    f = contract.fixed
+    f = definition.fixed
     qx = np.array(f["electrode_x_mm"], dtype=float)
     qy = np.array(f["electrode_y_mm"], dtype=float)
     chip_z = (float(f["setSubThickness_um"]) * 1e-6) / 2.0
@@ -987,7 +988,7 @@ def _score_one(contract, hits_path):
     return qp_nos.sum(axis=1), len(rec)
 
 
-def _score(contract, sub_runs, events_per_sub_run):
+def _score(definition, sub_runs, events_per_sub_run):
     """Score every completed sub-run separately, then pool.
 
     Per-sub-run scoring is EXACTLY equivalent to pooling the frames first --
@@ -1004,9 +1005,9 @@ def _score(contract, sub_runs, events_per_sub_run):
     Returns (total, per_primary, per_electrode, n_hits, blocks).
     """
     blocks, n_hits_total = [], 0
-    per_electrode = np.zeros(len(contract.fixed["electrode_x_mm"]), dtype=float)
+    per_electrode = np.zeros(len(definition.fixed["electrode_x_mm"]), dtype=float)
     for sr in sub_runs:
-        block_pe, n_hits = _score_one(contract, sr["hits_file"])
+        block_pe, n_hits = _score_one(definition, sr["hits_file"])
         per_electrode += block_pe
         n_hits_total += n_hits
         blocks.append({
@@ -1022,7 +1023,7 @@ def _score(contract, sub_runs, events_per_sub_run):
     return total, total / n_sim, [float(v) for v in per_electrode], n_hits_total, blocks
 
 
-def _blocks_from_ledger(ledger, trial_id, events_per_sub_run):
+def _blocks_from_database(database, trial_id, events_per_sub_run):
     """Rebuild the (position, replica) blocks of a cached trial.
 
     A cache hit must be usable by a block-resolved objective, otherwise the
@@ -1032,7 +1033,7 @@ def _blocks_from_ledger(ledger, trial_id, events_per_sub_run):
     than substituting a pooled value.
     """
     blocks = []
-    for row in ledger.sub_runs(trial_id):
+    for row in database.sub_runs(trial_id):
         if row["total_qps"] is None:
             return []
         blocks.append({
@@ -1044,56 +1045,56 @@ def _blocks_from_ledger(ledger, trial_id, events_per_sub_run):
     return blocks
 
 
-def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
+def evaluate(definition, candidate, event_count=None, seed_bank_id=None, database=None,
              runs_root=None, force=False, verbose=True, debye_override_THz=None,
              resolver=None, control_replica_id=None):
     """Evaluate one candidate. Returns a TrialResult; never raises on a physics
-    failure (that is a status), only on a contract/programming error.
+    failure (that is a status), only on a definition/programming error.
 
-    `resolver(contract, candidate) -> (resolved, derived)` lets a different kind
+    `resolver(definition, candidate) -> (resolved, derived)` lets a different kind
     of candidate reuse this evaluator unchanged. Stage 4 passes
     `stage4_space.resolve`, which returns the same shapes plus two extra keys in
     `derived` -- `config_overrides` and `macro_overrides`. Because `derived` is
     already inside the cache key, those overrides enter the trial identity for
     free. Default is the Stage 3 catalog resolver, so the v2 path is unchanged.
     """
-    fidelity = fidelity or contract.decision["fidelity"]["value"]
-    seed_bank_id = (contract.fixed["seed_bank_id"] if seed_bank_id is None else seed_bank_id)
+    event_count = event_count or definition.decision["event_count"]["value"]
+    seed_bank_id = (definition.fixed["seed_bank_id"] if seed_bank_id is None else seed_bank_id)
     if resolver is None:
-        resolved, derived = resolve_candidate(contract, candidate,
+        resolved, derived = resolve_candidate(definition, candidate,
                                              debye_override_THz=debye_override_THz)
     else:
-        resolved, derived = resolver(contract, candidate)
+        resolved, derived = resolver(definition, candidate)
         if debye_override_THz is not None:
             derived["debye_override_THz"] = debye_override_THz
 
-    events_total = int(contract.decision["fidelity"]["events_total_per_candidate"][fidelity])
-    events_per_sub_run = contract.events_per_sub_run(fidelity)
-    n_positions = int(contract.fixed["n_positions"])
-    n_replicas = int(contract.fixed["n_replicas"])
+    events_total = int(definition.decision["event_count"]["events_total_per_candidate"][event_count])
+    events_per_sub_run = definition.events_per_sub_run(event_count)
+    n_positions = int(definition.fixed["n_positions"])
+    n_replicas = int(definition.fixed["n_replicas"])
 
     template = os.environ.get("SENSITIVITY_MACRO_TEMPLATE",
                               os.path.join(REPO_ROOT, "sensitivity_template_beamOn1e6.mac"))
     template_z = float(find_macro_value(template, "/main/gun/setPosition").split()[2])
-    scenario = build_scenario(contract, template_z)
+    scenario = build_scenario(definition, template_z)
 
-    code_fp = contract.code_fingerprint()
+    code_fp = definition.code_fingerprint()
     # Finding N2: the cache key is built from the SIMULATION identity, not the
     # campaign's. Resource limits, the watchdog, the campaign name, the search
     # box and the objective cannot change a completed trial's result, and
-    # including them meant that relaunching the ladder at a different worker
+    # including them meant that repeating the primary-count comparison at a different worker
     # count abandoned in-flight trials that should have resumed.
-    sim_hash = contract.simulation_identity_hash()
+    sim_hash = definition.simulation_identity_hash()
     cache_key = compute_cache_key(
-        sim_hash, code_fp, candidate, derived, fidelity,
+        sim_hash, code_fp, candidate, derived, event_count,
         events_total, scenario, seed_bank_id,
         control_replica_id=control_replica_id)
 
-    runs_root = runs_root or os.path.join(HERE, "runs", contract.campaign_id)
-    ledger_owned = ledger is None
-    ledger = ledger or Ledger(os.path.join(HERE, "stage3_trials.sqlite"))
+    runs_root = runs_root or os.path.join(HERE, "runs", definition.campaign_id)
+    database_owned = database is None
+    database = database or Database(os.path.join(HERE, "stage3_trials.sqlite"))
     try:
-        existing = ledger.find_by_cache_key(cache_key)
+        existing = database.find_by_cache_key(cache_key)
         if existing is not None:
             if (existing["status"] in (STATUS_SUCCESS, STATUS_SUCCESS_ZERO)
                     and not force):
@@ -1103,14 +1104,14 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
                 return TrialResult(
                     trial_id=existing["trial_id"], cache_key=cache_key,
                     status=existing["status"], candidate=candidate, derived=derived,
-                    fidelity=fidelity, events_total=events_total,
+                    event_count=event_count, events_total=events_total,
                     events_per_sub_run=events_per_sub_run, n_positions=n_positions,
                     n_replicas=n_replicas, total_qps=existing["total_qps"],
                     qps_per_primary=existing["qps_per_primary"],
                     per_electrode_qps=json.loads(existing["per_electrode_qps"] or "[]"),
                     runtime_s=existing["runtime_s"], run_dir=existing["run_dir"],
                     cached=True,
-                    blocks=_blocks_from_ledger(ledger, existing["trial_id"],
+                    blocks=_blocks_from_database(database, existing["trial_id"],
                                                existing["events_per_sub_run"]))
             # Re-run IN PLACE, forced or not. Minting a new trial_id under the
             # same cache key would hit the UNIQUE constraint, `INSERT OR IGNORE`
@@ -1120,12 +1121,12 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
             trial_id = existing["trial_id"]
             run_dir = existing["run_dir"]
             if force:
-                with ledger.conn:
-                    ledger.conn.execute(
+                with database.conn:
+                    database.conn.execute(
                         "UPDATE sub_runs SET status=? WHERE trial_id=?",
                         ("planned", trial_id))
         else:
-            trial_id = f"{contract.campaign_id}_{uuid.uuid4().hex[:12]}"
+            trial_id = f"{definition.campaign_id}_{uuid.uuid4().hex[:12]}"
             run_dir = os.path.join(runs_root, trial_id)
 
         hits_dir = os.path.join(run_dir, "hits")
@@ -1135,7 +1136,7 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
         for d in (hits_dir, macros_dir, logs_dir, lattice_root):
             os.makedirs(d, exist_ok=True)
 
-        _write_lattice_config(contract, resolved, derived, lattice_root)
+        _write_lattice_config(definition, resolved, derived, lattice_root)
 
         planned = []
         for replica in range(n_replicas):
@@ -1144,7 +1145,7 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
                 hits_file = os.path.join(hits_dir, name + "_hitsfile.txt")
                 planned.append({
                     "name": name, "replica": replica, "position_index": position,
-                    "seed": candidate_seed(contract.fixed["seed_base"], seed_bank_id,
+                    "seed": candidate_seed(definition.fixed["seed_base"], seed_bank_id,
                                            candidate, replica, position),
                     "macro": os.path.join(macros_dir, name + ".mac"),
                     "hits_file": hits_file,
@@ -1153,32 +1154,32 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
 
         # Planned identities are recorded BEFORE anything launches, so
         # completeness is judged against intent, not against the filesystem.
-        ledger.plan_trial(
-            trial_id=trial_id, campaign_id=contract.campaign_id, cache_key=cache_key,
-            contract_hash=contract.campaign_contract_hash(),
+        database.plan_trial(
+            trial_id=trial_id, campaign_id=definition.campaign_id, cache_key=cache_key,
+            definition_hash=definition.campaign_definition_hash(),
             simulation_identity_hash=sim_hash, code_fingerprint=code_fp,
-            candidate=candidate, derived=derived, fidelity=fidelity,
+            candidate=candidate, derived=derived, event_count=event_count,
             events_total=events_total, events_per_sub_run=events_per_sub_run,
             n_positions=n_positions, n_replicas=n_replicas, scenario=scenario,
             seed_bank_id=seed_bank_id, run_dir=run_dir, planned_sub_runs=planned)
         if control_replica_id is not None:
-            ledger.set_optimizer_record(trial_id,
+            database.set_optimizer_record(trial_id,
                                         control_replica_id=str(control_replica_id))
 
         for sr in planned:
-            _write_sub_run_macro(contract, resolved, derived, template, sr["macro"],
+            _write_sub_run_macro(definition, resolved, derived, template, sr["macro"],
                                  sr["hits_file"], sr["done_marker"],
                                  scenario["sites_mm"][sr["position_index"]],
                                  sr["seed"], events_per_sub_run)
 
         # Resume: rerun only sub-runs not already terminal-good.
-        done_keys = {(r["replica"], r["position"]) for r in ledger.sub_runs(trial_id)
+        done_keys = {(r["replica"], r["position"]) for r in database.sub_runs(trial_id)
                      if r["status"] in (STATUS_SUCCESS, STATUS_SUCCESS_ZERO, STATUS_TEARDOWN_SEGV)}
         todo = [sr for sr in planned if (sr["replica"], sr["position_index"]) not in done_keys]
         if verbose:
             print(f"  trial {trial_id}: {len(todo)}/{len(planned)} sub-run(s) to run"
                   + (f" ({len(done_keys)} reused)" if done_keys else ""))
-        ledger.set_trial_result(trial_id, STATUS_RUNNING)
+        database.set_trial_result(trial_id, STATUS_RUNNING)
         # Liveness: record WHO is working on this trial, then beat while the
         # Geant4 workers run. Without this a `running` row is indistinguishable
         # from an abandoned one -- the trial row is not touched during the work
@@ -1187,7 +1188,7 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
         # substitute: a PID namespace can hide a genuine host process.
         lease_uuid = uuid.uuid4().hex
         try:
-            acquired = ledger.claim_trial(
+            acquired = database.claim_trial(
                 trial_id, lease_uuid, hostname=socket.gethostname(),
                 owner_pid=os.getpid(), owner_ppid=os.getppid(),
                 scheduler_job_id=_scheduler_job_id())
@@ -1199,9 +1200,9 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
             # Finding N3: another evaluator is live on this exact trial. Running
             # anyway means two processes writing one run directory and one
             # cache key -- the failure mode the lease exists to prevent.
-            raise ContractError(
+            raise DefinitionError(
                 f"{trial_id} is leased by a live evaluator (heartbeat within "
-                f"{ledger.LEASE_EXPIRY_SECONDS:.0f}s). Refusing to run it twice. "
+                f"{database.LEASE_EXPIRY_SECONDS:.0f}s). Refusing to run it twice. "
                 f"If that owner is genuinely dead, recover it explicitly with "
                 f"claim_trial(..., takeover=True) once the lease has expired.")
         stop_heartbeat = threading.Event()
@@ -1218,7 +1219,7 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
             """
             hb, consecutive = None, 0
             try:
-                hb = Ledger(ledger.path, allow_frozen=True)   # own connection:
+                hb = Database(database.path, allow_frozen=True)   # own connection:
                 while not stop_heartbeat.wait(HEARTBEAT_SECONDS):  # sqlite objects
                     try:                                           # are per-thread
                         if not hb.heartbeat(trial_id, lease_uuid):
@@ -1258,8 +1259,8 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
                                   daemon=True)
         beater.start()
 
-        timeout_s = float(contract.fixed.get("sample_timeout_s") or 0)
-        stall_timeout_s = float(contract.fixed.get("sample_stall_timeout_s") or 0)
+        timeout_s = float(definition.fixed.get("sample_timeout_s") or 0)
+        stall_timeout_s = float(definition.fixed.get("sample_stall_timeout_s") or 0)
         # TRIAL-level cap, distinct from the per-sub-run watchdogs above.
         #
         # Removing the absolute per-sub-run limit (finding N6) was right -- it
@@ -1273,8 +1274,8 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
         # N6 removed is what happens NEXT: a capped trial is reported to the
         # optimizer as a CENSORED observation, so the surrogate learns the
         # region is expensive instead of being silently steered into it again.
-        # See stage4_objectives.censored_value and STAGE4_RESULTS.md 5.4.
-        max_trial_s = float(contract.fixed.get("sample_max_trial_hours") or 0) * 3600.0
+        # See stage4_objectives.censored_value and material_scan/docs/results.md.
+        max_trial_s = float(definition.fixed.get("sample_max_trial_hours") or 0) * 3600.0
         trial_deadline = (time.monotonic() + max_trial_s) if max_trial_s > 0 else None
         if verbose and trial_deadline:
             print(f"  trial cap: {max_trial_s / 3600:.1f} h "
@@ -1285,9 +1286,9 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
                      else f"absolute {timeout_s:g}s")
                   + (f", stall {stall_timeout_s:g}s" if stall_timeout_s > 0
                      else ", no stall detector"))
-        workers = int(contract.fixed.get("max_workers", 32))
-        guard = MemoryGuard(total_gb=float(contract.fixed["total_mem_gb"]),
-                            per_sample_gb=float(contract.fixed["per_sample_mem_gb"]),
+        workers = int(definition.fixed.get("max_workers", 32))
+        guard = MemoryGuard(total_gb=float(definition.fixed["total_mem_gb"]),
+                            per_sample_gb=float(definition.fixed["per_sample_mem_gb"]),
                             poll_seconds=5.0).start()
         start = time.monotonic()
         failures = []
@@ -1309,7 +1310,7 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
                         # of every sibling sub-run that already succeeded.
                         status, rc, runtime = STATUS_SIM_FAILED, None, None
                         reason = f"{type(exc).__name__}: {exc}"
-                    ledger.set_sub_run_status(trial_id, sr["replica"], sr["position_index"],
+                    database.set_sub_run_status(trial_id, sr["replica"], sr["position_index"],
                                               status, rc, runtime, reason)
                     if status not in (STATUS_SUCCESS, STATUS_TEARDOWN_SEGV):
                         failures.append((sr["name"], status, reason))
@@ -1320,7 +1321,7 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
         peak_rss_gb = guard.peak_total_bytes / 1024 ** 3
 
         # Strict completeness, judged against the planned identities.
-        good = {(r["replica"], r["position"]) for r in ledger.sub_runs(trial_id)
+        good = {(r["replica"], r["position"]) for r in database.sub_runs(trial_id)
                 if r["status"] in (STATUS_SUCCESS, STATUS_SUCCESS_ZERO, STATUS_TEARDOWN_SEGV)}
         expected = {(sr["replica"], sr["position_index"]) for sr in planned}
         if good != expected:
@@ -1328,7 +1329,7 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
             reason = (f"{len(missing)}/{len(expected)} sub-run(s) incomplete "
                       f"(first: r{missing[0][0]}p{missing[0][1]}); "
                       f"failures={failures[:3]}")
-            ledger.set_trial_result(trial_id, STATUS_INCOMPLETE_SET, lease_uuid=lease_uuid,
+            database.set_trial_result(trial_id, STATUS_INCOMPLETE_SET, lease_uuid=lease_uuid,
                                     runtime_s=runtime_total, peak_rss_gb=peak_rss_gb,
                                     failure_reason=reason)
             if verbose:
@@ -1337,7 +1338,7 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
                       "quadrature; a partial set is biased toward the survivors.")
             return TrialResult(trial_id=trial_id, cache_key=cache_key,
                                status=STATUS_INCOMPLETE_SET, candidate=candidate,
-                               derived=derived, fidelity=fidelity,
+                               derived=derived, event_count=event_count,
                                events_total=events_total,
                                events_per_sub_run=events_per_sub_run,
                                n_positions=n_positions, n_replicas=n_replicas,
@@ -1345,13 +1346,13 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
                                failure_reason=reason, run_dir=run_dir)
 
         total, per_primary, per_electrode, n_hits, blocks = _score(
-            contract, planned, events_per_sub_run)
+            definition, planned, events_per_sub_run)
         status = STATUS_SUCCESS if total > 0 else STATUS_SUCCESS_ZERO
         for block in blocks:
-            ledger.set_sub_run_score(trial_id, block["replica"], block["position"],
+            database.set_sub_run_score(trial_id, block["replica"], block["position"],
                                      block["total_qps"], block["per_electrode_qps"],
                                      block["n_hits"])
-        wrote = ledger.set_trial_result(trial_id, status, total_qps=total,
+        wrote = database.set_trial_result(trial_id, status, total_qps=total,
                                         qps_per_primary=per_primary,
                                         per_electrode_qps=per_electrode,
                                         runtime_s=runtime_total,
@@ -1361,7 +1362,7 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
             # The lease was taken over while this trial ran. Refusing to write
             # is the point: the new owner's result stands, and this one is
             # reported rather than silently discarded (finding N3).
-            raise ContractError(
+            raise DefinitionError(
                 f"{trial_id}: the lease was taken over while this evaluator was "
                 f"running, so its result was NOT written. Another owner is "
                 f"authoritative for this trial. Re-run only after establishing "
@@ -1371,7 +1372,7 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
                   f"({per_primary:.3e}/event, {n_hits} surface hits, "
                   f"{runtime_total:.1f}s, peak {peak_rss_gb:.2f} GB)")
         return TrialResult(trial_id=trial_id, cache_key=cache_key, status=status,
-                           candidate=candidate, derived=derived, fidelity=fidelity,
+                           candidate=candidate, derived=derived, event_count=event_count,
                            events_total=events_total,
                            events_per_sub_run=events_per_sub_run,
                            n_positions=n_positions, n_replicas=n_replicas,
@@ -1379,42 +1380,42 @@ def evaluate(contract, candidate, fidelity=None, seed_bank_id=None, ledger=None,
                            per_electrode_qps=per_electrode, runtime_s=runtime_total,
                            peak_rss_gb=peak_rss_gb, run_dir=run_dir, blocks=blocks)
     finally:
-        if ledger_owned:
-            ledger.close()
+        if database_owned:
+            database.close()
 
 
 def main():
     ap = argparse.ArgumentParser(description="Stage 3 single-candidate evaluator")
-    ap.add_argument("--contract", default=os.path.join(HERE, "stage3_config.yaml"))
-    ap.add_argument("--fidelity", default=None)
+    ap.add_argument("--definition", default=os.path.join(HERE, "stage3_config.yaml"))
+    ap.add_argument("--event-count", default=None)
     ap.add_argument("--seed-bank", type=int, default=None)
     ap.add_argument("--events-total", type=int, default=None,
-                    help="Override the fidelity's event budget (testing only).")
+                    help="Override the event_count's event allowance (testing only).")
     ap.add_argument("--replay", action="store_true",
                     help="Exit check: run the baseline twice with the same seeds "
                          "and require an identical objective.")
     ap.add_argument("--force", action="store_true", help="Ignore a cache hit.")
     args = ap.parse_args()
 
-    contract = load_contract(args.contract)
+    definition = load_definition(args.definition)
     if args.events_total:
-        fid = args.fidelity or contract.decision["fidelity"]["value"]
-        contract.decision["fidelity"]["events_total_per_candidate"][fid] = args.events_total
+        fid = args.event_count or definition.decision["event_count"]["value"]
+        definition.decision["event_count"]["events_total_per_candidate"][fid] = args.events_total
     candidate = {
-        "substrate": contract.decision["substrate"]["value"],
-        "top_ground_film": contract.decision["top_ground_film"]["value"],
-        "bottom_film": contract.decision["bottom_film"]["value"],
+        "substrate": definition.decision["substrate"]["value"],
+        "top_ground_film": definition.decision["top_ground_film"]["value"],
+        "bottom_film": definition.decision["bottom_film"]["value"],
     }
-    print(f"Campaign {contract.campaign_id}; candidate {candidate}")
+    print(f"Campaign {definition.campaign_id}; candidate {candidate}")
 
-    first = evaluate(contract, candidate, args.fidelity, args.seed_bank, force=args.force)
+    first = evaluate(definition, candidate, args.event_count, args.seed_bank, force=args.force)
     if not args.replay:
         print(json.dumps({k: v for k, v in asdict(first).items()
                           if k not in ("per_electrode_qps",)}, indent=2, default=str))
         return 0 if first.is_observation else 1
 
     print("Replay with identical seeds (exit check):")
-    second = evaluate(contract, candidate, args.fidelity, args.seed_bank, force=True)
+    second = evaluate(definition, candidate, args.event_count, args.seed_bank, force=True)
     ok = (first.is_observation and second.is_observation
           and first.total_qps == second.total_qps
           and first.per_electrode_qps == second.per_electrode_qps)

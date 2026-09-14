@@ -46,7 +46,7 @@ _NUMERIC_START = tuple("+-.0123456789")
 def validate_macro_lines(lines: Sequence[str]) -> list[str]:
     """Return Geant command lines containing malformed numeric tokens.
 
-    This deliberately matches the legacy unit-hygiene rule.  A malformed
+    This deliberately matches the historical unit-hygiene rule.  A malformed
     number can make Geant4 skip ``beamOn`` yet exit with status zero.
     """
 

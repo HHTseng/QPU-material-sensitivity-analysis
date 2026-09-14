@@ -53,7 +53,7 @@ gradient so Neyman allocation can resolve it.
 
 WHAT THIS MODULE GUARANTEES
 ---------------------------
-* Strata come from the contract's own electrode table and the real hit test.
+* Strata come from the definition's own electrode table and the real hit test.
 * Every electrode is sampled inside its actual junction rectangle.
 * The estimator is sum_h W_h * mu_h, so OVERSAMPLING DOES NOT BIAS IT.
 * Designs are NESTED under doubling, within every stratum.
@@ -76,23 +76,23 @@ MIN_SITES = {"S0_junction": 17, "S1_le_0.05": 8, "S2_le_0.20": 8,
              "S3_le_0.50": 8, "S4_bulk": 8}
 
 
-def electrode_table(contract_fixed):
-    xs = np.asarray(contract_fixed["electrode_x_mm"], dtype=float)
-    ys = np.asarray(contract_fixed["electrode_y_mm"], dtype=float)
+def electrode_table(definition_fixed):
+    xs = np.asarray(definition_fixed["electrode_x_mm"], dtype=float)
+    ys = np.asarray(definition_fixed["electrode_y_mm"], dtype=float)
     if xs.shape != ys.shape:
         raise ValueError("electrode_x_mm and electrode_y_mm differ in length")
     return xs, ys
 
 
-def junction_half_extent_mm(contract_fixed):
+def junction_half_extent_mm(definition_fixed):
     """Half-width and half-height of the junction rectangle, in mm.
 
     These are /main/electrode_param/setWidth and setHeight -- the values the
     junction hit test actually uses. NOT electrode_island_um, which belongs to
     the waffle electrode class.
     """
-    return (float(contract_fixed["electrode_width_um"]) / 2000.0,
-            float(contract_fixed["electrode_height_um"]) / 2000.0)
+    return (float(definition_fixed["electrode_width_um"]) / 2000.0,
+            float(definition_fixed["electrode_height_um"]) / 2000.0)
 
 
 def dist_to_rect(x, y, xs, ys, hw, hh):
@@ -122,7 +122,7 @@ def classify(x, y, xs, ys, hw, hh):
     return "S4_bulk", e
 
 
-def stratum_weights(contract_fixed, n_mc=8_000_000, seed=0):
+def stratum_weights(definition_fixed, n_mc=8_000_000, seed=0):
     """Probability mass of each stratum under UNIFORM SURFACE injection.
 
     S0 is computed ANALYTICALLY -- 17 rectangles is an exact area, and at
@@ -130,9 +130,9 @@ def stratum_weights(contract_fixed, n_mc=8_000_000, seed=0):
     8e6 draws (it read 2.89e-5 against a true 2.66e-5). The remaining bands are
     estimated by Monte Carlo and renormalised to 1 - W_S0.
     """
-    xs, ys = electrode_table(contract_fixed)
-    hw, hh = junction_half_extent_mm(contract_fixed)
-    span = float(contract_fixed["position_half_span_mm"])
+    xs, ys = electrode_table(definition_fixed)
+    hw, hh = junction_half_extent_mm(definition_fixed)
+    span = float(definition_fixed["position_half_span_mm"])
     w_s0 = len(xs) * (2 * hw) * (2 * hh) / ((2 * span) ** 2)
 
     rng = np.random.default_rng(seed)
@@ -179,7 +179,7 @@ def neyman_allocation(n_total, weights, sds, costs=None, min_sites=None):
     return alloc
 
 
-def _sites_in_stratum(stratum, n, contract_fixed, seed):
+def _sites_in_stratum(stratum, n, definition_fixed, seed):
     """n scrambled-Sobol points inside one stratum, by rejection.
 
     Nested by construction: the generator is consumed in order, so the first k
@@ -190,9 +190,9 @@ def _sites_in_stratum(stratum, n, contract_fixed, seed):
     to resolve, and using it would bias mu_S0 upward while still claiming to
     estimate a footprint average.
     """
-    xs, ys = electrode_table(contract_fixed)
-    hw, hh = junction_half_extent_mm(contract_fixed)
-    span = float(contract_fixed["position_half_span_mm"])
+    xs, ys = electrode_table(definition_fixed)
+    hw, hh = junction_half_extent_mm(definition_fixed)
+    span = float(definition_fixed["position_half_span_mm"])
     out = []
     if stratum == "S0_junction":
         cov = np.random.default_rng(seed)
@@ -226,7 +226,7 @@ def _sites_in_stratum(stratum, n, contract_fixed, seed):
     return out[:n]
 
 
-def build_design(contract_fixed, alloc, template_z_mm, seed=None,
+def build_design(definition_fixed, alloc, template_z_mm, seed=None,
                  injection_law="uniform_surface", gun_energy_eV=None):
     """The full stratified design: ordered sites, labels, weights, hash.
 
@@ -239,28 +239,28 @@ def build_design(contract_fixed, alloc, template_z_mm, seed=None,
             "stratum weights here are AREA weights and are correct only for "
             "uniform surface injection; supply measured masses for any other law")
     if gun_energy_eV is None:
-        gun_energy_eV = contract_fixed.get("gun_energy_eV")
+        gun_energy_eV = definition_fixed.get("gun_energy_eV")
     gun_energy_eV = float(gun_energy_eV or 0.0)
     if gun_energy_eV <= 0.0:
         raise ValueError(
             "gun_energy_eV must be positive: the objective is named "
             "'per_energy' and must not silently fall back to per-primary")
 
-    seed = int(contract_fixed["position_seed"]) if seed is None else int(seed)
-    weights = stratum_weights(contract_fixed)
+    seed = int(definition_fixed["position_seed"]) if seed is None else int(seed)
+    weights = stratum_weights(definition_fixed)
     sites, labels, electrodes = [], [], []
     for h in STRATA:
         n = int(alloc.get(h, 0))
         if n <= 0:
             continue
         sub = (seed * 1000003 + STRATA.index(h)) % (2 ** 31 - 1)
-        for x, y, e in _sites_in_stratum(h, n, contract_fixed, sub):
+        for x, y, e in _sites_in_stratum(h, n, definition_fixed, sub):
             sites.append((x, y, template_z_mm))
             labels.append(h)
             electrodes.append(e)
     counts = {h: labels.count(h) for h in STRATA}
-    hw, hh = junction_half_extent_mm(contract_fixed)
-    n_el = len(contract_fixed["electrode_x_mm"])
+    hw, hh = junction_half_extent_mm(definition_fixed)
+    n_el = len(definition_fixed["electrode_x_mm"])
     design = {
         "sites_mm": [list(s) for s in sites],
         "stratum": labels,
@@ -278,7 +278,7 @@ def build_design(contract_fixed, alloc, template_z_mm, seed=None,
                            "setIsland (WaffleElectrodeMessenger).",
         "injection_law": injection_law,
         "position_seed": seed,
-        "half_span_mm": float(contract_fixed["position_half_span_mm"]),
+        "half_span_mm": float(definition_fixed["position_half_span_mm"]),
         "gun_energy_eV": gun_energy_eV,
         "normalization_basis": "per_injected_eV",
         # Predeclared electrode-criticality weights (Sep-8 plan 1.3). Uniform

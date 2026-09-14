@@ -1,10 +1,10 @@
 # Machine-readable register of results invalidated by a known audit finding.
 #
-# Written 2026-08-24 from STAGE4_IMPLEMENTATION_AUDIT_AND_FIX_PLAN.md. The rows
+# Written 2026-08-24 from the corrected-material audit. The rows
 # below are NOT deleted -- they are the debugging evidence for the defect, and
 # deleting them would make the defect unreproducible. They are marked so that
 # `stage4_audit.py` fails loudly if any of them is still being quoted, and so a
-# reader of the ledger cannot mistake them for physics.
+# reader of the database cannot mistake them for physics.
 #
 # Verdicts:
 #   invalid  -- the simulated crystal is not the one the row is labelled with.
@@ -43,31 +43,37 @@ decisions:
     expected_null_rows: 95
 
   cache_cold_accepted:
-    decided: 2026-08-24
-    title: Keep the cache cold; do not re-baseline the historical trials
+    decided: 2026-09-14
+    title: Do not reuse earlier simulations after the structural and direction changes
     rationale: >
-      Four files in CODE_IDENTITY_FILES were changed by the audit remediation,
-      so the code fingerprint moved and no recorded trial is cache-reachable.
-      That is the fingerprint working as designed. Re-baselining would weaken
-      the one mechanism that stops a cache returning results from code that no
-      longer exists, to save compute the project would rather just spend.
+      The structural cleanup changed names and contents of the simulation
+      identity files, and the crystal direction changed from a finite list to
+      two continuous coordinates. No earlier trial is eligible for automatic
+      reuse. This is intentional and prevents a result from a different
+      direction model or code version being returned as a new simulation.
     verified_before_accepting: >
-      All 163 trials re-resolved to a byte-identical `derived` and regenerated a
-      byte-identical lattice config, so a re-run would reproduce the same
-      simulation; only the fingerprint differs.
+      Earlier checks showed that the pre-direction-change candidates regenerated
+      identical derived values and lattice files. The later direction change is
+      scientifically meaningful, so new searches use a new result database.
     # The audit compares the SET of changed identity files against this list.
     # Anything NEW entering the set is unexplained and must warn.
     accepted_changed_identity_files:
-      - parameter_optimization/stage3_contract.py
-      - parameter_optimization/stage3_ledger.py
+      - parameter_optimization/experiment_definition.py
+      - parameter_optimization/experiment_database.py
+      - parameter_optimization/interface_transmission.py
+      - parameter_optimization/material_catalog.yaml
       - parameter_optimization/stage3_trial_runner.py
       - parameter_optimization/stage4_objectives.py
       - parameter_optimization/stage4_space.py
+      - sensitivity_memguard.py
+      - sensitivity_params.py
+      - stage1_run_simulations.py
+      - stage2_compute_QPs.py
 
 findings:
   P0_substrate_carrier_dropped:
     title: Projected substrate carrier lost before evaluation
-    audit: STAGE4_IMPLEMENTATION_AUDIT_AND_FIX_PLAN.md#p0
+    audit: material_scan/docs/results.md#corrected-real-material-projection
     detected: 2026-08-24
     fixed_by: >
       Versioned `_realization` envelope in stage4_space.py, preserved by
@@ -83,7 +89,7 @@ findings:
     trials:
       - trial_id: stage4_property_v1_projS_cd555c187d5c
         label: elasticity_of_SiC
-        fidelity: S
+        event_count: "4000000"
         events_total: 4000000
         reported_qps_per_primary: 1.785e-4
         intended_carrier: G4_CALCIUM_FLUORIDE
@@ -99,7 +105,7 @@ findings:
              ceiling 200 GPa; the fix keeps measured constants unclipped."
       - trial_id: stage4_property_v1_confirmM_338745b73829
         label: elasticity_of_SiC
-        fidelity: M
+        event_count: "32000000"
         events_total: 32000000
         reported_qps_per_primary: 1.930e-4
         intended_carrier: G4_CALCIUM_FLUORIDE
@@ -107,7 +113,7 @@ findings:
         verdict: invalid
       - trial_id: stage4_property_v1_confirmL_954b0d4e047f
         label: elasticity_of_SiC
-        fidelity: L
+        event_count: "320000000"
         events_total: 320000000
         reported_qps_per_primary: 1.8645e-4
         intended_carrier: G4_CALCIUM_FLUORIDE
@@ -115,7 +121,7 @@ findings:
         verdict: invalid
       - trial_id: stage4_property_v1_confirmL_f0f6a8dff4f4
         label: elasticity_of_SiC
-        fidelity: L
+        event_count: "320000000"
         events_total: 320000000
         reported_qps_per_primary: null
         status: incomplete_scenario_set
@@ -123,13 +129,13 @@ findings:
         simulated_carrier: G4_Si
         verdict: invalid
         note: >
-          Never scored -- abandoned when the ladder was relaunched at 64 workers.
+          Never scored -- abandoned when the primary-count comparison was relaunched at 64 workers.
           Listed anyway: it carries the same defect, and an unlisted row invites
           someone to resume it. Found by the mechanical sweep, not by hand,
           which is why the sweep exists.
       - trial_id: stage4_property_v1_confirmXL_9c78bf1319ba
         label: elasticity_of_SiC
-        fidelity: XL
+        event_count: "3200000000"
         events_total: 3200000000
         reported_qps_per_primary: 1.895069e-4
         intended_carrier: G4_CALCIUM_FLUORIDE
@@ -137,7 +143,7 @@ findings:
         verdict: invalid
       - trial_id: stage4_property_v1_projS_b53a427195de
         label: elasticity_of_Be2C
-        fidelity: S
+        event_count: "4000000"
         events_total: 4000000
         reported_qps_per_primary: 2.095e-4
         intended_carrier: G4_BORON_CARBIDE
@@ -153,7 +159,7 @@ findings:
              were clipped to the box ceilings 450 / 200 GPa."
       - trial_id: stage4_property_v1_confirmM_03034c6dd9ad
         label: elasticity_of_Be2C
-        fidelity: M
+        event_count: "32000000"
         events_total: 32000000
         reported_qps_per_primary: 2.1225e-4
         intended_carrier: G4_BORON_CARBIDE
@@ -161,7 +167,7 @@ findings:
         verdict: invalid
       - trial_id: stage4_property_v1_projS_6380e09ba015
         label: GaAs/Nb/Cu (projected triplet)
-        fidelity: S
+        event_count: "4000000"
         events_total: 4000000
         reported_qps_per_primary: 3.510e-4
         intended_carrier: G4_GALLIUM_ARSENIDE
@@ -177,7 +183,7 @@ findings:
              Debye with GaAs's tensor. The fix routes it through native_g4cmp."
       - trial_id: stage4_property_v1_confirmM_806a9cad48db
         label: GaAs/Nb/Cu (projected triplet)
-        fidelity: M
+        event_count: "32000000"
         events_total: 32000000
         reported_qps_per_primary: 3.4494e-4
         intended_carrier: G4_GALLIUM_ARSENIDE
@@ -185,7 +191,7 @@ findings:
         verdict: invalid
       - trial_id: stage4_property_v1_projS_6020c91f24e9
         label: Si/Nb/Cu (projected triplet)
-        fidelity: S
+        event_count: "4000000"
         events_total: 4000000
         reported_qps_per_primary: 3.730e-4
         intended_carrier: G4_Si
@@ -200,13 +206,13 @@ findings:
           itself -- and it remains a fair projected-triplet comparison.
       - trial_id: stage4_property_v1_confirmM_577b4c410978
         label: Si/Nb/Cu (projected triplet)
-        fidelity: M
+        event_count: "32000000"
         events_total: 32000000
         reported_qps_per_primary: 3.72125e-4
         intended_carrier: G4_Si
         simulated_carrier: G4_Si
         verdict: valid
-        note: same reasoning as the S-tier Si/Nb/Cu row.
+        note: same reasoning as the 4,000,000-event Si/Nb/Cu row.
 
     contaminated_inputs:
       # The defect reached the POINT FILES too, not only the results: these were
@@ -214,12 +220,12 @@ findings:
       # re-running from them would reproduce the same error. Regenerate them
       # from stage4_project_material.py before any rerun.
       - results/stage4_confirm_points.json
-      - results/stage4_confirm_points_L.json
+      - results/stage4_confirm_points_320000000_primaries.json
       - results/stage4_points_fair.json
-      - results/_xl_pair.json
+      - results/stage4_pair_3200000000_primaries.json
 
     derived_claims_withdrawn:
-      - "SiC recovers 77% of the ideal gain (STAGE4_RESULTS.md sec 0, 4.3)."
+      - "The earlier report said that SiC recovered 77% of the ideal gain."
       - "elasticity of SiC = -51.4% / -51.5% / -51.2% vs baseline."
       - "elasticity of Be2C = -43.0%, 64% of the ideal gain."
       - "GaAs/Nb/Cu projected = -4.5%, 7% of the ideal gain."
@@ -245,15 +251,15 @@ findings:
       date: 2026-08-25
       what: >
         The projected-material claims were re-measured after the carrier fix,
-        through the S, M and L tiers on held-out seed bank 9 under the corrected
-        8-replica contract, and are converged (M->L RMS value shift 0.7%, inside
+        through 4,000,000, 32,000,000, and 320,000,000 total events on held-out seed bank 9 under the corrected
+        8-replica definition, and are converged (32,000,000 to 320,000,000 RMS value shift 0.7%, inside
         the project's <=1.6% criterion; rank agreement rho = tau = 1.000 across
-        every tier pair).
+        every primary-count pair).
       corrected_values:
         ideal_target: "-70.0% vs baseline (1.174e-4), paired z = -68.1, 16/16 sites"
         elasticity_of_SiC: "-53.3% (1.825e-4), 76.2% of the ideal gain, z = -47.2, 16/16 sites"
         GaAs_Nb_Cu: "-31.2% (2.689e-4), 44.6% of the ideal gain, z = -23.7, 15/16 sites"
-      elasticity_of_Be2C: "-52.0% (1.896e-4), 73.6% of the ideal gain, M tier,
+      elasticity_of_Be2C: "-52.0% (1.896e-4), 73.6% of the ideal gain, 32,000,000-event setting,
           z = -17.7, 12/16 sites -- the last invalidated row to be replaced"
       phonon_bracket_result: >
         SiC's borrowed scat/decay/decayTT were each pushed to the far edge of the
@@ -263,8 +269,8 @@ findings:
         The claim does not rest on the unmeasured constants, and the caveat that
         SiC would require isotopic purification is withdrawn as a requirement.
       note: >
-        The corrected SiC figure (76.2% at the converged tier) is numerically
-        close to the withdrawn one (77% at the screening tier with the wrong
+        The corrected SiC figure (76.2% at the converged primary count) is numerically
+        close to the withdrawn one (77% at the screening primary count with the wrong
         density). That is a coincidence of two different calculations, not
         evidence the original was right. The withdrawn number remains withdrawn.
       independent_cross_check: >
@@ -277,7 +283,7 @@ findings:
     not_invalidated:
       - "The 92 scored search trials: they are pseudo-material candidates whose
          intended carrier IS G4_Si, so the defect could not reach them."
-      - "The baseline and ideal-target rows at every fidelity, for the same
+      - "The baseline and ideal-target rows at every event_count, for the same
          reason."
-      - "The fidelity ladder for best_bo_gp / best_cmaes / best_random."
+      - "The primary-count comparison for best_bo_gp / best_cmaes / best_random."
       - "The local tolerance scan around the best point found."

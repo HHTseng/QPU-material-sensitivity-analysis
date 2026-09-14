@@ -8,31 +8,30 @@ catalog/private/
 
 
 # ---------------------------------------------------------------------------
-# Stage 4 generated artifacts. Added 2026-08-24.
+# Generated property-search artifacts. Added 2026-08-24.
 #
-# The Stage 3 factorial run directories are tracked (they are small and were the
-# v2 comparison baseline). Stage 4's are not: 489 MB and growing, dominated by
-# hits files from 1e8-events-per-sub-run confirmations. They are reproducible
-# from the code plus the ledger, and GitHub would reject them.
+# The linked-material factorial directories are tracked because they are small.
+# Property-search directories are much larger and dominated by hit files from
+# high-primary-count confirmations. GitHub would reject them.
 # ---------------------------------------------------------------------------
 runs/stage4_*/
 logs_stage4/
 
-# The trial ledger is a live database (WAL) written by running evaluators, so a
-# committed copy would be both large and torn. It is the campaign's primary
-# record -- back it up with `stage4_post_xl.sh snapshot`, not with git.
+# The SQLite result file is written by running evaluators, so a committed copy
+# would be both large and internally inconsistent. Copy it with
+# `finish_property_event_comparison.sh snapshot`, not with Git.
 stage4_trials.sqlite
 *.sqlite-shm
 *.sqlite-wal
 *.sqlite.bak-*
 
-# Machine-local operational state: which ledger is closed to new writers on THIS
-# host. Created and removed by the post-XL runbook.
+# Machine-local state recording which database is temporarily closed to new
+# writers on this host.
 *.sqlite.frozen
 snapshots/
 
 # Result JSONs live under the globally-ignored results/ tree. The ones that
-# carry provenance -- validity labels from stage4_reconcile.py, the corrected
+# carry validity labels from stage4_reconcile.py, the corrected
 # projection, the smoke tests -- are tracked deliberately via `git add -f`,
 # because they are the record of what was withdrawn and why. Git cannot
 # un-ignore files inside an ignored directory, so new ones must be force-added

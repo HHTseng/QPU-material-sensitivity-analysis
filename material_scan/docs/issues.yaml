@@ -1,27 +1,27 @@
 schema: material-scan-issues-1
 updated: 2026-09-14
 
-legacy_validity_source:
+earlier_result_validity:
   path: ../../parameter_optimization/stage4_invalidations.yaml
-  policy: preserve_read_only_until_verified_import
+  policy: preserve read-only and inspect without schema changes
 
 open:
-  - id: archive-second-filesystem
-    severity: blocking-for-deletion
+  - id: second-independent-copy
+    severity: must-be-resolved-before-deletion
     statement: A second independent storage filesystem has not been selected.
-    consequence: Do not untrack, move, or delete legacy raw artifacts.
+    consequence: Do not untrack, move, or delete historical raw artifacts.
 
-  - id: legacy-build-provenance
-    severity: blocks-automatic-cache-reuse
-    statement: Many legacy rows do not identify all loaded libraries and external data.
-    consequence: Read and rescore them, but mark their simulation reuse as legacy-unresolved.
+  - id: earlier-build-record
+    severity: prevents-automatic-result-reuse
+    statement: Many historical rows do not identify all loaded libraries and external data.
+    consequence: Read and rescore them, but do not return them as new simulations.
 
-  - id: production-cutover
-    severity: blocks-new-production-writer
-    statement: The new path has not yet completed a disposable live Geant smoke and archive restore.
-    consequence: Keep production runs on the legacy path until all parity gates pass.
+  - id: direct-simulation-readiness
+    severity: prevents-new-simulation-launch
+    statement: The new path has not yet completed a disposable live Geant4 check and full data recovery check.
+    consequence: Do not begin a new property search until both checks pass.
 
 resolved:
   - id: strat512-live-state
     resolved_at: 2026-09-09T08:05:00-04:00
-    statement: The experiment finished and has no running ledger row.
+    statement: The experiment finished and has no running database row.

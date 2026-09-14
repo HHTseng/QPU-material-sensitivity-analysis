@@ -162,7 +162,7 @@ def assert_manifest_identities(entries, results_dir):
             if value is None:
                 raise ValueError(
                     f"{name}: manifest declares {n} hits file(s) but has no {field!r}. "
-                    f"This manifest predates the completion-marker/identity contract; "
+                    f"This manifest predates the completion-marker/identity definition; "
                     f"re-generate it with the current stage 1."
                 )
             if len(value) != n:

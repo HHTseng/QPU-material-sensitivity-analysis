@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Make recorded artifacts agree with the ledger and the invalidation registry.
+"""Make recorded artifacts agree with the database and the invalidation registry.
 
     python stage4_reconcile.py --dry-run     # show what would change
     python stage4_reconcile.py               # apply
@@ -13,12 +13,12 @@ Two jobs, both of which the audit reports as warnings until they are done:
    `validity`, `invalidated_by` and `invalidation_reason`, and the file gains a
    top-level `_invalidation_notice`.
 
-2. **Backfill `ledger_status_counts` into historical manifests.** Campaign
+2. **Backfill `database_status_counts` into historical manifests.** Campaign
    manifests written before the P7 fix report the driver's in-process counters,
    which are blind to trials abandoned when the process was killed -- so they
-   said "0 failures" while the ledger held 5, 6 and 4 non-success rows. The
+   said "0 failures" while the database held 5, 6 and 4 non-success rows. The
    original `n_failed` / `n_rejected` are LEFT ALONE: they are a true record of
-   what the driver observed. What is added is the ledger's authoritative view,
+   what the driver observed. What is added is the database's authoritative view,
    exactly as new manifests now carry it.
 
 Both operations are additive and idempotent: re-running changes nothing, and no
@@ -122,10 +122,10 @@ def label_results(results_dir, bad, findings, dry_run):
     return changed
 
 
-def backfill_manifests(runs_root, ledger_path, dry_run):
-    if not os.path.isfile(ledger_path):
+def backfill_manifests(runs_root, database_path, dry_run):
+    if not os.path.isfile(database_path):
         return []
-    conn = sqlite3.connect(f"file:{ledger_path}?mode=ro", uri=True)
+    conn = sqlite3.connect(f"file:{database_path}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     changed = []
     for campaign in sorted(os.listdir(runs_root)):
@@ -144,7 +144,7 @@ def backfill_manifests(runs_root, ledger_path, dry_run):
                 (cid_probe,)).fetchone()["n"] > 0
             if live:
                 continue          # a live campaign rewrites its own manifest
-            existing = man.get("ledger_status_counts")
+            existing = man.get("database_status_counts")
             if existing is not None:
                 fresh = {r["status"]: r["n"] for r in conn.execute(
                     "SELECT status, count(*) n FROM trials WHERE campaign_id=? "
@@ -153,7 +153,7 @@ def backfill_manifests(runs_root, ledger_path, dry_run):
                     continue                              # already authoritative
                 # Stale: the campaign was killed before it could save, so its
                 # counts predate whatever happened afterwards. Refresh them --
-                # the ledger is the authority, and a manifest frozen at the
+                # the database is the authority, and a manifest frozen at the
                 # moment of death is exactly the misleading artifact this tool
                 # exists to correct.
             cid = man.get("campaign_id", campaign)
@@ -162,13 +162,13 @@ def backfill_manifests(runs_root, ledger_path, dry_run):
                 "GROUP BY status", (cid,))}
             if not counts:
                 continue
-            man["ledger_status_counts"] = counts
-            man["ledger_status_counts_backfilled_at"] = time.strftime("%F %T")
-            man["ledger_status_counts_note"] = (
+            man["database_status_counts"] = counts
+            man["database_status_counts_backfilled_at"] = time.strftime("%F %T")
+            man["database_status_counts_note"] = (
                 "Backfilled by stage4_reconcile.py. `n_failed` and `n_rejected` "
                 "above are the DRIVER's in-process counters and are left as "
                 "recorded; they cannot see trials abandoned when the process was "
-                "killed. These counts are the ledger's authoritative view.")
+                "killed. These counts are the database's authoritative view.")
             changed.append((f"{campaign}/{name}", counts))
             if not dry_run:
                 if not os.path.exists(path + ".prebackfill"):
@@ -181,19 +181,19 @@ def backfill_manifests(runs_root, ledger_path, dry_run):
     return changed
 
 
-def backfill_identity(results_dir, ledger_path, dry_run):
+def backfill_identity(results_dir, database_path, dry_run):
     """Add the sub-run split and trial identity to result files that lack it.
 
     A result JSON that records only `events` is not self-describing: a reader
     cannot tell whether that total was split over 32 sub-runs or 128, and
-    `stage4_compare_fidelity.py` was reduced to assuming 32 -- wrong by 4x under
-    the 8-replica protocol. Every value here is READ BACK FROM THE LEDGER for
+    `compare_property_event_counts.py` was reduced to assuming 32 -- wrong by 4x under
+    the 8-replica protocol. Every value here is READ BACK FROM THE DATABASE for
     the trials the file actually references, never assumed, and the file is left
     alone if its trials disagree with each other.
     """
-    if not os.path.isfile(ledger_path):
+    if not os.path.isfile(database_path):
         return []
-    conn = sqlite3.connect(f"file:{ledger_path}?mode=ro", uri=True)
+    conn = sqlite3.connect(f"file:{database_path}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     changed = []
     for name in sorted(os.listdir(results_dir)):
@@ -216,7 +216,7 @@ def backfill_identity(results_dir, ledger_path, dry_run):
         marks = ",".join("?" * len(tids))
         rows = conn.execute(
             f"SELECT DISTINCT n_positions, n_replicas, events_per_sub_run, "
-            f"events_total, contract_hash FROM trials WHERE trial_id IN ({marks})",
+            f"events_total, definition_hash FROM trials WHERE trial_id IN ({marks})",
             tuple(tids)).fetchall()
         shapes = {(r["n_positions"], r["n_replicas"], r["events_per_sub_run"])
                   for r in rows}
@@ -228,10 +228,10 @@ def backfill_identity(results_dir, ledger_path, dry_run):
         doc["n_positions"], doc["n_replicas"] = npos, nrep
         doc["n_sub_runs"] = npos * nrep
         doc["events_per_sub_run"] = per_sub
-        doc["contract_hash"] = rows[0]["contract_hash"]
+        doc["definition_hash"] = rows[0]["definition_hash"]
         doc["identity_backfilled_at"] = time.strftime("%F %T")
         doc["identity_backfilled_note"] = (
-            "Read back from the ledger for the trials this file references. "
+            "Read back from the database for the trials this file references. "
             "`simulation_identity_hash` and `code_fingerprint` are absent: they "
             "were not recorded when these trials ran, and are not reconstructible.")
         changed.append((name, f"{npos}x{nrep}={npos * nrep} sub-runs, "
@@ -252,7 +252,7 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--results", default=os.path.join(HERE, "results"))
     ap.add_argument("--runs-root", default=os.path.join(HERE, "runs"))
-    ap.add_argument("--ledger", default=os.path.join(HERE, "stage4_trials.sqlite"))
+    ap.add_argument("--database", default=os.path.join(HERE, "stage4_trials.sqlite"))
     ap.add_argument("--registry",
                     default=os.path.join(HERE, "stage4_invalidations.yaml"))
     ap.add_argument("--dry-run", action="store_true")
@@ -269,9 +269,9 @@ def main():
     if not labelled:
         print("   nothing to label")
 
-    print("\n2. Backfilling ledger_status_counts into historical manifests "
+    print("\n2. Backfilling database_status_counts into historical manifests "
           f"({'dry run' if args.dry_run else 'applying'}):")
-    filled = backfill_manifests(args.runs_root, args.ledger, args.dry_run)
+    filled = backfill_manifests(args.runs_root, args.database, args.dry_run)
     for name, counts in filled:
         print(f"   {name}: {counts}")
     if not filled:
@@ -279,7 +279,7 @@ def main():
 
     print("\n3. Backfilling sub-run identity into result files "
           f"({'dry run' if args.dry_run else 'applying'}):")
-    ident = backfill_identity(args.results, args.ledger, args.dry_run)
+    ident = backfill_identity(args.results, args.database, args.dry_run)
     for name, detail in ident:
         print(f"   {name}: {detail}")
     if not ident:

@@ -1,7 +1,7 @@
-# Stage 3 experiment contract.
+# Stage 3 experiment definition.
 #
 # Every value below is classified as exactly one of `fixed`, `decision`, or
-# `derived`. stage3_contract.py refuses to load this file if any key is
+# `derived`. experiment_definition.py refuses to load this file if any key is
 # unclassified or appears in more than one class -- that is checklist item 1's
 # exit condition, enforced rather than asserted in prose.
 #
@@ -9,8 +9,8 @@
 #   decision : what the campaign is allowed to select over
 #   derived  : computed from a decision; never set by hand, never optimized
 #
-# See STAGE3_SMALL_MATERIAL_START.md for the checklist this implements and
-# STAGE3_MATERIAL_OPTIMIZATION_PIPELINE.md sec 3 for the parameter contract.
+# See material_scan/docs/science.md for the current scientific definition and
+# material_scan/docs/results.md for the linked-material results.
 
 campaign_id: stage3_factorial_v1
 description: >
@@ -24,8 +24,8 @@ description: >
 # fixed -- the controlled comparison
 # --------------------------------------------------------------------------
 fixed:
-  # Injection scenario. See the excitation-threshold contract in
-  # STAGE3_MATERIAL_OPTIMIZATION_PIPELINE.md sec 3.1.1:
+  # Injection scenario. See the excitation-threshold definition in
+  # Excitation-threshold relation from material_scan/docs/science.md:
   #   minEPhonons < 2*setTopGap <= E_gun   (lower gates are hard)
   # E_gun vs 2*setTopFilmGap classifies the REGIME, it is not a gate: the
   # Junction hit type means film absorptions are never recorded, so the
@@ -123,21 +123,21 @@ decision:
     allowed_miller: [[0, 0, 1]]
     miller: [0, 0, 1]
     lattice_deg: 45.0
-  fidelity:
+  event_count:
     # Derived from the measured 3.69e-5 QPs per primary event.
-    # F1 ~ 37 QPs per candidate, F2 ~ 370.
-    allowed: [F1, F2]
-    value: F1
+    # The two settings give about 37 and 370 QPs per candidate.
+    allowed: ["1000000", "10000000"]
+    value: "1000000"
     events_total_per_candidate:
-      F1: 1000000
-      F2: 10000000
+      "1000000": 1000000
+      "10000000": 10000000
 
 # --------------------------------------------------------------------------
 # derived -- computed from a decision, never set by hand
 # --------------------------------------------------------------------------
-# Listed so the contract is complete and so nothing here can be silently
+# Listed so the definition is complete and so nothing here can be silently
 # promoted to a decision variable. Values are produced by the resolver at
-# evaluation time and recorded in the ledger.
+# evaluation time and recorded in the database.
 derived:
   - vsound            # Christoffel spherical average from the tensor + density
   - vtrans            # ditto; 0 < vtrans < vsound is a hard gate

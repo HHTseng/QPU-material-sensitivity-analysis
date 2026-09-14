@@ -13,6 +13,7 @@ import json
 import math
 import os
 import shutil
+import sqlite3
 import sys
 import tempfile
 import time
@@ -44,8 +45,7 @@ def t1_space_round_trip():
     worst = 0.0
     for _ in range(2000):
         u = rng.random(space.n_cont)
-        c = int(rng.integers(space.n_cat))
-        p = space.from_unit(u, c)
+        p = space.from_unit(u)
         u2 = space.to_unit(p)
         worst = max(worst, float(np.max(np.abs(u - u2))))
     check("T1 space round-trip to_unit(from_unit(u)) == u",
@@ -74,9 +74,9 @@ def t2_gates_reject():
     ok3, r3 = S.precheck_cheap(bad_thres, space)
     check("T2c bot_gap_thres above 2*setTopGap rejected", not ok3, r3)
 
-    bad_miller = dict(base, miller=[7, 5, 1])
-    ok4, r4 = S.precheck(bad_miller, space)
-    check("T2d unrepresentable Miller direction rejected", not ok4, r4)
+    bad_orientation = dict(base, orientation_polar_cos=1.01)
+    ok4, r4 = S.precheck(bad_orientation, space)
+    check("T2d invalid sphere coordinate rejected", not ok4, r4)
 
     # Mode ordering: force it directly through derive(), since the box makes it
     # hard to reach by construction -- which is the point of keeping the speeds
@@ -93,6 +93,29 @@ def t2_gates_reject():
             inverted += 1
     check("T2e no Born-stable draw inverts v_T/v_L", inverted == 0,
           f"{inverted} inversions in 3000 draws")
+
+    maximum_angle = 0.0
+    integer_form_ok = True
+    for _ in range(5000):
+        z = float(rng.uniform(-1.0, 1.0))
+        turn = float(rng.random())
+        hkl = S.sphere_to_miller(z, turn)
+        divisor = math.gcd(math.gcd(abs(hkl[0]), abs(hkl[1])), abs(hkl[2]))
+        integer_form_ok &= divisor == 1 and max(abs(value) for value in hkl) <= 1_000_000
+        radius = math.sqrt(max(0.0, 1.0 - z * z))
+        exact = np.array([
+            radius * math.cos(2.0 * math.pi * turn),
+            radius * math.sin(2.0 * math.pi * turn),
+            z,
+        ])
+        rounded = np.asarray(hkl, dtype=float)
+        rounded /= np.linalg.norm(rounded)
+        dot = float(np.clip(exact @ rounded, -1.0, 1.0))
+        maximum_angle = max(maximum_angle, math.acos(dot))
+    check("T2f sphere directions become primitive bounded integers without "
+          "material angular loss",
+          integer_form_ok and maximum_angle < 4.0e-6,
+          f"maximum angular change {math.degrees(maximum_angle):.3e} degrees")
 
 
 def t3_baseline_reconstruction():
@@ -114,26 +137,26 @@ def t3_baseline_reconstruction():
 
 def t4_v2_path_unchanged():
     """Catches: a Stage 4 edit that changes what the v2 catalog path resolves to."""
-    from stage3_contract import load_contract
-    from stage3_ledger import Ledger
+    from experiment_definition import load_definition
+    from experiment_database import Database
     import stage3_trial_runner as R
-    ledger_path = os.path.join(HERE, "stage3_trials.sqlite")
-    if not os.path.isfile(ledger_path):
-        check("T4 v2 resolver unchanged", True, "skipped: no v2 ledger present")
+    database_path = os.path.join(HERE, "stage3_trials.sqlite")
+    if not os.path.isfile(database_path):
+        check("T4 v2 resolver unchanged", True, "skipped: no v2 database present")
         return
-    contract = load_contract(os.path.join(HERE, "stage3_config.yaml"))
-    # read_only: opening a ledger normally MIGRATES it, and this is the
+    definition = load_definition(os.path.join(HERE, "stage3_config.yaml"))
+    # read_only: opening a database normally MIGRATES it, and this is the
     # historical v2 campaign database -- running the tests must not touch it.
-    with Ledger(ledger_path, read_only=True) as led:
+    with Database(database_path, read_only=True) as led:
         rows = led.observations("stage3_factorial_v1")
         row = next((r for r in rows
                     if json.loads(r["candidate"]) ==
                     {"substrate": "Ge", "top_ground_film": "Nb", "bottom_film": "Cu"}), None)
     if row is None:
-        check("T4 v2 resolver unchanged", True, "skipped: Ge/Nb/Cu not in the ledger")
+        check("T4 v2 resolver unchanged", True, "skipped: Ge/Nb/Cu not in the database")
         return
     recorded = json.loads(row["derived"])
-    _, derived = R.resolve_candidate(contract, json.loads(row["candidate"]))
+    _, derived = R.resolve_candidate(definition, json.loads(row["candidate"]))
     keys = ("setTopAbs", "setTopFilmAbs", "setBotAbs", "vsound_m_s", "vtrans_m_s",
             "substrate_density_kg_m3", "g4_material_name", "lattice_map_name")
     diffs = [k for k in keys if recorded.get(k) != derived.get(k)]
@@ -148,18 +171,18 @@ def t5_scoring_equivalence():
     in Stage 4 is measuring something other than `total_QPs`.
     """
     import pandas as pd
-    from stage3_contract import load_contract
-    from stage3_ledger import Ledger
+    from experiment_definition import load_definition
+    from experiment_database import Database
     import stage3_trial_runner as R
     from stage2_compute_QPs import calculate_QPs
-    ledger_path = os.path.join(HERE, "stage3_trials.sqlite")
-    if not os.path.isfile(ledger_path):
-        check("T5 scoring equivalence", True, "skipped: no v2 ledger present")
+    database_path = os.path.join(HERE, "stage3_trials.sqlite")
+    if not os.path.isfile(database_path):
+        check("T5 scoring equivalence", True, "skipped: no v2 database present")
         return
-    contract = load_contract(os.path.join(HERE, "stage3_config.yaml"))
-    # read_only: opening a ledger normally MIGRATES it, and this is the
+    definition = load_definition(os.path.join(HERE, "stage3_config.yaml"))
+    # read_only: opening a database normally MIGRATES it, and this is the
     # historical v2 campaign database -- running the tests must not touch it.
-    with Ledger(ledger_path, read_only=True) as led:
+    with Database(database_path, read_only=True) as led:
         rows = led.observations("stage3_factorial_v1")
         if not rows:
             check("T5 scoring equivalence", True, "skipped: no observations")
@@ -171,10 +194,10 @@ def t5_scoring_equivalence():
         check("T5 scoring equivalence", True, "skipped: hit files not on disk")
         return
     total, per_primary, per_electrode, n_hits, blocks = R._score(
-        contract, subs, row["events_per_sub_run"])
+        definition, subs, row["events_per_sub_run"])
     frames = [pd.read_csv(s["hits_file"]).reset_index(drop=True) for s in subs]
     rec = pd.concat(frames, ignore_index=True)
-    f = contract.fixed
+    f = definition.fixed
     _, qp = calculate_QPs(rec, float(f["setTopGap"]),
                           np.array(f["electrode_x_mm"], dtype=float),
                           np.array(f["electrode_y_mm"], dtype=float),
@@ -183,7 +206,7 @@ def t5_scoring_equivalence():
     block_sum = sum(b["total_qps"] for b in blocks)
     check("T5 per-sub-run scores sum to the pooled score",
           total == pooled == block_sum == row["total_qps"],
-          f"blocks {block_sum} == pooled {pooled} == ledger {row['total_qps']}")
+          f"blocks {block_sum} == pooled {pooled} == database {row['total_qps']}")
 
 
 def t7_failure_is_not_zero(tmpdir):
@@ -193,17 +216,17 @@ def t7_failure_is_not_zero(tmpdir):
     zero-QP observation. Verified by forcing one sub-run to fail with the
     simulation itself stubbed out.
     """
-    from stage3_contract import load_contract, ContractError
-    from stage3_ledger import Ledger, STATUS_SUCCESS, STATUS_SIM_FAILED, STATUS_INCOMPLETE_SET
+    from experiment_definition import load_definition, DefinitionError
+    from experiment_database import Database, STATUS_SUCCESS, STATUS_SIM_FAILED, STATUS_INCOMPLETE_SET
     import stage3_trial_runner as R
     import stage4_space as S
     from stage4_optimize import candidate_payload, resolver_for
 
-    contract = load_contract(os.path.join(HERE, "stage4_config.yaml"))
-    contract.campaign_id = "stage4_selftest"
-    contract.fixed.update(n_positions=2, n_replicas=2, max_workers=2,
+    definition = load_definition(os.path.join(HERE, "stage4_config.yaml"))
+    definition.campaign_id = "stage4_selftest"
+    definition.fixed.update(n_positions=2, n_replicas=2, max_workers=2,
                           total_mem_gb=4, per_sample_mem_gb=2, sample_timeout_s=30)
-    contract.decision["fidelity"]["events_total_per_candidate"]["S"] = 4
+    definition.decision["event_count"]["events_total_per_candidate"]["4000000"] = 4
     space = S.DEFAULT_SPACE
     cand = candidate_payload(space.baseline_point(), space)
 
@@ -225,8 +248,8 @@ def t7_failure_is_not_zero(tmpdir):
 
     R._run_one = fake_run_one
     try:
-        with Ledger(os.path.join(tmpdir, "t7.sqlite")) as led:
-            result = R.evaluate(contract, cand, fidelity="S", ledger=led, verbose=False,
+        with Database(os.path.join(tmpdir, "t7.sqlite")) as led:
+            result = R.evaluate(definition, cand, event_count="4000000", database=led, verbose=False,
                                 resolver=resolver_for(space),
                                 runs_root=os.path.join(tmpdir, "runs"))
         check("T7a an incomplete scenario set is never scored",
@@ -238,18 +261,18 @@ def t7_failure_is_not_zero(tmpdir):
 
     missing = os.path.join(tmpdir, "nonexistent_hits.txt")
     try:
-        R._score_one(contract, missing)
+        R._score_one(definition, missing)
         raised = False
-    except ContractError:
+    except DefinitionError:
         raised = True
     check("T7c scoring a missing hits file raises rather than returning 0", raised)
 
     empty = os.path.join(tmpdir, "empty_hits.txt")
     open(empty, "w").close()
     try:
-        R._score_one(contract, empty)
+        R._score_one(definition, empty)
         raised = False
-    except ContractError:
+    except DefinitionError:
         raised = True
     check("T7d scoring an empty hits file raises rather than returning 0", raised)
 
@@ -276,13 +299,12 @@ def t8_optimizer_sanity(quick=True):
     def make(kind):
         def truth(point):
             u = space.to_unit(space.complete(point))
-            c = space.miller_index(space.complete(point))
             val = float(np.sum((u - A) ** 2 * W)
-                        + 0.6 * math.sin(4 * u[0]) * math.cos(3 * u[4]) + 0.25 * (c % 3))
+                        + 0.6 * math.sin(4 * u[0]) * math.cos(3 * u[4]))
             return math.exp(-2.0 + (val if kind == "interior" else -val))
         return truth
 
-    budget = 60 if quick else 100
+    allowance = 60 if quick else 100
     for kind in ("interior", "boundary"):
         truth = make(kind)
         scores = {}
@@ -298,7 +320,7 @@ def t8_optimizer_sanity(quick=True):
                                           n_blocks=32, transform="log",
                                           detail={"value_floor": 1e-12})
                 o = create(name, space, seed=seed)
-                while o.n_observations < budget:
+                while o.n_observations < allowance:
                     for p in o.ask(4):
                         o.tell(p, observe(p))
                 vals.append(o.best()[1].value)
@@ -319,15 +341,14 @@ def t9_gp_correctness():
     rng = np.random.default_rng(0)
     n, d = 25, 4
     X = rng.random((n, d))
-    C = rng.integers(0, 3, n)
-    y = np.sin(3 * X[:, 0]) + X[:, 1] ** 2 + 0.1 * C + rng.normal(0, 0.05, n)
+    y = np.sin(3 * X[:, 0]) + X[:, 1] ** 2 + rng.normal(0, 0.05, n)
 
     gp = GaussianProcess()
-    gp.X, gp.C = X, C
+    gp.X = X
     gp.y_mean, gp.y_std = y.mean(), y.std()
     gp.y = (y - gp.y_mean) / gp.y_std
     gp.noise = np.full(n, 1e-3)
-    theta = np.array([0.2] + [math.log(0.7)] * d + [math.log(1e-3), 0.8])
+    theta = np.array([0.2] + [math.log(0.7)] * d + [math.log(1e-3)])
     _, grad = gp._nll(theta)
     num = np.zeros_like(theta)
     for i in range(len(theta)):
@@ -339,13 +360,13 @@ def t9_gp_correctness():
     check("T9a GP analytic gradients match finite differences", err < 1e-5,
           f"max relative error {err:.2e}")
 
-    gp2 = GaussianProcess().fit(X, C, y, noise_var=np.full(n, 1e-3), rng=rng)
-    Xs, Cs = rng.random((5, d)), rng.integers(0, 3, 5)
-    mu, sd = gp2.predict(Xs, Cs)
-    sf2, ell, sn2, rho = gp2._unpack(gp2.theta)
+    gp2 = GaussianProcess().fit(X, y, noise_var=np.full(n, 1e-3), rng=rng)
+    Xs = rng.random((5, d))
+    mu, sd = gp2.predict(Xs)
+    sf2, ell, sn2 = gp2._unpack(gp2.theta)
     K, *_ = gp2._build(gp2.theta)
     m, _ = gp2._matern(Xs, X, ell)
-    Ks = sf2 * m * gp2._cat_factor(Cs, C, rho)
+    Ks = sf2 * m
     mu_bf = Ks @ np.linalg.solve(K, gp2.y) * gp2.y_std + gp2.y_mean
     var_bf = sf2 - np.einsum("ij,jk,ik->i", Ks, np.linalg.inv(K), Ks)
     sd_bf = np.sqrt(np.maximum(var_bf, 1e-12)) * gp2.y_std
@@ -361,6 +382,36 @@ def t9_gp_correctness():
     check("T9c Expected Improvement matches numerical quadrature",
           abs(ei - quad) < 1e-9, f"{ei:.10f} vs {quad:.10f}")
 
+    sphere_gp = GaussianProcess(sphere_columns=(0, 1))
+    ell = np.array([0.4, 0.4])
+    seam, _ = sphere_gp._matern(
+        np.array([[0.5, 0.999]]), np.array([[0.5, 0.001]]), ell)
+    opposite, _ = sphere_gp._matern(
+        np.array([[0.5, 0.999]]), np.array([[0.5, 0.501]]), ell)
+    pole, _ = sphere_gp._matern(
+        np.array([[1.0, 0.0]]), np.array([[1.0, 0.5]]), ell)
+    check("T9d sphere kernel closes the azimuth seam and ignores azimuth at a pole",
+          seam[0, 0] > opposite[0, 0] and abs(pole[0, 0] - 1.0) < 1e-14,
+          f"seam={seam[0, 0]:.6f}, opposite={opposite[0, 0]:.6f}, pole={pole[0, 0]:.6f}")
+
+    sphere_fit = GaussianProcess(sphere_columns=(2, 3))
+    sphere_fit.X = X
+    sphere_fit.y_mean, sphere_fit.y_std = y.mean(), y.std()
+    sphere_fit.y = (y - sphere_fit.y_mean) / sphere_fit.y_std
+    sphere_fit.noise = np.full(n, 1e-3)
+    _, sphere_grad = sphere_fit._nll(theta)
+    sphere_num = np.zeros_like(theta)
+    for i in range(len(theta)):
+        tp, tm = theta.copy(), theta.copy()
+        tp[i] += 1e-6
+        tm[i] -= 1e-6
+        sphere_num[i] = (sphere_fit._nll(tp)[0] - sphere_fit._nll(tm)[0]) / 2e-6
+    sphere_error = float(np.max(
+        np.abs(sphere_grad - sphere_num) / (np.abs(sphere_num) + 1e-8)
+    ))
+    check("T9e sphere-kernel ARD gradients match finite differences",
+          sphere_error < 1e-5, f"max relative error {sphere_error:.2e}")
+
 
 def t10_llm_guard_rails():
     """Catches: an LLM proposal bypassing the gates, or a dead host stalling a run."""
@@ -372,7 +423,6 @@ def t10_llm_guard_rails():
     def payload(**over):
         v = {k: float(base[k]) for k in space.names}
         v.update(over)
-        v["miller"] = [0, 0, 1]
         return {"values": v, "rationale": "test"}
 
     good = json.dumps({"candidates": [payload(sub_c11=200.0), payload(sub_c11=210.0)]})
@@ -488,35 +538,35 @@ def t12_resume(tmpdir):
     resume that silently drops trials would quietly shrink the surrogate's
     training set.
     """
-    from stage3_contract import load_contract
-    from stage3_ledger import Ledger, STATUS_SUCCESS
+    from experiment_definition import load_definition
+    from experiment_database import Database, STATUS_SUCCESS
     import stage4_space as S
     import stage4_optimize as OPT
 
     space = S.DEFAULT_SPACE
-    ledger_path = os.path.join(tmpdir, "resume.sqlite")
+    database_path = os.path.join(tmpdir, "resume.sqlite")
     rng = np.random.default_rng(0)
     points = space.sample(rng, 5)
     args = argparse.Namespace(
-        contract=os.path.join(HERE, "stage4_config.yaml"), ledger=ledger_path,
+        definition=os.path.join(HERE, "stage4_config.yaml"), database=database_path,
         optimizer="random", objective="total_qps_per_primary", objective_params=None,
         optimizer_params=None, trials=5, batch=1, parallel=1, workers=2,
-        total_mem_gb=4, fidelity="S", events=4000000, positions=None, replicas=None,
+        total_mem_gb=4, event_count="4000000", events=4000000, positions=None, replicas=None,
         timeout=None, seed=1, seed_bank=0, tag=None, patience=0, tolerance=0.05,
         max_events=None, max_hours=None, baseline_every=0, llm_model=None, llm_host=None)
     campaign = OPT.Campaign(args)
-    contract = campaign.contract          # the campaign records the objective in it
-    with Ledger(ledger_path) as led:
+    definition = campaign.definition          # the campaign records the objective in it
+    with Database(database_path) as led:
         for i, p in enumerate(points):
             cand = OPT.candidate_payload(p, space)
-            trial_id = f"{contract.campaign_id}_resume{i}"
+            trial_id = f"{definition.campaign_id}_resume{i}"
             planned = [{"replica": r, "position_index": q, "seed": 1,
                         "macro": "m", "hits_file": "h", "done_marker": "d"}
                        for r in range(2) for q in range(16)]
-            led.plan_trial(trial_id=trial_id, campaign_id=contract.campaign_id,
-                           cache_key=f"key{i}", contract_hash=contract.contract_hash(),
+            led.plan_trial(trial_id=trial_id, campaign_id=definition.campaign_id,
+                           cache_key=f"key{i}", definition_hash=definition.definition_hash(),
                            code_fingerprint={}, candidate=cand, derived={},
-                           fidelity="S", events_total=4000000,
+                           event_count="4000000", events_total=4000000,
                            events_per_sub_run=125000, n_positions=16, n_replicas=2,
                            scenario={}, seed_bank_id=0, run_dir="d",
                            planned_sub_runs=planned)
@@ -545,23 +595,23 @@ def t14_cache_identity():
     return nominal cached results. Both halves are checked: the candidate
     payload and the code fingerprint.
     """
-    from stage3_contract import load_contract, CODE_IDENTITY_FILES
-    from stage3_ledger import compute_cache_key
+    from experiment_definition import load_definition, CODE_IDENTITY_FILES
+    from experiment_database import compute_cache_key
     import stage4_space as S
     from stage4_optimize import candidate_payload, resolver_for
 
-    contract = load_contract(os.path.join(HERE, "stage4_config.yaml"))
+    definition = load_definition(os.path.join(HERE, "stage4_config.yaml"))
     space = S.DEFAULT_SPACE
     resolve = resolver_for(space)
     base = space.baseline_point()
     alt = dict(base, topfilm_ph_lifetime=base["topfilm_ph_lifetime"] * 2)
-    fp = contract.code_fingerprint()
+    fp = definition.code_fingerprint()
     keys = []
     for p in (base, alt):
         cand = candidate_payload(p, space)
-        _, derived = resolve(contract, cand)
-        keys.append(compute_cache_key(contract.contract_hash(), fp, cand, derived,
-                                      "S", 4000000, {"sites": [1]}, 0))
+        _, derived = resolve(definition, cand)
+        keys.append(compute_cache_key(definition.definition_hash(), fp, cand, derived,
+                                      "4000000", 4000000, {"sites": [1]}, 0))
     check("T14a a changed film lifetime changes the cache key", keys[0] != keys[1])
 
     tracked = set(CODE_IDENTITY_FILES)
@@ -587,8 +637,8 @@ def t15_realization_propagation(tmpdir):
     Every link in the chain is asserted separately, because the chain broke in
     the middle and each end looked correct on its own.
     """
-    from stage3_contract import load_contract
-    from stage3_ledger import compute_cache_key
+    from experiment_definition import load_definition
+    from experiment_database import compute_cache_key
     from stage3_trial_runner import (_write_lattice_config, _write_sub_run_macro,
                                      _verify_runtime_material)
     import stage4_space as S
@@ -596,7 +646,7 @@ def t15_realization_propagation(tmpdir):
     from stage4_optimize import candidate_payload, resolver_for
     import stage4_confirm as C
 
-    contract = load_contract(os.path.join(HERE, "stage4_config.yaml"))
+    definition = load_definition(os.path.join(HERE, "stage4_config.yaml"))
     space = S.DEFAULT_SPACE
     resolve = resolver_for(space)
     R = S.REALIZATION_KEY
@@ -638,13 +688,13 @@ def t15_realization_propagation(tmpdir):
           through_confirm.get(R, {}).get("substrate_carrier") == carrier,
           str(through_confirm.get(R, {}).get("substrate_carrier")))
 
-    # ledger payload -- what the cache key is computed over
+    # database payload -- what the cache key is computed over
     cand = candidate_payload(through_confirm, space)
-    check("T15c realization reaches the ledger candidate payload",
+    check("T15c realization reaches the database candidate payload",
           cand.get(R, {}).get("substrate_carrier") == carrier,
           str(cand.get(R)))
 
-    resolved, derived = resolve(contract, cand)
+    resolved, derived = resolve(definition, cand)
     check("T15d resolver uses the requested carrier and ITS density",
           derived["g4_material_name"] == carrier
           and abs(derived["substrate_density_kg_m3"]
@@ -656,7 +706,7 @@ def t15_realization_propagation(tmpdir):
     template = os.environ.get("SENSITIVITY_MACRO_TEMPLATE",
                               os.path.join(REPO_ROOT, "sensitivity_template_beamOn1e6.mac"))
     macro = os.path.join(tmpdir, "t15.mac")
-    _write_sub_run_macro(contract, resolved, derived, template, macro,
+    _write_sub_run_macro(definition, resolved, derived, template, macro,
                          os.path.join(tmpdir, "h.txt"), os.path.join(tmpdir, "h.txt.done"),
                          (0.0, 0.0, 0.0), 12345, 1000)
     with open(macro) as handle:
@@ -681,12 +731,12 @@ def t15_realization_propagation(tmpdir):
           ok_rt and not bad_rt, f"{msg} | swapped -> {bad_msg}")
 
     # -- (d) the carrier alone changes the cache key --------------------------
-    fp = contract.code_fingerprint()
+    fp = definition.code_fingerprint()
 
     def key(pt):
         c = candidate_payload(pt, space)
-        _, d = resolve(contract, c)
-        return compute_cache_key(contract.contract_hash(), fp, c, d, "S",
+        _, d = resolve(definition, c)
+        return compute_cache_key(definition.definition_hash(), fp, c, d, "4000000",
                                  4000000, {"sites": [1]}, 0)
 
     other = "G4_ALUMINUM_OXIDE" if carrier != "G4_ALUMINUM_OXIDE" else "G4_Ge"
@@ -720,13 +770,14 @@ def t15_realization_propagation(tmpdir):
     check("T15h a plain pseudo-material payload is unchanged by the envelope",
           R not in base_payload, sorted(k for k in base_payload if k.startswith("_")))
 
-    # `derived` is inside the cache key, so the realization envelope must add
-    # NOTHING to it for a default candidate. Checked against the real ledger,
-    # because "should be identical" and "is identical" have differed here before.
-    ledger_path = os.path.join(HERE, "stage4_trials.sqlite")
-    if os.path.isfile(ledger_path):
+    # The direction model is a scientific input and is inside the stored
+    # simulation identity.  Every earlier point must therefore resolve
+    # differently: silently reusing an integer-direction result for a new
+    # two-coordinate search would mix two different studies.
+    database_path = os.path.join(HERE, "stage4_trials.sqlite")
+    if os.path.isfile(database_path):
         import sqlite3
-        conn = sqlite3.connect(f"file:{ledger_path}?mode=ro", uri=True)
+        conn = sqlite3.connect(f"file:{database_path}?mode=ro", uri=True)
         conn.row_factory = sqlite3.Row
         n_same, differing = 0, []
         for row in conn.execute("SELECT trial_id, candidate, derived FROM trials "
@@ -736,7 +787,7 @@ def t15_realization_propagation(tmpdir):
                 continue
             stored = json.loads(row["derived"])
             try:
-                _, fresh = resolve(contract, stored_candidate)
+                _, fresh = resolve(definition, stored_candidate)
             except Exception as exc:                              # noqa: BLE001
                 differing.append(f"{row['trial_id'][-8:]}: {exc}")
                 continue
@@ -746,10 +797,11 @@ def t15_realization_propagation(tmpdir):
             else:
                 differing.append(row["trial_id"][-8:])
         conn.close()
-        check("T15h2 every recorded Stage 4 trial still resolves to its stored "
-              "`derived`, so no existing cache key was invalidated",
-              not differing and n_same > 0,
-              f"{n_same} identical" + (f", DIFFERING: {differing[:5]}" if differing else ""))
+        checked = n_same + len(differing)
+        check("T15h2 the continuous-direction model makes every earlier Stage 4 "
+              "result ineligible for automatic reuse",
+              checked > 0 and n_same == 0,
+              f"{checked} checked, {n_same} still identical")
 
     # -- (e) a native material keeps its OWN record ---------------------------
     for material in ("Ge", "GaAs"):
@@ -757,9 +809,9 @@ def t15_realization_propagation(tmpdir):
         npoint[R] = S.normalize_realization(
             {R: {"mode": "native_g4cmp", "material": material}})
         ncand = candidate_payload(npoint, space)
-        nres, nder = resolve(contract, ncand)
+        nres, nder = resolve(definition, ncand)
         dest = os.path.join(tmpdir, f"lat_{material}")
-        cfg = _write_lattice_config(contract, nres, nder, dest)
+        cfg = _write_lattice_config(definition, nres, nder, dest)
         with open(cfg) as handle:
             body = handle.read()
         native = S.native_substrate_values(material)
@@ -884,10 +936,10 @@ def t17_controls_are_fresh(tmpdir):
     re-evaluations with 0.0% spread. That is cache stability, not machine,
     executable or runtime stability.
     """
-    from stage3_ledger import Ledger, compute_cache_key, STATUS_SUCCESS
+    from experiment_database import Database, compute_cache_key, STATUS_SUCCESS
 
-    args = dict(contract_hash="c", code_fingerprint={"a": 1}, candidate={"x": 1},
-                derived={"y": 2}, fidelity="S", events_total=4000000,
+    args = dict(definition_hash="c", code_fingerprint={"a": 1}, candidate={"x": 1},
+                derived={"y": 2}, event_count="4000000", events_total=4000000,
                 scenario={"sites": [1]}, seed_bank_id=0)
     plain = compute_cache_key(**args)
     check("T17a a control replica id changes the cache key, so the trial reruns",
@@ -899,14 +951,14 @@ def t17_controls_are_fresh(tmpdir):
           compute_cache_key(**args, control_replica_id=None) == plain)
 
     path = os.path.join(tmpdir, "controls.sqlite")
-    with Ledger(path) as led:
+    with Database(path) as led:
         for i in range(3):
             is_control = i > 0
             tid = f"camp_t{i}"
             led.plan_trial(trial_id=tid, campaign_id="camp",
-                           cache_key=f"k{i}", contract_hash="c",
+                           cache_key=f"k{i}", definition_hash="c",
                            code_fingerprint={}, candidate={"x": 1}, derived={},
-                           fidelity="S", events_total=4000000,
+                           event_count="4000000", events_total=4000000,
                            events_per_sub_run=125000, n_positions=16, n_replicas=2,
                            scenario={}, seed_bank_id=0, run_dir="d",
                            planned_sub_runs=[])
@@ -941,7 +993,7 @@ def t17_controls_are_fresh(tmpdir):
     # The id must actually REACH the cache key, or every control collapses onto
     # one trial row. Measured 2026-09-07: 16 controls ran genuinely fresh across
     # the benchmark and all 16 wrote to the SAME trial_id, because
-    # `_evaluate_one` accepted `control_replica_id` and used it for the ledger
+    # `_evaluate_one` accepted `control_replica_id` and used it for the database
     # record but never passed it to `evaluate()`. The values survived only in
     # the manifests; P5's "N controls leave N inspectable rows" did not hold.
     driver = open(os.path.join(HERE, "stage4_optimize.py")).read()
@@ -1012,7 +1064,7 @@ def t19_engineering_objective():
 
 
 def t20_freeze_and_liveness(tmpdir):
-    """Catches: a new writer migrating a ledger a running campaign depends on,
+    """Catches: a new writer migrating a database a running campaign depends on,
     and an audit that calls a live 29-hour trial stale.
 
     Both were real. The audit's own fixes changed four CODE_IDENTITY_FILES, so a
@@ -1022,29 +1074,43 @@ def t20_freeze_and_liveness(tmpdir):
     genuinely running trial stale, because it judged on trial-row timestamps and
     on a process list that a PID namespace can hide.
     """
-    import stage3_ledger as L
+    import experiment_database as L
     import stage4_audit as A
 
+    earlier_path = os.path.join(tmpdir, "earlier.sqlite")
+    earlier = sqlite3.connect(earlier_path)
+    earlier.execute("CREATE TABLE trials (trial_id TEXT PRIMARY KEY)")
+    earlier.commit()
+    earlier.close()
+    earlier_bytes = open(earlier_path, "rb").read()
+    earlier_refused = False
+    try:
+        L.Database(earlier_path)
+    except L.IncompatibleDatabase:
+        earlier_refused = True
+    check("T20a0 an earlier database is refused before any writer changes it",
+          earlier_refused and open(earlier_path, "rb").read() == earlier_bytes)
+
     path = os.path.join(tmpdir, "frozen.sqlite")
-    with L.Ledger(path) as led:
+    with L.Database(path) as led:
         led.plan_trial(trial_id="t0", campaign_id="c", cache_key="k0",
-                       contract_hash="h", code_fingerprint={}, candidate={},
-                       derived={}, fidelity="S", events_total=1,
+                       definition_hash="h", code_fingerprint={}, candidate={},
+                       derived={}, event_count="4000000", events_total=1,
                        events_per_sub_run=1, n_positions=1, n_replicas=1,
                        scenario={}, seed_bank_id=0, run_dir=os.path.join(tmpdir, "r"),
                        planned_sub_runs=[])
-    check("T20a an unfrozen ledger opens normally", L.freeze_reason(path) is None)
+    check("T20a an unfrozen database opens normally", L.freeze_reason(path) is None)
 
     with open(L.freeze_path(path), "w") as handle:
-        handle.write("XL confirmation in flight under its launch identity")
+        handle.write("3,200,000,000-event confirmation in flight under its launch identity")
     refused = False
     try:
-        L.Ledger(path)
-    except L.LedgerFrozen as exc:
+        L.Database(path)
+    except L.DatabaseFrozen as exc:
         refused = "launch identity" in str(exc)
-    check("T20b a frozen ledger refuses a new writer, with the reason",
+    check("T20b a frozen database refuses a new writer, with the reason",
           refused, L.freeze_reason(path))
-    with L.Ledger(path, allow_frozen=True) as led:
+    with L.Database(path, allow_frozen=True) as led:
         opened = led.conn is not None
     check("T20c the freeze can be overridden explicitly, never silently", opened)
     os.remove(L.freeze_path(path))
@@ -1103,7 +1169,7 @@ def t20_freeze_and_liveness(tmpdir):
           f"alone={v_alone['verdict']}, corroborated={v_corrob['verdict']}")
 
     # the lease/heartbeat round trip
-    with L.Ledger(path) as led:
+    with L.Database(path) as led:
         led.claim_trial("t0", "lease-1", hostname="mimir", owner_pid=1,
                         owner_ppid=2, scheduler_job_id="SLURM_JOB_ID=7")
         row = led.conn.execute(
@@ -1122,22 +1188,22 @@ def t20_freeze_and_liveness(tmpdir):
           "an abandoned trial look alive", unchanged == first)
 
 
-def _fake_xl_ledger(root, trial="camp_confirmXL_deadbeef0001", complete=True):
-    """A disposable ledger + run directory shaped like a finished XL trial."""
-    from stage3_ledger import Ledger, STATUS_SUCCESS, STATUS_INCOMPLETE_SET
+def _fake_xl_database(root, trial="camp_confirm_3200000000_deadbeef0001", complete=True):
+    """A disposable database + run directory shaped like a finished 3,200,000,000-event trial."""
+    from experiment_database import Database, STATUS_SUCCESS, STATUS_INCOMPLETE_SET
     os.makedirs(root, exist_ok=True)
-    ledger = os.path.join(root, "t.sqlite")
-    run_dir = os.path.join(root, "runs", "camp_confirmXL", trial)
+    database = os.path.join(root, "t.sqlite")
+    run_dir = os.path.join(root, "runs", "camp_confirm_3200000000", trial)
     hits = os.path.join(run_dir, "hits")
     os.makedirs(hits, exist_ok=True)
     n_pos, n_rep = 16, 2
     planned = [{"replica": r, "position_index": q, "seed": 1,
                 "macro": "m", "hits_file": "h", "done_marker": "d"}
                for r in range(n_rep) for q in range(n_pos)]
-    with Ledger(ledger) as led:
-        led.plan_trial(trial_id=trial, campaign_id="camp_confirmXL", cache_key="k",
-                       contract_hash="h", code_fingerprint={}, candidate={},
-                       derived={}, fidelity="L", events_total=3200000000,
+    with Database(database) as led:
+        led.plan_trial(trial_id=trial, campaign_id="camp_confirm_3200000000", cache_key="k",
+                       definition_hash="h", code_fingerprint={}, candidate={},
+                       derived={}, event_count="320000000", events_total=3200000000,
                        events_per_sub_run=100000000, n_positions=n_pos,
                        n_replicas=n_rep, scenario={}, seed_bank_id=9,
                        run_dir=run_dir, planned_sub_runs=planned)
@@ -1156,25 +1222,25 @@ def _fake_xl_ledger(root, trial="camp_confirmXL_deadbeef0001", complete=True):
     result_json = os.path.join(root, "xl_result.json")
     with open(result_json, "w") as handle:
         json.dump({"results": {"best_random": {"value": 1e-4}}}, handle)
-    return ledger, trial, result_json
+    return database, trial, result_json
 
 
-def _run_runbook(step, root, ledger, trial, result_json, audit_ok=True,
+def _run_runbook(step, root, database, trial, result_json, audit_ok=True,
                  required_columns=None, stamp="TEST"):
-    """Invoke stage4_post_xl.sh against the disposable ledger."""
+    """Invoke finish_property_event_comparison.sh against the disposable database."""
     import subprocess
     env = dict(os.environ)
     env.update({
-        "LEDGER": ledger, "SNAPROOT": os.path.join(root, "snapshots"),
-        "STAMP": stamp, "XL_TRIAL": trial, "XL_RESULT_JSON": result_json,
-        "XL_OWNER_PID": "", "PY": sys.executable,
+        "DATABASE": database, "SNAPROOT": os.path.join(root, "snapshots"),
+        "STAMP": stamp, "EVENTS_3200000000_TRIAL": trial, "EVENTS_3200000000_RESULT_JSON": result_json,
+        "EVENTS_3200000000_OWNER_PID": "", "PY": sys.executable,
         "AUDIT_CMD": ("true" if audit_ok else "false"),
         # Snapshot the disposable tree, not the repository's real results dir.
         "SNAP_ARTIFACTS": os.path.join(root, "runs"),
     })
     if required_columns is not None:
         env["REQUIRED_COLUMNS"] = required_columns
-    proc = subprocess.run(["bash", os.path.join(HERE, "stage4_post_xl.sh"), step],
+    proc = subprocess.run(["bash", os.path.join(HERE, "finish_property_event_comparison.sh"), step],
                           cwd=HERE, env=env, capture_output=True, text=True,
                           timeout=300)
     return proc.returncode, proc.stdout + proc.stderr
@@ -1182,7 +1248,7 @@ def _run_runbook(step, root, ledger, trial, result_json, audit_ok=True,
 
 def t21_post_xl_state_machine(tmpdir):
     """Catches N0/N1: a runbook that can skip validation, or unfreeze after a
-    failed XL attempt.
+    failed 3,200,000,000-event attempt.
 
     The previous version keyed `migrate` and `unfreeze` on `SHA256SUMS`, which
     `snapshot` itself writes -- so snapshot -> migrate -> unfreeze bypassed
@@ -1191,10 +1257,10 @@ def t21_post_xl_state_machine(tmpdir):
     anyway; and `check` accepted `incomplete_scenario_set` as completion, so
     `all` could unfreeze after a failed attempt.
 
-    The gates below execute the real shell script against a disposable ledger.
+    The gates below execute the real shell script against a disposable database.
     """
     root = os.path.join(tmpdir, "runbook_ok")
-    ledger, trial, result_json = _fake_xl_ledger(root)
+    database, trial, result_json = _fake_xl_database(root)
     snap = os.path.join(root, "snapshots", "pre_migration_TEST")
 
     # -- out of order: every step refuses without its predecessor's receipt ---
@@ -1202,16 +1268,16 @@ def t21_post_xl_state_machine(tmpdir):
     for step, missing in (("validate", ".snapshot_complete"),
                           ("migrate", ".validated"),
                           ("unfreeze", ".migrated")):
-        rc, out = _run_runbook(step, root, ledger, trial, result_json)
+        rc, out = _run_runbook(step, root, database, trial, result_json)
         refusals.append((step, rc != 0 and missing in out))
     check("T21a every step refuses without its predecessor's receipt",
           all(ok for _, ok in refusals), str(refusals))
 
-    rc, out = _run_runbook("check", root, ledger, trial, result_json)
-    check("T21b check passes on a genuinely complete XL trial", rc == 0,
+    rc, out = _run_runbook("check", root, database, trial, result_json)
+    check("T21b check passes on a genuinely complete 3,200,000,000-event trial", rc == 0,
           out.strip().splitlines()[-1] if out else "")
 
-    rc, out = _run_runbook("snapshot", root, ledger, trial, result_json)
+    rc, out = _run_runbook("snapshot", root, database, trial, result_json)
     check("T21c snapshot succeeds and writes a receipt",
           rc == 0 and os.path.isfile(os.path.join(snap, ".snapshot_complete")), out[-200:])
     with open(os.path.join(snap, "SHA256SUMS")) as handle:
@@ -1221,7 +1287,7 @@ def t21_post_xl_state_machine(tmpdir):
           f"{len(manifest.splitlines())} file(s) hashed")
 
     # -- a failing audit must block certification --------------------------
-    rc, out = _run_runbook("validate", root, ledger, trial, result_json,
+    rc, out = _run_runbook("validate", root, database, trial, result_json,
                            audit_ok=False)
     check("T21e a failing audit blocks validation instead of being swallowed",
           rc != 0 and not os.path.isfile(os.path.join(snap, ".validated")),
@@ -1234,25 +1300,25 @@ def t21_post_xl_state_machine(tmpdir):
                   for f in fs if f not in ("SHA256SUMS", ".snapshot_complete")][0]
     with open(victim, "a") as handle:
         handle.write("corrupted")
-    rc, out = _run_runbook("validate", root, ledger, trial, result_json)
+    rc, out = _run_runbook("validate", root, database, trial, result_json)
     check("T21f checksum verification catches a corrupted snapshot",
           rc != 0 and "checksum verification FAILED" in out
           and not os.path.isfile(os.path.join(snap, ".validated")), out[-160:])
 
     # -- happy path on a clean tree ----------------------------------------
     root2 = os.path.join(tmpdir, "runbook_happy")
-    ledger2, trial2, rj2 = _fake_xl_ledger(root2)
-    open(ledger2 + ".frozen", "w").write("test freeze")
+    database2, trial2, rj2 = _fake_xl_database(root2)
+    open(database2 + ".frozen", "w").write("test freeze")
     snap2 = os.path.join(root2, "snapshots", "pre_migration_TEST")
-    rc, out = _run_runbook("all", root2, ledger2, trial2, rj2)
+    rc, out = _run_runbook("all", root2, database2, trial2, rj2)
     receipts = {r: os.path.isfile(os.path.join(snap2, r))
                 for r in (".snapshot_complete", ".validated", ".migrated", ".unfrozen")}
     check("T21g the happy path reaches every receipt in order and unfreezes",
           rc == 0 and all(receipts.values())
-          and not os.path.isfile(ledger2 + ".frozen"), str(receipts))
+          and not os.path.isfile(database2 + ".frozen"), str(receipts))
 
     import sqlite3
-    conn = sqlite3.connect(f"file:{ledger2}?mode=ro", uri=True)
+    conn = sqlite3.connect(f"file:{database2}?mode=ro", uri=True)
     cols = {r[1] for r in conn.execute("PRAGMA table_info(trials)")}
     conn.close()
     want = {"proposal_source", "control_replica_id", "lease_uuid", "heartbeat_at",
@@ -1262,11 +1328,11 @@ def t21_post_xl_state_machine(tmpdir):
 
     # -- a required column that migration cannot supply must FAIL ----------
     root3 = os.path.join(tmpdir, "runbook_missingcol")
-    ledger3, trial3, rj3 = _fake_xl_ledger(root3)
+    database3, trial3, rj3 = _fake_xl_database(root3)
     snap3 = os.path.join(root3, "snapshots", "pre_migration_TEST")
-    _run_runbook("snapshot", root3, ledger3, trial3, rj3)
-    _run_runbook("validate", root3, ledger3, trial3, rj3)
-    rc, out = _run_runbook("migrate", root3, ledger3, trial3, rj3,
+    _run_runbook("snapshot", root3, database3, trial3, rj3)
+    _run_runbook("validate", root3, database3, trial3, rj3)
+    rc, out = _run_runbook("migrate", root3, database3, trial3, rj3,
                            required_columns="proposal_source a_column_that_cannot_exist")
     check("T21i migration FAILS when a required column is absent, instead of "
           "printing MISSING and succeeding",
@@ -1275,13 +1341,13 @@ def t21_post_xl_state_machine(tmpdir):
 
     # -- an INCOMPLETE attempt must never be certified ----------------------
     root4 = os.path.join(tmpdir, "runbook_incomplete")
-    ledger4, trial4, rj4 = _fake_xl_ledger(root4, complete=False)
+    database4, trial4, rj4 = _fake_xl_database(root4, complete=False)
     snap4 = os.path.join(root4, "snapshots", "pre_migration_TEST")
-    rc_chk, out_chk = _run_runbook("check", root4, ledger4, trial4, rj4)
-    rc_snap, _ = _run_runbook("snapshot", root4, ledger4, trial4, rj4)
-    rc_rec, _ = _run_runbook("snapshot-recovery", root4, ledger4, trial4, rj4)
-    rc_val, out_val = _run_runbook("validate", root4, ledger4, trial4, rj4)
-    check("T21j an incomplete XL attempt fails check, cannot be snapshotted as "
+    rc_chk, out_chk = _run_runbook("check", root4, database4, trial4, rj4)
+    rc_snap, _ = _run_runbook("snapshot", root4, database4, trial4, rj4)
+    rc_rec, _ = _run_runbook("snapshot-recovery", root4, database4, trial4, rj4)
+    rc_val, out_val = _run_runbook("validate", root4, database4, trial4, rj4)
+    check("T21j an incomplete 3,200,000,000-event attempt fails check, cannot be snapshotted as "
           "complete, and its recovery snapshot is never certified",
           rc_chk != 0 and rc_snap != 0 and rc_rec == 0 and rc_val != 0
           and not os.path.isfile(os.path.join(snap4, ".validated")),
@@ -1291,13 +1357,13 @@ def t21_post_xl_state_machine(tmpdir):
     # safety (no live writer) and scientific completeness are different
     # questions: best_random timed out at 41.7 h, leaving a campaign that was
     # over with nothing running, and a runbook that demanded success would have
-    # deadlocked the ledger forever. A gate that can never be satisfied is not
+    # deadlocked the database forever. A gate that can never be satisfied is not
     # fail-closed, it is stuck.
     root5 = os.path.join(tmpdir, "runbook_closed")
-    ledger5, trial5, rj5 = _fake_xl_ledger(root5, complete=False)
-    open(ledger5 + ".frozen", "w").write("test freeze")
+    database5, trial5, rj5 = _fake_xl_database(root5, complete=False)
+    open(database5 + ".frozen", "w").write("test freeze")
     snap5 = os.path.join(root5, "snapshots", "pre_migration_TEST")
-    rc_noreason, out_noreason = _run_runbook("close-incomplete", root5, ledger5,
+    rc_noreason, out_noreason = _run_runbook("close-incomplete", root5, database5,
                                              trial5, rj5)
     check("T21k closing a campaign REQUIRES a recorded reason",
           rc_noreason != 0 and "needs a reason" in out_noreason,
@@ -1305,15 +1371,15 @@ def t21_post_xl_state_machine(tmpdir):
 
     import subprocess
     env = dict(os.environ)
-    env.update({"LEDGER": ledger5, "SNAPROOT": os.path.join(root5, "snapshots"),
-                "STAMP": "TEST", "XL_TRIAL": trial5, "XL_RESULT_JSON": rj5,
-                "XL_OWNER_PID": "", "PY": sys.executable, "AUDIT_CMD": "true",
+    env.update({"DATABASE": database5, "SNAPROOT": os.path.join(root5, "snapshots"),
+                "STAMP": "TEST", "EVENTS_3200000000_TRIAL": trial5, "EVENTS_3200000000_RESULT_JSON": rj5,
+                "EVENTS_3200000000_OWNER_PID": "", "PY": sys.executable, "AUDIT_CMD": "true",
                 "SNAP_ARTIFACTS": os.path.join(root5, "runs")})
     closed = subprocess.run(
-        ["bash", os.path.join(HERE, "stage4_post_xl.sh"), "close-incomplete",
+        ["bash", os.path.join(HERE, "finish_property_event_comparison.sh"), "close-incomplete",
          "best_random timed out at 41.7 h; not obtainable at this watchdog"],
         cwd=HERE, env=env, capture_output=True, text=True, timeout=300)
-    rc_all, out_all = _run_runbook("all", root5, ledger5, trial5, rj5)
+    rc_all, out_all = _run_runbook("all", root5, database5, trial5, rj5)
     receipts5 = {r: os.path.isfile(os.path.join(snap5, r))
                  for r in (".campaign_closed", ".snapshot_complete", ".validated",
                            ".migrated", ".unfrozen")}
@@ -1331,29 +1397,29 @@ def t21_post_xl_state_machine(tmpdir):
 def t22_identity_separation():
     """Catches N2: execution knobs minting new cache keys.
 
-    Measured cost of the old design: relaunching the fidelity ladder from 32 to
+    Measured cost of the old design: repeating the primary-count comparison from 32 to
     64 workers changed `max_workers`, which lives in `fixed` and was hashed into
     the cache key, so four in-flight trials were abandoned instead of resuming.
     None of the four excluded values can change a completed simulation.
     """
-    from stage3_contract import load_contract, Contract
-    from stage3_ledger import compute_cache_key
+    from experiment_definition import load_definition, Definition
+    from experiment_database import compute_cache_key
     import stage4_space as S
     from stage4_optimize import candidate_payload, resolver_for
 
     path = os.path.join(HERE, "stage4_config.yaml")
-    base = load_contract(path)
-    sim0, camp0 = base.simulation_identity_hash(), base.campaign_contract_hash()
+    base = load_definition(path)
+    sim0, camp0 = base.simulation_identity_hash(), base.campaign_definition_hash()
 
     # -- execution knobs move the campaign hash, never the simulation hash ----
     moved_sim, moved_camp = [], []
     for key, value in (("max_workers", 999), ("total_mem_gb", 7.0),
                        ("per_sample_mem_gb", 3.0), ("sample_timeout_s", 12.0)):
-        c = load_contract(path)
+        c = load_definition(path)
         c.fixed[key] = value
         if c.simulation_identity_hash() != sim0:
             moved_sim.append(key)
-        if c.campaign_contract_hash() != camp0:
+        if c.campaign_definition_hash() != camp0:
             moved_camp.append(key)
     check("T22a resource limits and the watchdog do NOT change the simulation "
           "identity", not moved_sim, f"leaked into the cache key: {moved_sim}")
@@ -1362,24 +1428,24 @@ def t22_identity_separation():
               ["max_workers", "total_mem_gb", "per_sample_mem_gb",
                "sample_timeout_s"]), str(sorted(moved_camp)))
 
-    c = load_contract(path); c.campaign_id = "some_other_campaign"
+    c = load_definition(path); c.campaign_id = "some_other_campaign"
     check("T22c renaming a campaign does not change the simulation identity",
           c.simulation_identity_hash() == sim0
-          and c.campaign_contract_hash() != camp0)
+          and c.campaign_definition_hash() != camp0)
 
-    c = load_contract(path)
+    c = load_definition(path)
     c.raw.setdefault("stage4", {})["objective"] = "p90_position"
     check("T22d changing the objective does not change the simulation identity "
           "(scoring is post-hoc over the same blocks)",
           c.simulation_identity_hash() == sim0
-          and c.campaign_contract_hash() != camp0)
+          and c.campaign_definition_hash() != camp0)
 
-    c = load_contract(path)
+    c = load_definition(path)
     c.raw.setdefault("space", {})["millers"] = [[0, 0, 1]]
     check("T22e widening or narrowing the search box does not change the "
           "simulation identity of a point already inside it",
           c.simulation_identity_hash() == sim0
-          and c.campaign_contract_hash() != camp0)
+          and c.campaign_definition_hash() != camp0)
 
     # -- anything physical must still move BOTH ------------------------------
     physical = []
@@ -1387,7 +1453,7 @@ def t22_identity_separation():
                        ("setTopGap", 2.0e-4), ("n_positions", 32),
                        ("n_replicas", 4), ("seed_base", 12345),
                        ("setWallAbs", 0.5), ("phononBounces", 100)):
-        c = load_contract(path)
+        c = load_definition(path)
         if key not in c.fixed:
             continue
         c.fixed[key] = value
@@ -1402,27 +1468,27 @@ def t22_identity_separation():
     point = space.baseline_point()
     fp = base.code_fingerprint()
 
-    def key(contract):
+    def key(definition):
         cand = candidate_payload(point, space)
-        _, derived = resolve(contract, cand)
-        return compute_cache_key(contract.simulation_identity_hash(), fp, cand,
-                                 derived, "S", 4000000, {"sites": [1]}, 0)
+        _, derived = resolve(definition, cand)
+        return compute_cache_key(definition.simulation_identity_hash(), fp, cand,
+                                 derived, "4000000", 4000000, {"sites": [1]}, 0)
 
-    hot = load_contract(path); hot.fixed["max_workers"] = 64
+    hot = load_definition(path); hot.fixed["max_workers"] = 64
     # `seed_base` rather than the gun energy: lowering E_gun below 2*topfilm_gap
     # trips gate G6 before a cache key can be computed, which would test the
     # gate instead of the identity.
-    cold = load_contract(path); cold.fixed["seed_base"] = int(base.fixed["seed_base"]) + 1
+    cold = load_definition(path); cold.fixed["seed_base"] = int(base.fixed["seed_base"]) + 1
     check("T22g a worker-count change is a cache HIT; a seed-bank change is a "
           "cache MISS",
           key(hot) == key(base) and key(cold) != key(base))
 
-    check("T22h contract_hash() still means the campaign identity, so resume() "
-          "and the ledger column keep their meaning",
-          base.contract_hash() == camp0)
+    check("T22h definition_hash() still means the campaign identity, so resume() "
+          "and the database column keep their meaning",
+          base.definition_hash() == camp0)
 
-    unclassified = set(Contract.EXECUTION_ONLY_FIXED_KEYS) - set(base.fixed)
-    check("T22i every key claimed execution-only actually exists in the contract",
+    unclassified = set(Definition.EXECUTION_ONLY_FIXED_KEYS) - set(base.fixed)
+    check("T22i every key claimed execution-only actually exists in the definition",
           not unclassified, f"not in `fixed`: {sorted(unclassified)}")
 
 
@@ -1435,14 +1501,14 @@ def t23_lease_enforcement(tmpdir):
     SQLite lock turned a live job into a stale-heartbeat false positive.
     """
     import time as _t
-    from stage3_ledger import Ledger, LeaseHeld, STATUS_SUCCESS
+    from experiment_database import Database, LeaseHeld, STATUS_SUCCESS
     import stage4_audit as A
 
     path = os.path.join(tmpdir, "lease.sqlite")
-    with Ledger(path) as led:
+    with Database(path) as led:
         led.plan_trial(trial_id="t", campaign_id="c", cache_key="k",
-                       contract_hash="h", code_fingerprint={}, candidate={},
-                       derived={}, fidelity="S", events_total=1,
+                       definition_hash="h", code_fingerprint={}, candidate={},
+                       derived={}, event_count="4000000", events_total=1,
                        events_per_sub_run=1, n_positions=1, n_replicas=1,
                        scenario={}, seed_bank_id=0, run_dir="d",
                        planned_sub_runs=[])
@@ -1486,10 +1552,10 @@ def t23_lease_enforcement(tmpdir):
     # abandoned trial kept its lease for the full expiry, so a legitimate resume
     # -- the point of the restartable design -- was refused by an evaluator that
     # no longer existed. Measured 2026-09-04 as a burst of constraint_rejected.
-    with Ledger(path) as led:
+    with Database(path) as led:
         led.plan_trial(trial_id="t2", campaign_id="c", cache_key="k2",
-                       contract_hash="h", code_fingerprint={}, candidate={},
-                       derived={}, fidelity="S", events_total=1,
+                       definition_hash="h", code_fingerprint={}, candidate={},
+                       derived={}, event_count="4000000", events_total=1,
                        events_per_sub_run=1, n_positions=1, n_replicas=1,
                        scenario={}, seed_bank_id=0, run_dir="d",
                        planned_sub_runs=[])
@@ -1561,10 +1627,10 @@ def t24_projection_parallelism(tmpdir):
                    "per_electrode_qps": [1.0] * 17, "events": 1000, "n_hits": 5}
                   for r in range(2)]
 
-    def fake_evaluate(contract, candidate, **kw):
+    def fake_evaluate(definition, candidate, **kw):
         with guard:
-            seen["max_workers"] = contract.fixed["max_workers"]
-            seen["total_mem_gb"] = contract.fixed["total_mem_gb"]
+            seen["max_workers"] = definition.fixed["max_workers"]
+            seen["total_mem_gb"] = definition.fixed["total_mem_gb"]
             live["n"] += 1
             overlap["max_concurrent"] = max(overlap["max_concurrent"], live["n"])
         _t.sleep(0.25)
@@ -1575,10 +1641,10 @@ def t24_projection_parallelism(tmpdir):
     real = TR.evaluate
     TR.evaluate = fake_evaluate
     try:
-        ledger = os.path.join(tmpdir, "proj.sqlite")
+        database = os.path.join(tmpdir, "proj.sqlite")
         t0 = _t.time()
         results = P.verify(points, os.path.join(HERE, "stage4_config.yaml"),
-                           ledger, events=4000000, workers=8, parallel=4,
+                           database, events=4000000, workers=8, parallel=4,
                            seed_bank=9, tag="t24")
         elapsed = _t.time() - t0
         concurrent_max = overlap["max_concurrent"]
@@ -1586,7 +1652,7 @@ def t24_projection_parallelism(tmpdir):
 
         overlap["max_concurrent"] = 0
         P.verify({"only_one": space.baseline_point()},
-                 os.path.join(HERE, "stage4_config.yaml"), ledger,
+                 os.path.join(HERE, "stage4_config.yaml"), database,
                  events=4000000, workers=8, parallel=4, seed_bank=9, tag="t24b")
         workers_single = seen["max_workers"]
     finally:
@@ -1609,18 +1675,18 @@ def t24_projection_parallelism(tmpdir):
     check("T24d with ONE candidate the whole machine is used, not 1/parallel",
           workers_single == 8, f"max_workers={workers_single} (expected 8)")
 
-    # Found BY this gate: several threads opening a fresh ledger at once each
+    # Found BY this gate: several threads opening a fresh database at once each
     # saw a column missing and each issued the ALTER, so all but the first died
     # with "duplicate column name". Every multi-threaded entry point opens one
-    # connection per thread, so it was reachable on any new ledger's first use.
-    from stage3_ledger import Ledger
+    # connection per thread, so it was reachable on any new database's first use.
+    from experiment_database import Database
     race_path = os.path.join(tmpdir, "migrate_race", "r.sqlite")
     os.makedirs(os.path.dirname(race_path), exist_ok=True)
     errors = []
 
     def _open():
         try:
-            Ledger(race_path).close()
+            Database(race_path).close()
         except Exception as exc:                             # noqa: BLE001
             errors.append(f"{type(exc).__name__}: {exc}")
 
@@ -1629,7 +1695,7 @@ def t24_projection_parallelism(tmpdir):
         w.start()
     for w in workers:
         w.join()
-    check("T24e concurrent first-opens of a ledger do not race in the schema "
+    check("T24e concurrent first-opens of a database do not race in the schema "
           "migration", not errors, "; ".join(sorted(set(errors))[:2]) or
           "16 concurrent opens, no error")
 
@@ -1638,20 +1704,20 @@ def t24_projection_parallelism(tmpdir):
     # cover a schema change, so the migration retries explicitly. The same run
     # exercises the lease CAS, which had a nested-BEGIN bug: `with self.conn:`
     # already opens a transaction, so an inner `BEGIN IMMEDIATE` fought it.
-    stress_root = os.path.join(tmpdir, "ledger_stress")
+    stress_root = os.path.join(tmpdir, "database_stress")
     os.makedirs(stress_root, exist_ok=True)
     stress_errors = []
 
     def _hammer(worker_id):
         try:
             for round_id in range(4):
-                led = Ledger(os.path.join(stress_root, f"db{round_id}.sqlite"))
+                led = Database(os.path.join(stress_root, f"db{round_id}.sqlite"))
                 trial = f"t{round_id}"
                 try:
                     led.plan_trial(
                         trial_id=trial, campaign_id="c", cache_key=f"k{round_id}",
-                        contract_hash="h", code_fingerprint={}, candidate={},
-                        derived={}, fidelity="S", events_total=1,
+                        definition_hash="h", code_fingerprint={}, candidate={},
+                        derived={}, event_count="4000000", events_total=1,
                         events_per_sub_run=1, n_positions=1, n_replicas=1,
                         scenario={}, seed_bank_id=0, run_dir="d",
                         planned_sub_runs=[])
@@ -1671,7 +1737,7 @@ def t24_projection_parallelism(tmpdir):
     check("T24f concurrent open + lease + heartbeat never raises "
           "'database is locked'",
           not stress_errors, "; ".join(sorted(set(stress_errors))[:2])
-          or "8 threads x 4 ledgers, no error")
+          or "8 threads x 4 databases, no error")
 
 
 def t25_watchdog_does_not_censor_by_quality(tmpdir):
@@ -1682,14 +1748,14 @@ def t25_watchdog_does_not_censor_by_quality(tmpdir):
     absorbed -- so an ABSOLUTE wall-clock limit censors on candidate quality.
     Measured on 2026-08-25: `best_random` lost all 32 sub-runs to a 41.7 h limit
     (~1300 core-hours, no result) while the baseline, at three times the QP
-    yield, finished the same tier in 8.3 h.
+    yield, finished the same event_count in 8.3 h.
 
     The replacement is a PROGRESS watchdog: a slow-but-progressing run is never
     killed however slow it is, a hung one still is.
     """
     import types
     import stage3_trial_runner as TR
-    from stage3_ledger import STATUS_SUCCESS, STATUS_TIMEOUT
+    from experiment_database import STATUS_SUCCESS, STATUS_TIMEOUT
 
     root = os.path.join(tmpdir, "watchdog")
     os.makedirs(root, exist_ok=True)
@@ -1737,24 +1803,24 @@ def t25_watchdog_does_not_censor_by_quality(tmpdir):
           both[0] == STATUS_TIMEOUT and "no output" in (both[3] or ""),
           f"{both[0]}: {both[3]}")
 
-    from stage3_contract import load_contract, Contract
-    base = load_contract(os.path.join(HERE, "stage4_config.yaml"))
-    check("T25f the shipped contract has NO absolute wall-clock limit and DOES "
+    from experiment_definition import load_definition, Definition
+    base = load_definition(os.path.join(HERE, "stage4_config.yaml"))
+    check("T25f the shipped definition has NO absolute wall-clock limit and DOES "
           "have a stall detector",
           float(base.fixed.get("sample_timeout_s", 1)) == 0
           and float(base.fixed.get("sample_stall_timeout_s", 0)) > 0,
           f"timeout={base.fixed.get('sample_timeout_s')} "
           f"stall={base.fixed.get('sample_stall_timeout_s')}")
 
-    alt = load_contract(os.path.join(HERE, "stage4_config.yaml"))
+    alt = load_definition(os.path.join(HERE, "stage4_config.yaml"))
     alt.fixed["sample_timeout_s"] = 12345
     alt.fixed["sample_stall_timeout_s"] = 99
     check("T25g both watchdogs are execution-only: changing them cannot change "
           "a cache key",
           alt.simulation_identity_hash() == base.simulation_identity_hash()
-          and alt.campaign_contract_hash() != base.campaign_contract_hash())
+          and alt.campaign_definition_hash() != base.campaign_definition_hash())
     check("T25h the stall watchdog is declared execution-only by name",
-          "sample_stall_timeout_s" in Contract.EXECUTION_ONLY_FIXED_KEYS)
+          "sample_stall_timeout_s" in Definition.EXECUTION_ONLY_FIXED_KEYS)
 
     # The stall signal must include CPU time, not just bytes written. Output
     # cadence is a property of Geant4's buffering that this code does not
@@ -1832,13 +1898,13 @@ def t26_reconcile_and_decisions(tmpdir):
         _json.dump({"results": {"bad": {"trial_id": "bad1", "value": 1.0},
                                 "good": {"trial_id": "ok1", "value": 2.0}}}, handle)
 
-    from stage3_ledger import Ledger, STATUS_SUCCESS, STATUS_INCOMPLETE_SET
-    ledger = os.path.join(root, "l.sqlite")
-    with Ledger(ledger) as led:
+    from experiment_database import Database, STATUS_SUCCESS, STATUS_INCOMPLETE_SET
+    database = os.path.join(root, "l.sqlite")
+    with Database(database) as led:
         for i, status in enumerate([STATUS_SUCCESS] * 3 + [STATUS_INCOMPLETE_SET] * 2):
             led.plan_trial(trial_id=f"t{i}", campaign_id="camp", cache_key=f"k{i}",
-                           contract_hash="h", code_fingerprint={}, candidate={},
-                           derived={}, fidelity="S", events_total=1,
+                           definition_hash="h", code_fingerprint={}, candidate={},
+                           derived={}, event_count="4000000", events_total=1,
                            events_per_sub_run=1, n_positions=1, n_replicas=1,
                            scenario={}, seed_bank_id=0, run_dir="d",
                            planned_sub_runs=[])
@@ -1851,7 +1917,7 @@ def t26_reconcile_and_decisions(tmpdir):
         [sys.executable, os.path.join(HERE, "stage4_reconcile.py"),
          "--results", os.path.join(root, "results"),
          "--runs-root", os.path.join(root, "runs"),
-         "--ledger", ledger, "--registry", registry],
+         "--database", database, "--registry", registry],
         capture_output=True, text=True, timeout=120)
     with open(res) as handle:
         after = _json.load(handle)
@@ -1864,16 +1930,16 @@ def t26_reconcile_and_decisions(tmpdir):
           os.path.isfile(res + ".prelabel"), proc.stdout[-80:])
     with open(man) as handle:
         man_after = _json.load(handle)
-    check("T26c manifest gains the ledger's authoritative counts and keeps the "
+    check("T26c manifest gains the database's authoritative counts and keeps the "
           "driver's own numbers untouched",
-          man_after["ledger_status_counts"] == {"success": 3,
+          man_after["database_status_counts"] == {"success": 3,
                                                 "incomplete_scenario_set": 2}
-          and man_after["n_failed"] == 0, str(man_after.get("ledger_status_counts")))
+          and man_after["n_failed"] == 0, str(man_after.get("database_status_counts")))
     before = _json.dumps(after, sort_keys=True)
     subprocess.run([sys.executable, os.path.join(HERE, "stage4_reconcile.py"),
                     "--results", os.path.join(root, "results"),
                     "--runs-root", os.path.join(root, "runs"),
-                    "--ledger", ledger, "--registry", registry],
+                    "--database", database, "--registry", registry],
                    capture_output=True, text=True, timeout=120)
     with open(res) as handle:
         check("T26d reconcile is idempotent", _json.dumps(_json.load(handle),
@@ -1899,17 +1965,15 @@ def t26_reconcile_and_decisions(tmpdir):
           str(prov.get("campaigns")))
     check("T26g the cache decision lists the accepted identity files, so a NEW "
           "one still surfaces",
-          len(cache.get("accepted_changed_identity_files") or []) == 5
-          and all(f.startswith("parameter_optimization/")
-                  for f in cache["accepted_changed_identity_files"]),
+          len(cache.get("accepted_changed_identity_files") or []) == 11,
           str(len(cache.get("accepted_changed_identity_files") or [])))
 
     # A file outside the accepted set must be reported as unexpected.
     accepted = set(cache.get("accepted_changed_identity_files") or [])
-    pretend_changed = sorted(accepted | {"stage1_run_simulations.py"})
+    pretend_changed = sorted(accepted | {"new_physics_file.py"})
     unexpected = sorted(set(pretend_changed) - accepted)
     check("T26h an identity file outside the recorded decision is flagged "
-          "unexpected", unexpected == ["stage1_run_simulations.py"],
+          "unexpected", unexpected == ["new_physics_file.py"],
           str(unexpected))
 
 
@@ -1924,11 +1988,11 @@ def t27_external_review_findings(tmpdir):
     import subprocess
     import stage3_trial_runner as TR
 
-    # -- 1. the retired ladder script must refuse to run --------------------
-    retired = os.path.join(HERE, "run_stage4_xl.sh")
+    # -- 1. the retired comparison script must refuse to run ----------------
+    retired = os.path.join(HERE, "run_property_event_comparison.sh")
     proc = subprocess.run(["bash", retired], capture_output=True, text=True,
                           timeout=60)
-    check("T27a run_stage4_xl.sh refuses to run (it hard-codes 32 sub-runs, "
+    check("T27a run_property_event_comparison.sh refuses to run (it hard-codes 32 sub-runs, "
           "passes absolute timeouts, and reads contaminated point files)",
           proc.returncode != 0 and "REFUSING TO RUN" in (proc.stdout + proc.stderr),
           f"exit={proc.returncode}")
@@ -1983,7 +2047,7 @@ def t27_external_review_findings(tmpdir):
         TR._PROC_NS_OK = saved
 
     # -- 3. the comparer must read the split, never assume 32 ---------------
-    import stage4_compare_fidelity as CF
+    import compare_property_event_counts as CF
     good = os.path.join(tmpdir, "good.json")
     with open(good, "w") as handle:
         _json.dump({"events": 32000000, "seed_bank": 9, "n_positions": 16,
@@ -2009,7 +2073,7 @@ def t27_external_review_findings(tmpdir):
           refused)
 
     # -- 5. new confirmations must carry their identity ---------------------
-    for path in ("results/stage4_smoke_P0_M.json",):
+    for path in ("results/stage4_smoke_P0_32000000_primaries.json",):
         full = os.path.join(HERE, path)
         if not os.path.isfile(full):
             continue
@@ -2034,13 +2098,14 @@ def t28_trial_cap_and_censoring(tmpdir):
     What makes the cap legitimate is what happens next: the trial is reported to
     the optimizer as a RIGHT-CENSORED observation, so the surrogate learns to
     avoid the region. The old watchdog carried no objective value at all, which
-    is why the search kept being steered back into it (STAGE4_RESULTS.md 5.4).
+    is why the search kept being steered back into it
+    (material_scan/docs/results.md).
     """
     import types
     import stage3_trial_runner as TR
     import stage4_objectives as O
-    from stage3_contract import load_contract, Contract
-    from stage3_ledger import STATUS_TIMEOUT
+    from experiment_definition import load_definition, Definition
+    from experiment_database import STATUS_TIMEOUT
 
     # -- the cap actually fires, and says it is censoring ---------------------
     root = os.path.join(tmpdir, "cap")
@@ -2090,20 +2155,20 @@ def t28_trial_cap_and_censoring(tmpdir):
           f"surrogate_y={v.surrogate_y():.3f}, penalty x{v.detail['penalty']}")
 
     # -- classification ------------------------------------------------------
-    base = load_contract(os.path.join(HERE, "stage4_config.yaml"))
-    alt = load_contract(os.path.join(HERE, "stage4_config.yaml"))
+    base = load_definition(os.path.join(HERE, "stage4_config.yaml"))
+    alt = load_definition(os.path.join(HERE, "stage4_config.yaml"))
     alt.fixed["sample_max_trial_hours"] = 99.0
     check("T28f the cap cannot change a completed trial's cache key, but IS "
           "recorded in the campaign identity",
           alt.simulation_identity_hash() == base.simulation_identity_hash()
-          and alt.campaign_contract_hash() != base.campaign_contract_hash())
-    check("T28g the shipped contract sets a cap generous against the measured "
+          and alt.campaign_definition_hash() != base.campaign_definition_hash())
+    check("T28g the shipped definition sets a cap generous against the measured "
           "median (123 s)",
           float(base.fixed.get("sample_max_trial_hours", 0)) >= 1.0,
           f"{base.fixed.get('sample_max_trial_hours')} h "
           f"= {float(base.fixed['sample_max_trial_hours']) * 3600 / 123:.0f}x the median")
     check("T28h the cap is declared execution-only by name",
-          "sample_max_trial_hours" in Contract.EXECUTION_ONLY_FIXED_KEYS)
+          "sample_max_trial_hours" in Definition.EXECUTION_ONLY_FIXED_KEYS)
 
 
 def t13_inertness_from_pilot():
@@ -2504,7 +2569,7 @@ def main():
         t1_space_round_trip()
         t2_gates_reject()
         t3_baseline_reconstruction()
-        print("\nEvaluator and ledger:")
+        print("\nEvaluator and database:")
         t4_v2_path_unchanged()
         t5_scoring_equivalence()
         t7_failure_is_not_zero(tmpdir)

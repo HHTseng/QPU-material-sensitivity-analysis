@@ -1,7 +1,7 @@
 """Acoustic interface transmission for the substrate/film boundaries.
 
-Implements the **baseline-calibrated effective AMM** policy of
-STAGE3_SMALL_MATERIAL_START.md sec 5.1:
+Implements the reference-calibrated effective acoustic-mismatch policy
+described in ``material_scan/docs/science.md``:
 
     A_candidate = clip(A_Si_baseline * T_candidate / T_Si_baseline, 0, 1)
 

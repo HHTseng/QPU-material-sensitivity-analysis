@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Confirm Stage 4 finalists at a higher fidelity with HELD-OUT seeds.
+"""Confirm Stage 4 finalists at a higher event_count with HELD-OUT seeds.
 
     python stage4_confirm.py --report results/stage4_report.json --top 3 \\
-        --fidelity M --seed-bank 9 --workers 16 --parallel 2
+        --event-count 32000000 --seed-bank 9 --workers 16 --parallel 2
 
 Selection and confirmation must not share seeds. The screening campaign runs on
 seed bank 0; this runs the finalists on a bank that no optimizer has seen, at a
-higher event budget, on the SAME 16 injection sites. Changing the site set here
+higher event allowance, on the SAME 16 injection sites. Changing the site set here
 would change the objective between selection and confirmation and invalidate the
 comparison -- confirmation adds seeds and statistics, never a new scenario.
 
@@ -18,7 +18,7 @@ What it reports, and why each one:
   lot is a different animal from one that wins on 16 of 16 by a little, and the
   second is the one you can fabricate against;
 * the screening-vs-confirmation shift, which is the honest measure of how much
-  the screening tier was over-fitting its own noise.
+  the screening event_count was over-fitting its own noise.
 """
 
 import argparse
@@ -37,8 +37,8 @@ for _p in (HERE, REPO_ROOT):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from stage3_contract import load_contract, ContractError        # noqa: E402
-from stage3_ledger import Ledger                                # noqa: E402
+from experiment_definition import load_definition, DefinitionError        # noqa: E402
+from experiment_database import Database                                # noqa: E402
 from stage3_trial_runner import (evaluate, find_macro_value,   # noqa: E402
                                  REPO_ROOT)
 
@@ -57,13 +57,13 @@ import stage4_objectives as O                                   # noqa: E402
 from stage4_optimize import candidate_payload, resolver_for, build_space  # noqa: E402
 
 
-def _refuse_if_frozen(ledger_path):
-    """Exit before touching anything if the ledger is closed to new writers."""
-    from stage3_ledger import freeze_reason, freeze_path
-    reason = freeze_reason(ledger_path)
+def _refuse_if_frozen(database_path):
+    """Exit before touching anything if the database is closed to new writers."""
+    from experiment_database import freeze_reason, freeze_path
+    reason = freeze_reason(database_path)
     if reason:
-        sys.exit(f"REFUSING TO RUN: {os.path.abspath(ledger_path)} is frozen.\n\n"
-                 f"{reason}\n\nRemove {freeze_path(ledger_path)} deliberately, "
+        sys.exit(f"REFUSING TO RUN: {os.path.abspath(database_path)} is frozen.\n\n"
+                 f"{reason}\n\nRemove {freeze_path(database_path)} deliberately, "
                  f"after snapshotting, to lift this.")
 
 
@@ -118,7 +118,7 @@ def collect_points(args, space):
         points["explicit"] = _complete(space, json.loads(args.point), "explicit")
     if args.points_file:
         # {label: point} written by whatever produced the candidates -- e.g. the
-        # projection's elasticity variants, which exist only as ledger rows.
+        # projection's elasticity variants, which exist only as database rows.
         with open(args.points_file) as handle:
             for label, point in json.load(handle).items():
                 points[label] = _complete(space, point, label)
@@ -137,10 +137,10 @@ def main():
                     help="JSON {label: property vector} to confirm alongside the "
                          "report's finalists")
     ap.add_argument("--top", type=int, default=3)
-    ap.add_argument("--contract", default=os.path.join(HERE, "stage4_config.yaml"))
-    ap.add_argument("--ledger", default=os.path.join(HERE, "stage4_trials.sqlite"))
-    ap.add_argument("--fidelity", default="M", choices=("S", "M", "L"))
-    ap.add_argument("--events", type=int, default=None, help="override the tier")
+    ap.add_argument("--definition", default=os.path.join(HERE, "stage4_config.yaml"))
+    ap.add_argument("--database", default=os.path.join(HERE, "stage4_trials.sqlite"))
+    ap.add_argument("--event-count", default="32000000", choices=("4000000", "32000000", "320000000"))
+    ap.add_argument("--events", type=int, default=None, help="override the event_count")
     ap.add_argument("--positions", type=int, default=None,
                     help="override n_positions for a spatial-convergence sweep "
                          "(power of two). Changing it changes the SCENARIO, so "
@@ -172,26 +172,26 @@ def main():
     ap.add_argument("--tag", default="confirm")
     ap.add_argument("--out", default=os.path.join(HERE, "results", "stage4_confirmation.json"))
     args = ap.parse_args()
-    _refuse_if_frozen(args.ledger)
+    _refuse_if_frozen(args.database)
 
-    contract = load_contract(args.contract)
-    space = build_space(contract)
+    definition = load_definition(args.definition)
+    space = build_space(definition)
     points = collect_points(args, space)
     if len(points) < 2:
         sys.exit("nothing to confirm: no finalists found")
 
-    contract.campaign_id = f"{contract.campaign_id}_{args.tag}"
+    definition.campaign_id = f"{definition.campaign_id}_{args.tag}"
     if args.positions:
-        contract.fixed["n_positions"] = args.positions
+        definition.fixed["n_positions"] = args.positions
 
-    # Electrode-aware stratified design. Built from the contract's own electrode
+    # Electrode-aware stratified design. Built from the definition's own electrode
     # table, then carried inside `fixed` so it reaches build_scenario() and is
     # hashed into every cache key -- a stratified trial can never collide with a
     # uniform one at the same site count.
     design = None
     if args.stratified:
         import stage4_strata as ST
-        weights = ST.stratum_weights(contract.fixed)
+        weights = ST.stratum_weights(definition.fixed)
         sd_path = os.path.join(HERE, "results", "stage4_pilot_sd.json")
         pilot_sd = dict(PILOT_SD)
         if os.path.isfile(sd_path):
@@ -200,9 +200,9 @@ def main():
         alloc = ST.neyman_allocation(args.stratified, weights, pilot_sd)
         template_z = float(find_macro_value(
             MACRO_TEMPLATE, "/main/gun/setPosition").split()[2])
-        design = ST.build_design(contract.fixed, alloc, template_z)
-        contract.fixed["n_positions"] = args.stratified
-        contract.fixed["stratified_design"] = design
+        design = ST.build_design(definition.fixed, alloc, template_z)
+        definition.fixed["n_positions"] = args.stratified
+        definition.fixed["stratified_design"] = design
         O.set_stratified_design(design)
         if args.objective == "total_qps_per_primary":
             args.objective = "device_weighted_junction_qps_per_energy"
@@ -210,30 +210,30 @@ def main():
               + "  ".join(f"{h}={design['stratum_counts'][h]}"
                           f"(W={design['stratum_weights'][h]:.3f})"
                           for h in ST.STRATA))
-    contract.decision["fidelity"]["value"] = args.fidelity
+    definition.decision["event_count"]["value"] = args.event_count
     if args.events:
-        contract.decision["fidelity"]["events_total_per_candidate"][args.fidelity] = args.events
-    events = int(contract.decision["fidelity"]["events_total_per_candidate"][args.fidelity])
-    contract.fixed["max_workers"] = max(1, args.workers // max(1, args.parallel))
-    contract.fixed["total_mem_gb"] = float(contract.fixed["total_mem_gb"]) / max(1, args.parallel)
-    contract.fixed["sample_timeout_s"] = args.timeout
-    contract.fixed["sample_stall_timeout_s"] = args.stall_timeout
+        definition.decision["event_count"]["events_total_per_candidate"][args.event_count] = args.events
+    events = int(definition.decision["event_count"]["events_total_per_candidate"][args.event_count])
+    definition.fixed["max_workers"] = max(1, args.workers // max(1, args.parallel))
+    definition.fixed["total_mem_gb"] = float(definition.fixed["total_mem_gb"]) / max(1, args.parallel)
+    definition.fixed["sample_timeout_s"] = args.timeout
+    definition.fixed["sample_stall_timeout_s"] = args.stall_timeout
     objective = O.get(args.objective)
     resolver = resolver_for(space)
     local = threading.local()
 
     def led():
         if getattr(local, "l", None) is None:
-            local.l = Ledger(args.ledger)
+            local.l = Database(args.database)
         return local.l
 
     def run(label, point):
         t0 = time.time()
         try:
-            r = evaluate(contract, candidate_payload(point, space), fidelity=args.fidelity,
-                         seed_bank_id=args.seed_bank, ledger=led(), verbose=False,
+            r = evaluate(definition, candidate_payload(point, space), event_count=args.event_count,
+                         seed_bank_id=args.seed_bank, database=led(), verbose=False,
                          resolver=resolver)
-        except (ContractError, S.GateError) as exc:
+        except (DefinitionError, S.GateError) as exc:
             return label, {"status": "rejected", "reason": str(exc)}, None
         if not r.is_observation:
             return label, {"status": r.status, "reason": r.failure_reason}, None
@@ -250,9 +250,9 @@ def main():
                        "cached": r.cached,
                        "detail": v.detail}, r
 
-    print(f"Confirmation: {len(points)} candidate(s) at fidelity {args.fidelity} "
+    print(f"Confirmation: {len(points)} candidate(s) at event_count {args.event_count} "
           f"({events:,} events each), HELD-OUT seed bank {args.seed_bank}, "
-          f"{args.parallel} x {contract.fixed['max_workers']} workers")
+          f"{args.parallel} x {definition.fixed['max_workers']} workers")
     results, trials = {}, {}
     with ThreadPoolExecutor(max_workers=args.parallel) as pool:
         futures = [pool.submit(run, k, v) for k, v in points.items()]
@@ -294,22 +294,22 @@ def main():
         print(line)
 
     # Identity metadata. Without it a downstream reader cannot tell how the
-    # events were split, and `stage4_compare_fidelity.py` was reduced to
+    # events were split, and `compare_property_event_counts.py` was reduced to
     # assuming 32 sub-runs -- wrong by 4x under the 8-replica protocol. It also
-    # makes the JSON self-describing enough to be checked against the ledger by
+    # makes the JSON self-describing enough to be checked against the database by
     # someone who has only this file.
-    out = {"fidelity": args.fidelity, "events": events, "seed_bank": args.seed_bank,
+    out = {"event_count": args.event_count, "events": events, "seed_bank": args.seed_bank,
            "objective": args.objective,
-           "n_positions": int(contract.fixed["n_positions"]),
-           "n_replicas": int(contract.fixed["n_replicas"]),
-           "n_sub_runs": int(contract.fixed["n_positions"]) * int(contract.fixed["n_replicas"]),
-           "events_per_sub_run": contract.events_per_sub_run(args.fidelity),
-           "campaign_id": contract.campaign_id,
-           "campaign_contract_hash": contract.campaign_contract_hash(),
-           "simulation_identity_hash": contract.simulation_identity_hash(),
-           "code_fingerprint": contract.code_fingerprint(),
-           "sample_timeout_s": contract.fixed.get("sample_timeout_s"),
-           "sample_stall_timeout_s": contract.fixed.get("sample_stall_timeout_s"),
+           "n_positions": int(definition.fixed["n_positions"]),
+           "n_replicas": int(definition.fixed["n_replicas"]),
+           "n_sub_runs": int(definition.fixed["n_positions"]) * int(definition.fixed["n_replicas"]),
+           "events_per_sub_run": definition.events_per_sub_run(args.event_count),
+           "campaign_id": definition.campaign_id,
+           "campaign_definition_hash": definition.campaign_definition_hash(),
+           "simulation_identity_hash": definition.simulation_identity_hash(),
+           "code_fingerprint": definition.code_fingerprint(),
+           "sample_timeout_s": definition.fixed.get("sample_timeout_s"),
+           "sample_stall_timeout_s": definition.fixed.get("sample_stall_timeout_s"),
            "stratified_design": design,
            "results": results,
            "points": {k: {kk: (list(vv) if isinstance(vv, list) else vv)

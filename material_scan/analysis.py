@@ -164,7 +164,7 @@ def validate_complete_blocks(
 ) -> dict[tuple[int, int], Block]:
     """Validate the exact declared position-by-replica Cartesian product.
 
-    Scalar legacy objectives may use blocks without an electrode vector.  The
+    Scalar historical objectives may use blocks without an electrode vector.  The
     electrode-aware device objective opts into the stronger requirement.
     """
 

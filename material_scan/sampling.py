@@ -1,7 +1,7 @@
 """Recorded sampling designs and immutable task plans.
 
 This module never estimates stratum area.  A production design must carry the
-coordinates, labels, weights, allocation, and legacy design hash that were
+coordinates, labels, weights, allocation, and historical design hash that were
 recorded when the experiment was planned.  Loading such a design performs
 validation only; it does not run Sobol generators or Monte Carlo integration.
 """
@@ -46,11 +46,11 @@ def _sequence(value: Any, label: str) -> Sequence[Any]:
     return value
 
 
-def legacy_design_hash(record: Mapping[str, Any]) -> str:
-    """Reproduce the 16-hex hash written by legacy ``stage4_strata.py``."""
+def historical_design_hash(record: Mapping[str, Any]) -> str:
+    """Reproduce the 16-hex hash written by historical ``stage4_strata.py``."""
 
     payload = {key: value for key, value in record.items() if key != "design_hash"}
-    # Validate first, then reproduce json.dumps' legacy defaults exactly (notably
+    # Validate first, then reproduce json.dumps' historical defaults exactly (notably
     # ensure_ascii=True and the spelling of negative zero).
     canonical_json(payload)
     encoded = json.dumps(
@@ -63,10 +63,10 @@ def legacy_design_hash(record: Mapping[str, Any]) -> str:
 class RecordedStratifiedDesign:
     """A byte-independent, immutable view of an already generated design.
 
-    ``recorded_hash`` is the legacy 16-character hash stored with the original
+    ``recorded_hash`` is the historical 16-character hash stored with the original
     result.  ``record_hash`` hashes every recorded field in the new identity
     domain.  ``design_key`` currently equals ``record_hash`` and is named
-    separately so callers never confuse either full key with the legacy hash.
+    separately so callers never confuse either full key with the historical hash.
     """
 
     sites_mm: Tuple[Tuple[float, float, float], ...]
@@ -181,12 +181,12 @@ class RecordedStratifiedDesign:
         if len(recorded_hash) != 16 or any(
             char not in "0123456789abcdef" for char in recorded_hash
         ):
-            raise SamplingError("design_hash must be the recorded 16-hex legacy hash")
-        calculated_legacy = legacy_design_hash(record)
-        if verify_recorded_hash and calculated_legacy != recorded_hash:
+            raise SamplingError("design_hash must be the recorded 16-hex historical hash")
+        calculated_historical = historical_design_hash(record)
+        if verify_recorded_hash and calculated_historical != recorded_hash:
             raise SamplingError(
                 f"recorded design hash mismatch: stored {recorded_hash}, "
-                f"calculated {calculated_legacy}"
+                f"calculated {calculated_historical}"
             )
 
         hash_payload = {key: value for key, value in record.items() if key != "design_hash"}
@@ -245,7 +245,7 @@ def load_recorded_stratified_design(
     )
 
 
-def legacy_position_seed(seed_base: int, seed_bank_id: int, replica: int,
+def historical_position_seed(seed_base: int, seed_bank_id: int, replica: int,
                          position: int) -> int:
     """Exact seed rule used by the existing Stage 3/4 evaluator."""
 
@@ -366,7 +366,7 @@ def build_recorded_plan(
     events_per_task: int,
     seed_base: int,
     seed_bank_id: int,
-    seed_algorithm: str = "legacy-position-v1",
+    seed_algorithm: str = "historical-position-v1",
 ) -> SamplingPlan:
     """Expand a recorded design to immutable tasks without regenerating sites."""
 
@@ -378,17 +378,17 @@ def build_recorded_plan(
         or events_per_task <= 0
     ):
         raise SamplingError("events_per_task must be a positive integer")
-    if seed_algorithm != "legacy-position-v1":
+    if seed_algorithm != "historical-position-v1":
         raise SamplingError(f"unsupported seed algorithm {seed_algorithm!r}")
     # Validate both integers even for a design with one task.
-    legacy_position_seed(seed_base, seed_bank_id, 0, 0)
+    historical_position_seed(seed_base, seed_bank_id, 0, 0)
 
     tasks = []
     for replica in range(replicas):
         for position, (site, stratum, nearest) in enumerate(
             zip(design.sites_mm, design.strata, design.nearest_electrode)
         ):
-            first_seed = legacy_position_seed(
+            first_seed = historical_position_seed(
                 seed_base, seed_bank_id, replica, position
             )
             mass = design.weight_for(stratum)

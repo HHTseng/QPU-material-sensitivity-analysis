@@ -566,7 +566,7 @@ def _macro_energy_eV(macroname, command):
 
 
 def assert_excitation_thresholds(macroname, quiet=False):
-    """Enforce the excitation-threshold contract before anything is launched.
+    """Enforce the excitation-threshold definition before anything is launched.
 
     "Above minEPhonons" is NOT sufficient and must never be used as the gate:
     minEPhonons is a numerical tracking cut, not a physical threshold. With it
@@ -580,7 +580,7 @@ def assert_excitation_thresholds(macroname, quiet=False):
 
     Last link: above the ground-film gap the Nb plane also absorbs, so
     total_QPs stops being purely junction QPs and the objective silently
-    changes meaning. See STAGE3_MATERIAL_OPTIMIZATION_PIPELINE.md sec 3.1.1.
+    changes meaning. See material_scan/docs/science.md.
     """
     e_gun = _macro_energy_eV(macroname, "/main/gun/setEnergy")
     min_e = _macro_energy_eV(macroname, "/g4cmp/minEPhonons")
@@ -622,7 +622,7 @@ def assert_excitation_thresholds(macroname, quiet=False):
     ground_plane_active = e_gun >= film_gate
     if not quiet:
         print(
-            f"Excitation-threshold contract OK: minEPhonons {ueV(min_e)} < "
+            f"Excitation-threshold definition OK: minEPhonons {ueV(min_e)} < "
             f"2*setTopGap {ueV(junction_gate)} <= gun {ueV(e_gun)} "
             f"({e_gun / junction_gate:.2f}x the gate); 2*setTopFilmGap "
             f"{ueV(film_gate)} -> ground plane "
@@ -903,7 +903,7 @@ if N_REPLICAS < 1:
 if TOTAL_EVENTS < 0:
     raise ValueError("SENSITIVITY_TOTAL_EVENTS must be at least 0 (0 = take it from the template)")
 if PER_SAMPLE_MEM_GB <= 0 or TOTAL_MEM_GB <= 0:
-    raise ValueError("Memory-guard budgets must be positive")
+    raise ValueError("Memory-guard allowances must be positive")
 if PER_SAMPLE_MEM_GB > TOTAL_MEM_GB:
     raise ValueError(
         f"SENSITIVITY_PER_SAMPLE_MEM_GB ({PER_SAMPLE_MEM_GB:g}) exceeds "
@@ -915,7 +915,7 @@ _available_gb = host_available_gb()
 if _available_gb == _available_gb and TOTAL_MEM_GB > _available_gb:  # NaN-safe
     raise ValueError(
         f"SENSITIVITY_TOTAL_MEM_GB ({TOTAL_MEM_GB:g} GB) exceeds the host's current "
-        f"MemAvailable ({_available_gb:.0f} GB). Lower the budget; this host is shared."
+        f"MemAvailable ({_available_gb:.0f} GB). Lower the allowance; this host is shared."
     )
 # Each sub-run is one single-threaded Geant4 process, so more workers than cores
 # only adds context switching -- and on a shared host it also crowds out other
@@ -1482,7 +1482,7 @@ def run_sample_debug(sub_run, run_index, total_runs):
             raise MemoryKilled(f"{sample_name} was SIGKILLed (memory guard or external kill)")
         raise subprocess.CalledProcessError(return_code, ["bash", "-lc", command])
 
-    # See run_sample_parallel for the full contract.
+    # See run_sample_parallel for the full definition.
     if not os.path.exists(sub_run.get("done_marker", "")):
         finalize_log_file(temp_log_file, log_file, True)
         raise MacroAborted(
@@ -1553,7 +1553,7 @@ def run_sample_parallel(sub_run, guard=None):
 
     if return_code != 0:
         # SIGKILL (-9) is what the memory guard uses, so report it distinctly:
-        # a memory kill is a budget event, not a physics failure.
+        # a memory kill is a allowance event, not a physics failure.
         if return_code == -signal.SIGKILL:
             finalize_log_file(temp_log_file, log_file, True)
             raise MemoryKilled(f"{sub_name} was SIGKILLed (memory guard or external kill)")
@@ -1711,7 +1711,7 @@ def main(macro_files):
         finally:
             guard.stop()
             print(f"Peak tracked RSS across all concurrent sub-runs: "
-                  f"{guard.peak_total_bytes / 1024 ** 3:.2f} GB (budget {TOTAL_MEM_GB:g} GB)")
+                  f"{guard.peak_total_bytes / 1024 ** 3:.2f} GB (allowance {TOTAL_MEM_GB:g} GB)")
             if guard.killed:
                 print(f"Memory guard killed {len(guard.killed)} sub-run(s).")
 
@@ -1801,7 +1801,7 @@ if __name__ == "__main__":
         seen.add(sub_run["sample_name"])
         assert_excitation_thresholds(sub_run["macro"], quiet=checked > 0)
         checked += 1
-    print(f"Excitation-threshold contract verified for all {checked} design point(s).")
+    print(f"Excitation-threshold definition verified for all {checked} design point(s).")
 
     if GENERATE_ONLY:
         print("Generation-only mode complete; Geant4/G4CMP simulations were not started.")

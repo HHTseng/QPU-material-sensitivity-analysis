@@ -5,10 +5,10 @@ This is the driver that produced the 2026-08-13 18-combination result. It is
 deliberately a *loop over `evaluate()`*, not an optimizer: at ~25 s per candidate
 the whole factorial is minutes of compute, so exhaustive enumeration is both
 simpler and more reliable than any surrogate. An optimizer only earns its
-complexity when the space is larger than the budget.
+complexity when the space is larger than the allowance.
 
 Every candidate is scored on the SAME injection sites and the SAME seed bank, so
-comparisons are paired. Results land in the SQLite ledger; nothing is printed
+comparisons are paired. Results land in the SQLite database; nothing is printed
 that is not also persisted.
 
 Usage:
@@ -28,9 +28,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
-from stage3_contract import load_contract, ContractError   # noqa: E402
+from experiment_definition import load_definition, DefinitionError   # noqa: E402
 from stage3_trial_runner import evaluate, SUBSTRATES, TOP_FILMS, BOTTOM_FILMS  # noqa: E402
-from stage3_ledger import Ledger                            # noqa: E402
+from experiment_database import Database                            # noqa: E402
 
 
 def enabled(section):
@@ -63,8 +63,8 @@ def apply_lifetime_bracket(which):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--contract", default=os.path.join(HERE, "stage3_config.yaml"))
-    ap.add_argument("--ledger", default=os.path.join(HERE, "stage3_trials.sqlite"))
+    ap.add_argument("--definition", default=os.path.join(HERE, "stage3_config.yaml"))
+    ap.add_argument("--database", default=os.path.join(HERE, "stage3_trials.sqlite"))
     ap.add_argument("--events", type=int, default=4000000, help="TOTAL events per candidate")
     ap.add_argument("--positions", type=int, default=16)
     ap.add_argument("--replicas", type=int, default=2)
@@ -77,38 +77,38 @@ def main():
                     help="comma-separated candidate names (sub/top/bot) to run; "
                          "used to shard one campaign across concurrent processes")
     ap.add_argument("--timeout", type=float, default=None,
-                    help="per-sub-run wall clock seconds; overrides the contract. "
+                    help="per-sub-run wall clock seconds; overrides the definition. "
                          "MUST be raised for large beamOn -- the default 1800 s "
                          "would kill every sub-run above ~1e6 events.")
     ap.add_argument("--tag", default=None, help="campaign_id suffix, e.g. 'e7'")
     ap.add_argument("--total-mem-gb", type=float, default=None,
-                    help="aggregate RSS budget FOR THIS PROCESS. When sharding, "
-                         "divide the machine budget by the number of shards -- each "
+                    help="aggregate RSS allowance FOR THIS PROCESS. When sharding, "
+                         "divide the machine allowance by the number of shards -- each "
                          "shard runs its own guard and only sees its own sub-runs.")
     ap.add_argument("--per-sample-mem-gb", type=float, default=None)
     args = ap.parse_args()
 
-    contract = load_contract(args.contract)
-    contract.fixed["n_positions"] = args.positions
-    contract.fixed["n_replicas"] = args.replicas
-    contract.fixed["max_workers"] = args.workers
-    fidelity = contract.decision["fidelity"]["value"]
-    contract.decision["fidelity"]["events_total_per_candidate"][fidelity] = args.events
+    definition = load_definition(args.definition)
+    definition.fixed["n_positions"] = args.positions
+    definition.fixed["n_replicas"] = args.replicas
+    definition.fixed["max_workers"] = args.workers
+    event_count = definition.decision["event_count"]["value"]
+    definition.decision["event_count"]["events_total_per_candidate"][event_count] = args.events
     if args.timeout is not None:
-        contract.fixed["sample_timeout_s"] = args.timeout
+        definition.fixed["sample_timeout_s"] = args.timeout
     if args.total_mem_gb is not None:
-        contract.fixed["total_mem_gb"] = args.total_mem_gb
+        definition.fixed["total_mem_gb"] = args.total_mem_gb
     if args.per_sample_mem_gb is not None:
-        contract.fixed["per_sample_mem_gb"] = args.per_sample_mem_gb
+        definition.fixed["per_sample_mem_gb"] = args.per_sample_mem_gb
     if args.tag:
-        contract.campaign_id = f"{contract.campaign_id}_{args.tag}"
+        definition.campaign_id = f"{definition.campaign_id}_{args.tag}"
     # A sub-run that outlives the watchdog is killed and the trial is refused, so
-    # check the budget against the timeout rather than discovering it at hour 3.
+    # check the allowance against the timeout rather than discovering it at hour 3.
     per_sub = args.events // (args.positions * args.replicas)
     est_s = per_sub * 1.4e-4          # measured at 10 meV, 125k -> ~17 s
-    if contract.fixed.get("sample_timeout_s") and est_s > 0.5 * contract.fixed["sample_timeout_s"]:
+    if definition.fixed.get("sample_timeout_s") and est_s > 0.5 * definition.fixed["sample_timeout_s"]:
         print(f"WARNING: estimated {est_s / 60:.0f} min per sub-run vs a "
-              f"{contract.fixed['sample_timeout_s'] / 60:.0f} min timeout. Raise --timeout.")
+              f"{definition.fixed['sample_timeout_s'] / 60:.0f} min timeout. Raise --timeout.")
 
     if args.lifetime_scale != "nominal":
         touched, skipped = apply_lifetime_bracket(args.lifetime_scale)
@@ -124,20 +124,20 @@ def main():
         missing = wanted - {f"{a}/{b}/{c}" for a, b, c in combos}
         if missing:
             sys.exit(f"--only names not in the enabled catalog: {sorted(missing)}")
-    print(f"Campaign {contract.campaign_id}: {len(subs)}x{len(tops)}x{len(bots)} = "
+    print(f"Campaign {definition.campaign_id}: {len(subs)}x{len(tops)}x{len(bots)} = "
           f"{len(combos)} combinations at {args.events:,} events "
           f"({args.positions} positions x {args.replicas} replicas), "
           f"lifetime={args.lifetime_scale}")
 
     rows = {}
-    with Ledger(args.ledger) as ledger:
+    with Database(args.database) as database:
         for sub, top, bot in combos:
             name = f"{sub}/{top}/{bot}"
             try:
-                result = evaluate(contract, {"substrate": sub, "top_ground_film": top,
+                result = evaluate(definition, {"substrate": sub, "top_ground_film": top,
                                              "bottom_film": bot},
-                                  seed_bank_id=args.seed_bank, ledger=ledger, verbose=False)
-            except ContractError as exc:
+                                  seed_bank_id=args.seed_bank, database=database, verbose=False)
+            except DefinitionError as exc:
                 print(f"  {name:16s} REJECTED: {exc}")
                 continue
             rows[name] = result
@@ -168,7 +168,7 @@ def main():
     failed = len(rows) - len(observations)
     print(f"\n{len(observations)} scored, {failed} not scored, "
           f"{len(combos) - len(rows)} rejected before running.")
-    print(f"Ledger: {args.ledger}")
+    print(f"Database: {args.database}")
     return 0 if observations and failed == 0 else 1
 
 

@@ -109,22 +109,15 @@ parameters:
     target: macro:/main/detector_param/setLatticeDeg
     valid_range: [0.0, 360.0]
     source: Rotation angle accepted by the detector command.
-  miller:
+  orientation_polar_cos:
     unit: '1'
-    type: choice
-    target: macro:/main/detector_param/setMiller
-    choices:
-      - [0, 0, 1]
-      - [0, 1, 1]
-      - [1, 1, 1]
-      - [0, 1, 2]
-      - [1, 1, 2]
-      - [1, 2, 2]
-      - [0, 1, 3]
-      - [1, 1, 3]
-      - [0, 2, 3]
-      - [1, 2, 3]
-      - [2, 2, 3]
-      - [1, 3, 3]
-      - [2, 3, 3]
-    source: Cubic-symmetry-reduced integer directions with maximum index 3.
+    type: float
+    target: model:continuous_crystal_normal
+    valid_range: [-1.0, 1.0]
+    source: Cosine of the polar angle on the unit sphere.
+  orientation_azimuth_turns:
+    unit: turn
+    type: float
+    target: model:continuous_crystal_normal
+    valid_range: [0.0, 1.0]
+    source: Periodic azimuth coordinate on the unit sphere.

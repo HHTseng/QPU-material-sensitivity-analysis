@@ -1,75 +1,95 @@
-# Material scan
+# Material-property search
 
-`material_scan` is the revised interface for the material-parameter studies.
-It validates experiments, freezes their full task plan, reproduces the legacy
-QP analysis, and provides safe run-state and archive primitives. The original
-`parameter_optimization/` tree remains the scientific reference during the
-transition.
+This is the current interface for material-property studies. It separates the
+physical inputs, recorded injection sites, simulation, quasiparticle
+calculation, optimizer, and reports so each part can be checked independently.
 
-## Data flow
+## How it works
 
-1. `parameters.yaml` owns parameter types, units, physical ranges, and simulator
-   targets. A file in `experiments/` owns one study's values or search bounds,
-   recorded design, fidelity, objective, and build identity.
-2. `check` validates the experiment. `freeze` resolves candidate values and
-   writes an immutable manifest containing every site, replica, seed, and event
-   count. Resume reads this file; it never redraws the experiment.
-3. Task, simulation, analysis, and search identities are separate. A report
-   change cannot invalidate an identical simulation, while a physics input,
-   site, seed, executable, or artifact change cannot collide silently.
-4. A task succeeds only with a valid hit file and a post-`beamOn` witness. The
-   runner publishes it atomically. The one-writer SQLite store uses a controller
-   lease and attempt token so a late worker cannot overwrite a retry.
-5. The scorer produces per-electrode QPs. Analysis requires the exact declared
-   site-by-replica set and computes the area-weighted objective, uncertainty,
-   spatial `R0.95`, and paired differences. Partial or malformed data fail.
-6. Random, Sobol, BO-GP, and CMA-ES use one recorded `ask`/`tell` interface.
-   This compatibility layer still calls the tested legacy optimizer math.
+1. `parameters.yaml` defines every parameter, unit, physical range, and
+   destination in the simulator or interface calculation.
+2. One YAML file in `experiments/` fixes the injection sites, replicas, random
+   seeds, primary-event count, objective, material values, and search ranges.
+3. `check` rejects missing, unknown, inconsistent, or unphysical values.
+4. `freeze` resolves every site and seed into one read-only JSON description.
+   Restarting uses those recorded tasks; it does not draw new sites.
+5. `runner.py` starts one simulation task in a temporary directory. A task is
+   accepted only when the hit file is valid and the macro wrote its expected
+   completion witness. Publication is atomic.
+6. `physics.py` converts energy deposited at the sensor surface into
+   quasiparticles. `analysis.py` requires the full declared site-by-replica set
+   and calculates the area-weighted objective and its uncertainty.
+7. `search.py` gives random, Sobol, Gaussian-process Bayesian, and CMA-ES
+   methods the same recorded `ask` and `tell` calls.
+8. `store.py` records experiment, simulation, task, attempt, and observation
+   states in SQLite. Only the controller writes to it.
 
-Material realization and macro/lattice rendering have not yet passed parity.
-Therefore `python -m material_scan run ...` refuses to launch Geant4. This
-branch has not produced or silently reused a new physics result.
+The final material and macro rendering path is still being compared with the
+earlier implementation. For that reason, `python -m material_scan run` refuses
+to start Geant4. The temporary compatibility programs in
+`parameter_optimization/` remain available for controlled comparison studies;
+they are not the starting point for a new production search.
 
-## Use
+## Commands
 
-From the repository root in the G4CMP Python environment:
+Run from the repository root in the G4CMP Conda environment:
 
 ```bash
-python -m material_scan check material_scan/experiments/spatial-strata-512-baseline.yaml
-python -m material_scan freeze EXPERIMENT.yaml --values VALUES.yaml --output resolved.json
-python -m material_scan legacy-summary parameter_optimization/stage4_trials.sqlite
-python -m unittest discover -s material_scan/tests -v
+conda run -n G4CMP python -m material_scan check \
+  material_scan/experiments/spatial-strata-512-baseline.yaml
+
+conda run -n G4CMP python -m material_scan freeze EXPERIMENT.yaml \
+  --values VALUES.yaml --output resolved.json
+
+conda run -n G4CMP python -m unittest discover -s material_scan/tests -v
 ```
 
-`freeze` accepts candidate values only through one JSON/YAML mapping; it has no
-scientific scalar overrides. `legacy-summary` is read-only. See `--help` for
-the explicit `inventory`, `archive`, `verify-archive`, `recover`, and
-`store-doctor` maintenance commands. Archive creation never deletes its source.
+The maintenance commands are `inventory`, `archive`, `verify-archive`,
+`recover`, `history-summary`, and `store-doctor`. Archive creation copies data;
+it never deletes the source.
 
-## Legacy comparison
+## Source map
 
-A checksummed 32-file legacy trial reproduces exactly 113 hits, 672 QPs, all
-17 electrode totals, the full time matrix, and `1.68e-4` QPs per primary. The
-corrected stratified anchors also reproduce (objective units: area-weighted
-junction QPs per injected eV):
+| File | One responsibility |
+|---|---|
+| `config.py` | validate parameter and experiment files |
+| `sampling.py` | load the recorded stratified spatial design |
+| `identity.py` | hash physical inputs, tasks, analysis, and search separately |
+| `runner.py` | execute and publish one Geant4 task |
+| `physics.py` | hit-to-quasiparticle and density calculations |
+| `analysis.py` | complete-set checks, weighted objective, uncertainty, paired differences |
+| `search.py` | recorded optimizer interaction |
+| `store.py` | single-writer SQLite state |
+| `archive.py` | checksummed data packaging and recovery |
+| `historical.py` | read-only inspection of earlier experiment files |
+| `cli.py` | the only command-line entry point |
+| `tools/plot_hits.py` | Matplotlib hit-file checks from read-only result data |
+| `plot_orientation.py` | fixed integer-direction versus sphere-point comparison |
+
+## Documentation
+
+- [science.md](docs/science.md): equations, assumptions, crystal direction,
+  constraints, and objective.
+- [results.md](docs/results.md): experiment history, current conclusions,
+  unresolved questions, and recommended next work.
+- [data.md](docs/data.md): directory names, preservation, verification, and
+  recovery.
+
+Earlier long notes were merged into these files. Superseded instructions remain
+recoverable from Git history rather than competing with the current procedure.
+
+## Checked equivalence
+
+A retained 32-file simulation reproduces exactly 113 hit rows, 672
+quasiparticles, all 17 electrode totals, the complete time matrix, and
+`1.68e-4` quasiparticles per primary. The corrected stratified reference values
+also reproduce:
 
 | Sites | Baseline | SiC | Paired difference | Relative change |
 |---:|---:|---:|---:|---:|
 | 128 | 2.42916e-3 | 1.08713e-3 | -1.34202e-3 | -55.25% |
 | 512 | 2.41552e-3 | 1.25609e-3 | -1.15943e-3 | -48.00% |
 
-The recorded standard errors and spatial `R0.95` values match as well. These
-are parity anchors, not a claim that 128 sites were converged. On 2026-09-14,
-62/62 revised tests, 190/190 legacy gates, and 15/15 Stage-4 audit checks pass;
-the legacy ledger checksum is unchanged.
-
-`spatial-strata-512` finished on 2026-09-09 at 08:05. Its two unfinished ledger
-records were deleted by the user. Surviving orphan directories are evidence,
-not cacheable results.
-
-Before enabling `run`: port and compare material realization; require normalized
-macro/lattice parity; verify the complete executable, libraries, data, and
-analysis environment; then run one matched low-event baseline smoke.
-
-See the [restructuring blueprint](../parameter_optimization/REPOSITORY_RESTRUCTURING_BLUEPRINT.md),
-[experiment map](docs/experiments.md), and [data rules](docs/data.md).
+These are software-equivalence checks, not evidence that 128 spatial sites are
+enough. The 512-site experiment finished on 2026-09-09 at 08:05. Its two
+unfinished records were removed by the user.

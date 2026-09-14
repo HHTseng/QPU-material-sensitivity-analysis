@@ -1,4 +1,4 @@
-"""Deterministic, verified archives for completed legacy or new trials.
+"""Deterministic, verified archives for completed historical or new trials.
 
 Archiving is never triggered by import, scoring, or task completion.  A caller
 must invoke :func:`create_archive` explicitly.  Publication is atomic: a

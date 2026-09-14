@@ -1,9 +1,9 @@
 #!/bin/bash
 # P6-8 of the Sep-8 plan. REFUSES to start until P2-4 has produced a CONVERGED
 # stratified design, because every step here consumes that design as a frozen
-# contract and a non-converged objective would make all of it meaningless.
+# definition and a non-converged objective would make all of it meaningless.
 #
-#   P5  freeze the production contract (recorded, not simulated)
+#   P5  freeze the production definition (recorded, not simulated)
 #   P6  re-evaluate warm starts under the NEW objective -- old J16 values are
 #       observations of a DIFFERENT quantity and are never imported
 #   P7  equal-cost optimizer benchmark, 4 methods x 3 seeds x 96 evaluations
@@ -44,7 +44,7 @@ else
   $PY -u stage4_build_warmstarts.py --n 24 --out results/stage4_p6_points.json \
       >> "$LOG/p6.log" 2>&1 || { say "P6 point selection FAILED"; exit 3; }
   $PY -u stage4_confirm.py --top 0 --points-file results/stage4_p6_points.json \
-      --fidelity L --stratified "$NSITES" --events "$EVENTS" --seed-bank 9 \
+      --event-count 320000000 --stratified "$NSITES" --events "$EVENTS" --seed-bank 9 \
       --workers 96 --parallel 6 --tag "p6warm" --out "$OUT6" \
       >> "$LOG/p6.log" 2>&1 && say "P6 done" || say "WARNING: P6 returned $?"
 fi
@@ -62,7 +62,7 @@ if [ -f "$OUT8" ]; then
 else
   say "=== P8: held-out confirmation of feasible finalists ==="
   $PY -u stage4_confirm.py --report results/stage4_p7_report.json --top 4 \
-      --fidelity L --stratified "$NSITES" --events "$((EVENTS * 4))" \
+      --event-count 320000000 --stratified "$NSITES" --events "$((EVENTS * 4))" \
       --seed-bank 11 --workers 96 --parallel 4 --tag "p8" --out "$OUT8" \
       >> "$LOG/p8.log" 2>&1 && say "P8 done" || say "WARNING: P8 returned $?"
 fi

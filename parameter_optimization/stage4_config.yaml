@@ -1,19 +1,18 @@
-# Stage 4 experiment contract -- property-space optimization.
+# Stage 4 experiment definition -- property-space optimization.
 #
 # Same classification discipline as stage3_config.yaml: every value is exactly
-# one of `fixed`, `decision`, or `derived`, and stage3_contract.py refuses the
+# one of `fixed`, `decision`, or `derived`, and experiment_definition.py refuses the
 # file otherwise. The difference is that the decisions are now CONTINUOUS
 # PROPERTIES rather than material identities, so a fourth section appears:
 #
 #   space    : the variable table -- bounds, scales, which variables are active
 #
-# `space` is hashed into contract_hash(), so widening a bound or activating a
+# `space` is hashed into definition_hash(), so widening a bound or activating a
 # variable creates a different campaign rather than silently contaminating an
 # existing one.
 #
-# See STAGE4_PROPERTY_OPTIMIZATION_PLAN.md for the design and
-# STAGE3_MATERIAL_OPTIMIZATION_PIPELINE.md sec 3.2 for why this is a separate
-# interpretation from the v2 material search.
+# See material_scan/docs/science.md for the design and
+# material_scan/docs/results.md for its relation to the linked-material study.
 
 campaign_id: stage4_property_v1
 description: >
@@ -84,7 +83,7 @@ fixed:
   position_weights: uniform
   # CHANGED 2026-08-25: 2 -> 8. Two independent reasons, both measured.
   #
-  # 1. FAILURE GRANULARITY. At the 1e8 tier with 2 replicas a sub-run carries
+  # 1. FAILURE GRANULARITY. At the 1e8 event_count with 2 replicas a sub-run carries
   #    1e8 events and runs for tens of hours, so a single kill discards the
   #    whole trial -- best_random lost ~1300 core-hours that way. At 8 replicas
   #    the same total is split into 128 sub-runs of 2.5e7 events, so any one
@@ -92,12 +91,12 @@ fixed:
   # 2. THE ERROR BAR. Every uncertainty in this project is replica-based:
   #    `replica_se_total` estimates the stochastic error from the spread BETWEEN
   #    REPLICAS AT THE SAME SITE. With 2 replicas that is 16 degrees of freedom,
-  #    and STAGE4_RESULTS.md 5b already caught it misbehaving -- a point's own
+  #    and material_scan/docs/results.md records a case where it misbehaved: a point's own
   #    screening trial reported 20% error where the independent held-out
   #    estimate was 12.4%. 8 replicas gives 112 dof for the same total events.
   #
-  # Every fidelity tier still divides evenly into 16 x 8 = 128 sub-runs
-  # (S 31250, M 250000, L 2500000, XL 25000000 events each), and the seed
+  # Every total divides evenly into 16 x 8 = 128 simulation tasks:
+  # 31,250; 250,000; 2,500,000; or 25,000,000 events per task.
   # function stays collision-free (replica stride 10007 > 15 x 101).
   #
   # This IS a change of simulation identity -- different seeds, different block
@@ -110,18 +109,18 @@ fixed:
 
   # Resource policy. Deliberately conservative: mimir is shared, and at the time
   # this campaign was written another user held ~95% of the 192 cores. The
-  # driver splits `max_workers` and the memory budget across concurrently
+  # driver splits `max_workers` and the memory allowance across concurrently
   # evaluated candidates.
   max_workers: 32
   total_mem_gb: 120
   per_sample_mem_gb: 4
   # Watchdogs. CHANGED 2026-08-25 after best_random lost all 32 sub-runs (~1300
-  # core-hours) to a 41.7 h wall-clock limit at the 1e8 tier.
+  # core-hours) to a 41.7 h wall-clock limit at the 1e8 event_count.
   #
   # An absolute wall-clock limit censors on CANDIDATE QUALITY: how long a
   # sub-run takes is a function of the physics, and the low-absorption designs
   # the optimizer prefers are the slow ones. It therefore destroys preferentially
-  # the candidates worth measuring. STAGE4_RESULTS.md 5.4 already said "do not
+  # the candidates worth measuring. material_scan/docs/results.md says "do not
   # fix this by shortening the watchdog"; the mechanism itself was the problem.
   #
   # 0 = NO wall-clock limit. The run is still bounded by physics -- a phonon
@@ -163,36 +162,26 @@ decision:
     allowed_space_ids: [stage4_property_v1]
     value: stage4_property_v1
 
-  orientation:
-    # Integer Miller indices only: G4LatticePhysical::SetMillerOrientation takes
-    # (G4int h, G4int k, G4int l, G4double rot). The 13 directions below are the
-    # cubic-symmetry-reduced set with max|index| = 3.
-    allowed_miller: [[0, 0, 1], [0, 1, 1], [1, 1, 1], [0, 1, 2], [1, 1, 2],
-                     [1, 2, 2], [0, 1, 3], [1, 1, 3], [0, 2, 3], [1, 2, 3],
-                     [2, 2, 3], [1, 3, 3], [2, 3, 3]]
-    miller: [0, 0, 1]
-    lattice_deg: 45.0
-
-  fidelity:
+  event_count:
     # Calibrated by the v2 beamOn scaling study, not guessed:
-    #   S  4.0e6   ~41 s on 32 idle workers, corrected 1 sigma ~5.0%
-    #   M  3.2e7   ~7 min,                   corrected 1 sigma ~1.8%
-    #   L  3.2e8   ~1.5 h,                   corrected 1 sigma ~0.56%
+    #   4,000,000 total   ~41 s on 32 idle workers, corrected 1 sigma ~5.0%
+    #   32,000,000 total  ~7 min,             corrected 1 sigma ~1.8%
+    #   320,000,000 total ~1.5 h,             corrected 1 sigma ~0.56%
     # "Corrected" = Poisson x 2.3, the measured Fano ~ 5 overdispersion.
-    # L is the tier at which the v2 ranking was shown converged (1e8 changed no
-    # ordering and no value by more than 1.6%).
-    allowed: [S, M, L]
-    value: S
+    # The 320,000,000-event setting is where the v2 ranking was shown converged:
+    # increasing to 3,200,000,000 changed no ordering and no value by more than 1.6%.
+    allowed: ["4000000", "32000000", "320000000"]
+    value: "4000000"
     events_total_per_candidate:
-      S: 4000000
-      M: 32000000
-      L: 320000000
+      "4000000": 4000000
+      "32000000": 32000000
+      "320000000": 320000000
 
 # --------------------------------------------------------------------------
 # space -- the continuous property box (Stage 4 only)
 # --------------------------------------------------------------------------
 # Defaults come from stage4_space.VARIABLES, where each bound carries its
-# evidence. Anything overridden here changes contract_hash and therefore starts
+# evidence. Anything overridden here changes definition_hash and therefore starts
 # a new campaign. `active` lists the variables this campaign searches; the
 # others are held at baseline and written for provenance.
 space:
@@ -214,12 +203,14 @@ space:
     - sub_decayTT
     - temperature
     - lattice_deg
+    - orientation_polar_cos
+    - orientation_azimuth_turns
   # sub_lattice_a is deliberately NOT active: it sets fBasis, which for a cubic
   # cell affects only the (scale-invariant) Miller direction and the charge
   # cloud. Proved inert by A/B rather than assumed -- see tests_stage4.py T13.
   # ---------------------------------------------------------------------
   # BOX WIDENING for the next campaign (audit P2). Do NOT uncomment inside
-  # this campaign: `space` is hashed into contract_hash(), so changing a bound
+  # this campaign: `space` is hashed into definition_hash(), so changing a bound
   # starts a different campaign -- which is the point, but it must be a
   # deliberate one with a new campaign_id.
   #
@@ -246,7 +237,7 @@ space:
   # ---------------------------------------------------------------------
 
   # Engineering constraints the QP objective cannot express (audit P3).
-  # Hashed with the contract, so declaring one starts a different campaign
+  # Hashed with the definition, so declaring one starts a different campaign
   # rather than re-reporting this one. All three are OFF here: the campaign on
   # record was run unconstrained, and turning one on retroactively would change
   # what its numbers mean.
@@ -259,8 +250,8 @@ space:
   # .engineering_diagnostics). Before that design is recommended, declare the
   # floor here and re-run, or present the finalists as a Pareto set.
   # (No `constraints:` key is written here on purpose: the `space` section is
-  # hashed into contract_hash(), so even an empty mapping would mint a new
-  # contract hash and orphan every trial already in the ledger. Uncomment the
+  # hashed into definition_hash(), so even an empty mapping would mint a new
+  # definition hash and orphan every trial already in the database. Uncomment the
   # block below only when deliberately starting a constrained campaign.)
   #
   # constraints:

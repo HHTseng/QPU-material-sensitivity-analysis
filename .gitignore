@@ -22,8 +22,16 @@ backup_pre_mac_sync_*/
 *.env
 !.env.example
 
-# Revised material-scan runtime data. Definitions and small curated fixtures
-# stay in Git; active ledgers, scratch, archives, logs, and generated plots do not.
+# Revised material-scan runtime data. Definitions and small checking examples
+# stay in Git; result databases, temporary files, compressed copies, logs, and
+# generated plots do not.
 material_scan_data/
 *.sqlite-wal
 *.sqlite-shm
+
+# Locally retained outputs summarized by the checked files under material_scan/.
+material_scan/experiments/orientation-pilot/results.json
+material_scan/experiments/orientation-pilot/results.sqlite
+parameter_optimization/hit_diagnostics_20260914/
+parameter_optimization/hit_diagnostics_matplotlib_20260914/
+parameter_optimization/runs/stage4_property_v1_orientation_pilot/
