@@ -1,0 +1,20 @@
+{
+  "source_trial_id": "stage4_property_v1_rand_9a3f0ab28d9d",
+  "source_ledger": "parameter_optimization/stage4_trials.sqlite",
+  "source_hits_directory": "parameter_optimization/runs/stage4_property_v1_rand/stage4_property_v1_rand_9a3f0ab28d9d/hits",
+  "file_count": 32,
+  "total_bytes": 19553,
+  "fixture_sha256": "9fcc68dccfa0790109f20a8856f1041fb281cc032093b0cab82ef8e317a220c5",
+  "expected_qps_npz_sha256": "c05c63af9cfdbd3d0cdd4e4c7acd48f3c23ec046499d5f0e36702908ff310237",
+  "gap_eV": 0.000191,
+  "chip_surface_z_m": 0.0002625,
+  "electrode_x_mm": [-2.0, 0.0, 2.0, -2.0, 0.0, 2.0, -2.0, 0.0, 2.0, 1.0, -1.0, 1.0, -1.0, -3.0, 1.0, -1.0, 3.0],
+  "electrode_y_mm": [-2.0, -2.0, -2.0, 0.0, 0.0, 0.0, 2.0, 2.0, 2.0, -3.0, -1.0, 1.0, 3.0, -1.0, -1.0, 1.0, 1.0],
+  "events_per_file": 125000,
+  "expected": {
+    "n_hits": 113,
+    "total_qps": 672.0,
+    "qps_per_primary": 0.000168,
+    "per_electrode_qps": [44.0, 14.0, 24.0, 136.0, 50.0, 0.0, 40.0, 26.0, 32.0, 8.0, 12.0, 28.0, 40.0, 46.0, 28.0, 86.0, 58.0]
+  }
+}

@@ -1,0 +1,23 @@
+schema: material-scan-index-1
+updated: 2026-09-14
+
+experiments:
+  - id: spatial-strata-512-baseline-view
+    definition: spatial-strata-512-baseline.yaml
+    mode: read-only-reconstruction
+    legacy_aliases: [stage4_property_v1_strat512]
+    recorded_designs:
+      - {generation: old-H, design_hash: 50b2353e2f5059dd, preserve: true}
+      - {generation: corrected-S, design_hash: fa659c7d860acdee, preserve: true}
+
+families:
+  material-factorial:
+    legacy_aliases: [stage3_factorial_v1]
+  property-search-original:
+    legacy_aliases: [stage4_property_v1_rand, stage4_property_v1_sobol, stage4_property_v1_bo_gp, stage4_property_v1_cmaes]
+  optimizer-benchmark:
+    legacy_alias_prefix: stage4_property_v1_bench_
+  spatial-uniform:
+    legacy_aliases: [stage4_property_v1_sites16, stage4_property_v1_sites32, stage4_property_v1_sites64]
+  spatial-strata:
+    legacy_aliases: [stage4_property_v1_strat128, stage4_property_v1_strat256, stage4_property_v1_strat512]

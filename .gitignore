@@ -21,3 +21,9 @@ backup_pre_mac_sync_*/
 .env
 *.env
 !.env.example
+
+# Revised material-scan runtime data. Definitions and small curated fixtures
+# stay in Git; active ledgers, scratch, archives, logs, and generated plots do not.
+material_scan_data/
+*.sqlite-wal
+*.sqlite-shm

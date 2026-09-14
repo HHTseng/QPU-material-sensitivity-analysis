@@ -1,0 +1,130 @@
+schema: material-scan-parameters-1
+meta:
+  purpose: Definitions and model destinations for the material-property scan.
+  note: Search bounds belong to each experiment, not to this catalog.
+
+parameters:
+  topfilm_vsound:
+    unit: km/s
+    type: float
+    target: macro:/main/detector_param/setTopFilmVSound
+    valid_range: [0.1, 20.0]
+    source: Positive model domain; experiment bounds cite the selected film set.
+  topfilm_gap:
+    unit: eV
+    type: float
+    target: macro:/main/detector_param/setTopFilmGap
+    valid_range: [1.0e-6, 1.0e-2]
+    source: Positive model domain; excitation and fabrication constraints are experiment data.
+  topfilm_ph_lifetime:
+    unit: ns
+    type: float
+    target: macro:/main/detector_param/setTopFilmPhLifetime
+    valid_range: [1.0e-6, 1000000.0]
+    source: Positive model domain; experiment bounds cite measured film values.
+  topfilm_density:
+    unit: kg/m3
+    type: float
+    target: model:top-interface-density
+    valid_range: [1.0, 100000.0]
+    source: Positive acoustic-impedance model domain.
+
+  bot_vsound:
+    unit: km/s
+    type: float
+    target: macro:/main/detector_param/setBotVSound
+    valid_range: [0.1, 20.0]
+    source: Positive model domain; experiment bounds cite the selected film set.
+  bot_gap_thres:
+    unit: eV
+    type: float
+    target: macro:/main/detector_param/setBotGapThres
+    valid_range: [1.0e-12, 1.0e-2]
+    source: Transport-model domain; the junction threshold relation is an experiment constraint.
+  bot_ph_lifetime:
+    unit: ns
+    type: float
+    target: macro:/main/detector_param/setBotPhLifetime
+    valid_range: [1.0e-6, 1000000.0]
+    source: Positive model domain; experiment bounds cite measured film values.
+  bot_density:
+    unit: kg/m3
+    type: float
+    target: model:bottom-interface-density
+    valid_range: [1.0, 100000.0]
+    source: Positive acoustic-impedance model domain.
+
+  sub_c11:
+    unit: GPa
+    type: float
+    target: 'config:stiffness 1 1'
+    valid_range: [-2000.0, 2000.0]
+    source: Broad tensor input domain; cubic Born stability is enforced jointly.
+  sub_c12:
+    unit: GPa
+    type: float
+    target: 'config:stiffness 1 2'
+    valid_range: [-2000.0, 2000.0]
+    source: Broad tensor input domain; cubic Born stability is enforced jointly.
+  sub_c44:
+    unit: GPa
+    type: float
+    target: 'config:stiffness 4 4'
+    valid_range: [1.0e-9, 2000.0]
+    source: Positive shear-stiffness model domain; experiment bounds carry material evidence.
+  sub_scat:
+    unit: s3
+    type: float
+    target: config:scat
+    valid_range: [1.0e-50, 1.0e-35]
+    source: Positive G4CMP scattering-coefficient domain.
+  sub_decay:
+    unit: s4
+    type: float
+    target: config:decay
+    valid_range: [1.0e-65, 1.0e-45]
+    source: Positive G4CMP anharmonic-decay domain.
+  sub_decayTT:
+    unit: '1'
+    type: float
+    target: config:decayTT
+    valid_range: [0.0, 1.0]
+    source: Fraction of longitudinal decays assigned to the transverse-transverse channel.
+  sub_lattice_a:
+    unit: Angstrom
+    type: float
+    target: config:cubic
+    valid_range: [0.1, 100.0]
+    source: Positive cubic lattice-length input domain; inactive in the recorded search.
+
+  temperature:
+    unit: K
+    type: float
+    target: macro:/g4cmp/temperature
+    valid_range: [0.0, 10.0]
+    source: Non-negative G4CMP temperature input domain.
+  lattice_deg:
+    unit: deg
+    type: float
+    target: macro:/main/detector_param/setLatticeDeg
+    valid_range: [0.0, 360.0]
+    source: Rotation angle accepted by the detector command.
+  miller:
+    unit: '1'
+    type: choice
+    target: macro:/main/detector_param/setMiller
+    choices:
+      - [0, 0, 1]
+      - [0, 1, 1]
+      - [1, 1, 1]
+      - [0, 1, 2]
+      - [1, 1, 2]
+      - [1, 2, 2]
+      - [0, 1, 3]
+      - [1, 1, 3]
+      - [0, 2, 3]
+      - [1, 2, 3]
+      - [2, 2, 3]
+      - [1, 3, 3]
+      - [2, 3, 3]
+    source: Cubic-symmetry-reduced integer directions with maximum index 3.
