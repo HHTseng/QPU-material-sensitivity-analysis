@@ -391,15 +391,42 @@ def check_code_identity(definition_path, database_path, registry_path=None):
         newest = max(stored, key=stored.get)
         old_files = (json.loads(newest) or {}).get("files", {})
         new_files = json.loads(now).get("files", {})
-        changed = sorted(k for k in set(old_files) | set(new_files)
-                         if old_files.get(k) != new_files.get(k))
         renamed_paths = {
             "legacy/stage3_" + "con" + "tract.py":
                 "legacy/experiment_definition.py",
             "legacy/stage3_" + "led" + "ger.py":
                 "legacy/experiment_database.py",
         }
-        changed = sorted({renamed_paths.get(path, path) for path in changed})
+
+        def _current_spelling(path):
+            """Historical identity-file name -> its name in the current tree.
+
+            Stored fingerprints are immutable, so they still spell identity
+            files as they were when the trial ran: under
+            `parameter_optimization/`, or bare at the repository root. The
+            2026-09-15 restructuring moved every one of them into `legacy/`.
+            Without this, each file appears under two names, every one looks
+            changed, and a recorded decision can never match again -- the
+            cleanup would have silently dropped an invalidation label.
+            """
+            if path.startswith("macro_template:"):
+                return path
+            if path.startswith("legacy/"):
+                return renamed_paths.get(path, path)
+            if path.startswith("parameter_optimization/"):
+                path = "legacy/" + path[len("parameter_optimization/"):]
+            elif "/" not in path:
+                path = "legacy/" + path
+            return renamed_paths.get(path, path)
+
+        # Normalize BOTH sides to current spelling BEFORE comparing hashes.
+        # Comparing raw keys first would mark every identity file as changed
+        # purely because the restructuring renamed it, drowning a real content
+        # change in noise.
+        old_files = {_current_spelling(k): v for k, v in old_files.items()}
+        new_files = {_current_spelling(k): v for k, v in new_files.items()}
+        changed = sorted(k for k in set(old_files) | set(new_files)
+                         if old_files.get(k) != new_files.get(k))
     # A cold cache is only a finding if it is UNEXPLAINED. The decision to keep
     # it cold is recorded, together with which identity files were expected to
     # change; the numbers are still printed, but a NEW file entering that set is

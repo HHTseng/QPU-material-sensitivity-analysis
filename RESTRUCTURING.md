@@ -249,3 +249,44 @@ The gate asserted a property the code did not have, so the fix is in the code,
 not the test: the previous `labelled_at` is preserved when nothing else about the
 notice changed, and a genuine change still re-stamps. Reconcile is now actually
 idempotent, and the suite passed 194/194 three times consecutively.
+
+## A regression the restructuring introduced, found by re-running the audit
+
+Reproducing the earlier findings under the new layout surfaced one problem that
+the test suites did not catch, because no gate covers it: `stage4_audit.py`
+dropped from **15/15, 0 warnings** to **14/15, 1 warning**.
+
+    [WARN] the cold cache is the accepted, recorded one (no NEW identity file
+    changed) -- UNEXPECTED identity change in sensitivity_utils.py,
+    interface_transmission.py, material_catalog.yaml, ... (13 files)
+    -- not covered by any recorded decision
+
+Confirmed against a sparse `git worktree` at `HEAD~1`, whose audit passes
+15/15 — so this was caused by the restructuring, not inherited.
+
+**Cause.** Stored code fingerprints are immutable: a historical trial records its
+identity files as they were spelled when it ran, under `parameter_optimization/`
+or bare at the repository root. The restructuring moved all of them into
+`legacy/`. The audit compared raw keys, so every identity file appeared under two
+names and all of them looked changed. Rewriting
+`accepted_changed_identity_files` to the new spellings — done during phase 1 —
+made it worse: the recorded decision could then never match a stored fingerprint
+again.
+
+This is precisely the risk the blueprint's R0 names: *"a cleanup that merely
+moves files can accidentally break ledger paths, drop invalidation labels, or
+make a partial run look complete."* The invalidation label was being dropped.
+
+**Fix.** `stage4_audit.py` now normalizes both sides to current spelling
+*before* comparing hashes, via `_current_spelling()`. Normalizing afterwards is
+not enough — it still forces every renamed file into the changed set, which left
+`sensitivity_utils.py` flagged even though its content never changed. With the
+comparison done on normalized keys, only genuine content changes appear, and the
+reported list is byte-identical to the baseline's.
+
+Re-verified: audit 15/15 with 0 warnings, `tests_stage4.py` 194/194,
+`material_scan` 6/6.
+
+**Worth noting for future moves:** the test suites were green throughout this
+regression. Renaming anything that appears in a stored fingerprint needs the
+audit run as well, not just the suites.
