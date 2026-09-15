@@ -1074,7 +1074,7 @@ def evaluate(definition, candidate, event_count=None, seed_bank_id=None, databas
     n_replicas = int(definition.fixed["n_replicas"])
 
     template = os.environ.get("SENSITIVITY_MACRO_TEMPLATE",
-                              os.path.join(REPO_ROOT, "sensitivity_template_beamOn1e6.mac"))
+                              os.path.join(REPO_ROOT, "legacy", "macros", "sensitivity_template_beamOn1e6.mac"))
     template_z = float(find_macro_value(template, "/main/gun/setPosition").split()[2])
     scenario = build_scenario(definition, template_z)
 

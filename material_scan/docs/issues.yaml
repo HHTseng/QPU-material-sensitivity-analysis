@@ -2,7 +2,7 @@ schema: material-scan-issues-1
 updated: 2026-09-14
 
 earlier_result_validity:
-  path: ../../parameter_optimization/stage4_invalidations.yaml
+  path: ../../legacy/stage4_invalidations.yaml
   policy: preserve read-only and inspect without schema changes
 
 open:
@@ -22,6 +22,17 @@ open:
     consequence: Do not begin a new property search until both checks pass.
 
 resolved:
+  - id: absolute-artifact-paths
+    resolved_at: 2026-09-15
+    statement: >
+      Ledger artifact paths were absolute and pinned the evidence directory's
+      name. `second-independent-copy` was suspended once, under explicit
+      instruction, to rename `parameter_optimization/` to `data/` and rewrite
+      407,089 stored paths to repository-relative form. Nothing was deleted or
+      untracked; every live ledger was backed up first and all four verify with
+      zero absolute paths remaining. The rule above is back in force.
+    tool: legacy/migrate_ledger_paths.py
+
   - id: strat512-live-state
     resolved_at: 2026-09-09T08:05:00-04:00
     statement: The experiment finished and has no running database row.

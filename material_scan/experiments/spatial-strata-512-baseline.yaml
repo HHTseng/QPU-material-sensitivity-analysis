@@ -37,7 +37,7 @@ constraints:
 
 sampling:
   kind: recorded-stratified
-  design_file: ../../parameter_optimization/results/stage4_strat_512.json
+  design_file: ../../data/results/stage4_strat_512.json
   replicas: 8
   seed:
     algorithm: historical-position-v1
@@ -80,5 +80,5 @@ build:
 
 provenance:
   historical_campaign: stage4_property_v1_strat512
-  historical_result: parameter_optimization/results/stage4_strat_512.json
+  historical_result: data/results/stage4_strat_512.json
   status: read-only reconstruction; not launchable

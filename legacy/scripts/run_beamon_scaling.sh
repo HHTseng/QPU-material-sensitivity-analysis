@@ -14,7 +14,7 @@
 # Designed to be run inside tmux and left alone:
 #
 #     tmux new -s beamon
-#     cd /home/htseng/Sensitivity_Analysis_HT/parameter_optimization
+#     cd /home/htseng/Sensitivity_Analysis_HT/legacy/scripts
 #     ./run_beamon_scaling.sh e7
 #     # detach with Ctrl-b d ; reattach with: tmux attach -t beamon
 #

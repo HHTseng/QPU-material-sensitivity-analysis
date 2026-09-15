@@ -139,7 +139,7 @@ G4CMPBIN = expand_path(
 )
 MAIN_EXE = expand_path(os.environ.get("SENSITIVITY_MAIN_EXE", os.path.join(G4CMPBIN, "Main")))
 RUN_WORKDIR = expand_path(os.environ.get("SENSITIVITY_RUN_WORKDIR", SCRIPT_DIR))
-MACRO_TEMPLATE = os.environ.get("SENSITIVITY_MACRO_TEMPLATE", os.path.join(SCRIPT_DIR, "sensitivity_template_beamOn1e6.mac"),)
+MACRO_TEMPLATE = os.environ.get("SENSITIVITY_MACRO_TEMPLATE", os.path.join(SCRIPT_DIR, "macros", "sensitivity_template_beamOn1e6.mac"),)
 CONFIG_TEMPLATE = os.path.join(G4CMP_SOURCE_CRYSTALMAPS, "Si", "config.txt")
 LATTICE_MATERIAL = "Si"
 
@@ -262,7 +262,7 @@ THREAD_ENV_VARS = (
     "NUMEXPR_NUM_THREADS",
 )
 
-# Match parameter_optimization/SoundfromTensor.py: average Christoffel-mode
+# Match legacy/SoundfromTensor.py: average Christoffel-mode
 # velocities over approximately uniform Fibonacci-sphere directions. The
 # calculation is vectorized and cached because a 4-level Morris design repeats
 # the same C11/C12/C44 combinations many times.

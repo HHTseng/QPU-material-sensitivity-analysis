@@ -1,0 +1,778 @@
+{
+ "baseline": 0.000392,
+ "campaigns": [
+  {
+   "optimizer": "bo_gp",
+   "objective": "total_qps_per_primary",
+   "campaign": "stage4_property_v1_bench_bo_gp_s1",
+   "fidelity": "S",
+   "events_per_candidate": 4000000,
+   "n": 96,
+   "rejected": 4,
+   "failed": 6,
+   "events_used": 372000000,
+   "elapsed_h": 13.07325,
+   "best": 5.6e-05,
+   "best_se": 1.0911985546701782e-05,
+   "median": 0.00010825,
+   "p10": 7.625000000000001e-05,
+   "baseline_controls": [
+    {
+     "control_replica_id": "stage4_property_v1_bench_bo_gp_s1#control01",
+     "replica": 1,
+     "trial_id": "stage4_property_v1_bench_bo_gp_s1_14c8b5914eb3",
+     "status": "success",
+     "cached": false,
+     "wall_s": 90.1,
+     "host": "mimir.sdcc.bnl.gov",
+     "workers": 96,
+     "code_fingerprint": {
+      "git_revision": "67e5634b287895cbc35120a00bdc5b579b26896d-dirty",
+      "main_exe_sha256": "83607e6cde7b05eb7ef76f782af8b76dbcc0c41ef3309e0aeea49802dc1a0b00"
+     },
+     "timestamp": 1788496140.835803,
+     "value": 0.000392,
+     "se": 2.195124467671806e-05,
+     "drift_vs_first": 0.0,
+     "spread_cv": 0.0
+    },
+    {
+     "control_replica_id": "stage4_property_v1_bench_bo_gp_s1#control02",
+     "replica": 2,
+     "trial_id": "stage4_property_v1_bench_bo_gp_s1_14c8b5914eb3",
+     "status": "success",
+     "cached": false,
+     "wall_s": 58.6,
+     "host": "mimir.sdcc.bnl.gov",
+     "workers": 96,
+     "code_fingerprint": {
+      "git_revision": "67e5634b287895cbc35120a00bdc5b579b26896d-dirty",
+      "main_exe_sha256": "83607e6cde7b05eb7ef76f782af8b76dbcc0c41ef3309e0aeea49802dc1a0b00"
+     },
+     "timestamp": 1788512958.5790827,
+     "value": 0.000392,
+     "se": 2.195124467671806e-05,
+     "drift_vs_first": 0.0,
+     "spread_cv": 0.0
+    },
+    {
+     "control_replica_id": "stage4_property_v1_bench_bo_gp_s1#control03",
+     "replica": 3,
+     "trial_id": "stage4_property_v1_bench_bo_gp_s1_14c8b5914eb3",
+     "status": "success",
+     "cached": false,
+     "wall_s": 58.5,
+     "host": "mimir.sdcc.bnl.gov",
+     "workers": 96,
+     "code_fingerprint": {
+      "git_revision": "67e5634b287895cbc35120a00bdc5b579b26896d-dirty",
+      "main_exe_sha256": "83607e6cde7b05eb7ef76f782af8b76dbcc0c41ef3309e0aeea49802dc1a0b00"
+     },
+     "timestamp": 1788525807.357552,
+     "value": 0.000392,
+     "se": 2.195124467671806e-05,
+     "drift_vs_first": 0.0,
+     "spread_cv": 0.0
+    },
+    {
+     "control_replica_id": "stage4_property_v1_bench_bo_gp_s1#control04",
+     "replica": 4,
+     "trial_id": "stage4_property_v1_bench_bo_gp_s1_14c8b5914eb3",
+     "status": "success",
+     "cached": false,
+     "wall_s": 43.6,
+     "host": "mimir.sdcc.bnl.gov",
+     "workers": 96,
+     "code_fingerprint": {
+      "git_revision": "67e5634b287895cbc35120a00bdc5b579b26896d-dirty",
+      "main_exe_sha256": "83607e6cde7b05eb7ef76f782af8b76dbcc0c41ef3309e0aeea49802dc1a0b00"
+     },
+     "timestamp": 1788533640.437157,
+     "value": 0.000392,
+     "se": 2.195124467671806e-05,
+     "drift_vs_first": 0.0,
+     "spread_cv": 0.0
+    }
+   ],
+   "baseline_control_values": [
+    0.000392,
+    0.000392,
+    0.000392,
+    0.000392
+   ],
+   "proposal_sources": {
+    "gp_ei": 69,
+    "sobol_init": 37
+   },
+   "ledger_status_counts": {
+    "incomplete_scenario_set": 10,
+    "success": 132,
+    "timeout": 1
+   },
+   "llm": null
+  },
+  {
+   "optimizer": "cmaes",
+   "objective": "total_qps_per_primary",
+   "campaign": "stage4_property_v1_bench_cmaes_s1",
+   "fidelity": "S",
+   "events_per_candidate": 4000000,
+   "n": 96,
+   "rejected": 0,
+   "failed": 1,
+   "events_used": 384000000,
+   "elapsed_h": 8.807277777777777,
+   "best": 5.3e-05,
+   "best_se": 1.260952021291849e-05,
+   "median": 0.0001635,
+   "p10": 9.05e-05,
+   "baseline_controls": [
+    {
+     "control_replica_id": "stage4_property_v1_bench_cmaes_s1#control01",
+     "replica": 1,
+     "trial_id": "stage4_property_v1_bench_bo_gp_s1_14c8b5914eb3",
+     "status": "success",
+     "cached": false,
+     "wall_s": 33.1,
+     "host": "mimir.sdcc.bnl.gov",
+     "workers": 96,
+     "code_fingerprint": {
+      "git_revision": "67e5634b287895cbc35120a00bdc5b579b26896d-dirty",
+      "main_exe_sha256": "83607e6cde7b05eb7ef76f782af8b76dbcc0c41ef3309e0aeea49802dc1a0b00"
+     },
+     "timestamp": 1788546965.0365899,
+     "value": 0.0003915,
+     "se": 2.1940666743352566e-05,
+     "drift_vs_first": 0.0,
+     "spread_cv": 0.0
+    },
+    {
+     "control_replica_id": "stage4_property_v1_bench_cmaes_s1#control02",
+     "replica": 2,
+     "trial_id": "stage4_property_v1_bench_bo_gp_s1_14c8b5914eb3",
+     "status": "success",
+     "cached": false,
+     "wall_s": 39.5,
+     "host": "mimir.sdcc.bnl.gov",
+     "workers": 96,
+     "code_fingerprint": {
+      "git_revision": "67e5634b287895cbc35120a00bdc5b579b26896d-dirty",
+      "main_exe_sha256": "83607e6cde7b05eb7ef76f782af8b76dbcc0c41ef3309e0aeea49802dc1a0b00"
+     },
+     "timestamp": 1788561979.9455624,
+     "value": 0.000392,
+     "se": 2.195124467671806e-05,
+     "drift_vs_first": 0.001277139208173722,
+     "spread_cv": 0.0009024974871557943
+    },
+    {
+     "control_replica_id": "stage4_property_v1_bench_cmaes_s1#control03",
+     "replica": 3,
+     "trial_id": "stage4_property_v1_bench_bo_gp_s1_14c8b5914eb3",
+     "status": "success",
+     "cached": false,
+     "wall_s": 38.1,
+     "host": "mimir.sdcc.bnl.gov",
+     "workers": 96,
+     "code_fingerprint": {
+      "git_revision": "67e5634b287895cbc35120a00bdc5b579b26896d-dirty",
+      "main_exe_sha256": "83607e6cde7b05eb7ef76f782af8b76dbcc0c41ef3309e0aeea49802dc1a0b00"
+     },
+     "timestamp": 1788566156.8621714,
+     "value": 0.000392,
+     "se": 2.1938224957496318e-05,
+     "drift_vs_first": 0.001277139208173722,
+     "spread_cv": 0.0007367293949676391
+    },
+    {
+     "control_replica_id": "stage4_property_v1_bench_cmaes_s1#control04",
+     "replica": 4,
+     "trial_id": "stage4_property_v1_bench_bo_gp_s1_14c8b5914eb3",
+     "status": "success",
+     "cached": false,
+     "wall_s": 39.3,
+     "host": "mimir.sdcc.bnl.gov",
+     "workers": 96,
+     "code_fingerprint": {
+      "git_revision": "67e5634b287895cbc35120a00bdc5b579b26896d-dirty",
+      "main_exe_sha256": "83607e6cde7b05eb7ef76f782af8b76dbcc0c41ef3309e0aeea49802dc1a0b00"
+     },
+     "timestamp": 1788574059.0523546,
+     "value": 0.000395,
+     "se": 2.2489680173041907e-05,
+     "drift_vs_first": 0.008939974457215916,
+     "spread_cv": 0.004077124633831836
+    }
+   ],
+   "baseline_control_values": [
+    0.0003915,
+    0.000392,
+    0.000392,
+    0.000395
+   ],
+   "proposal_sources": {
+    "cma_generation": 96,
+    "cma_incumbent_reeval": 1
+   },
+   "ledger_status_counts": {
+    "incomplete_scenario_set": 1,
+    "success": 96
+   },
+   "llm": null
+  },
+  {
+   "optimizer": "random",
+   "objective": "total_qps_per_primary",
+   "campaign": "stage4_property_v1_bench_random_s1",
+   "fidelity": "S",
+   "events_per_candidate": 4000000,
+   "n": 96,
+   "rejected": 0,
+   "failed": 4,
+   "events_used": 384000000,
+   "elapsed_h": 6.6055277777777786,
+   "best": 0.000102,
+   "best_se": 1.3833189901723422e-05,
+   "median": 0.00040175,
+   "p10": 0.0001885,
+   "baseline_controls": [
+    {
+     "control_replica_id": "stage4_property_v1_bench_random_s1#control01",
+     "replica": 1,
+     "trial_id": "stage4_property_v1_bench_bo_gp_s1_14c8b5914eb3",
+     "status": "success",
+     "cached": false,
+     "wall_s": 72.9,
+     "host": "mimir.sdcc.bnl.gov",
+     "workers": 96,
+     "code_fingerprint": {
+      "git_revision": "67e5634b287895cbc35120a00bdc5b579b26896d-dirty",
+      "main_exe_sha256": "83607e6cde7b05eb7ef76f782af8b76dbcc0c41ef3309e0aeea49802dc1a0b00"
+     },
+     "timestamp": 1788575455.8739676,
+     "value": 0.0003915,
+     "se": 2.196019125599775e-05,
+     "drift_vs_first": 0.0,
+     "spread_cv": 0.0
+    },
+    {
+     "control_replica_id": "stage4_property_v1_bench_random_s1#control02",
+     "replica": 2,
+     "trial_id": "stage4_property_v1_bench_bo_gp_s1_14c8b5914eb3",
+     "status": "success",
+     "cached": false,
+     "wall_s": 99.5,
+     "host": "mimir.sdcc.bnl.gov",
+     "workers": 96,
+     "code_fingerprint": {
+      "git_revision": "67e5634b287895cbc35120a00bdc5b579b26896d-dirty",
+      "main_exe_sha256": "83607e6cde7b05eb7ef76f782af8b76dbcc0c41ef3309e0aeea49802dc1a0b00"
+     },
+     "timestamp": 1788576617.7426977,
+     "value": 0.000392,
+     "se": 2.195124467671806e-05,
+     "drift_vs_first": 0.001277139208173722,
+     "spread_cv": 0.0009024974871557943
+    },
+    {
+     "control_replica_id": "stage4_property_v1_bench_random_s1#control03",
+     "replica": 3,
+     "trial_id": "stage4_property_v1_bench_bo_gp_s1_14c8b5914eb3",
+     "status": "success",
+     "cached": false,
+     "wall_s": 61.6,
+     "host": "mimir.sdcc.bnl.gov",
+     "workers": 96,
+     "code_fingerprint": {
+      "git_revision": "67e5634b287895cbc35120a00bdc5b579b26896d-dirty",
+      "main_exe_sha256": "83607e6cde7b05eb7ef76f782af8b76dbcc0c41ef3309e0aeea49802dc1a0b00"
+     },
+     "timestamp": 1788578580.004733,
+     "value": 0.000391,
+     "se": 2.194961763415742e-05,
+     "drift_vs_first": -0.0012771392081735837,
+     "spread_cv": 0.0012771392081736528
+    },
+    {
+     "control_replica_id": "stage4_property_v1_bench_random_s1#control04",
+     "replica": 4,
+     "trial_id": "stage4_property_v1_bench_bo_gp_s1_14c8b5914eb3",
+     "status": "success",
+     "cached": false,
+     "wall_s": 43.1,
+     "host": "mimir.sdcc.bnl.gov",
+     "workers": 96,
+     "code_fingerprint": {
+      "git_revision": "67e5634b287895cbc35120a00bdc5b579b26896d-dirty",
+      "main_exe_sha256": "83607e6cde7b05eb7ef76f782af8b76dbcc0c41ef3309e0aeea49802dc1a0b00"
+     },
+     "timestamp": 1788592094.9372609,
+     "value": 0.0003925,
+     "se": 2.197157254271983e-05,
+     "drift_vs_first": 0.002554278416347444,
+     "spread_cv": 0.001647727439356471
+    }
+   ],
+   "baseline_control_values": [
+    0.0003915,
+    0.000392,
+    0.000391,
+    0.0003925
+   ],
+   "proposal_sources": {
+    "random_baseline": 100
+   },
+   "ledger_status_counts": {
+    "incomplete_scenario_set": 4,
+    "success": 96
+   },
+   "llm": null
+  },
+  {
+   "optimizer": "sobol",
+   "objective": "total_qps_per_primary",
+   "campaign": "stage4_property_v1_bench_sobol_s1",
+   "fidelity": "S",
+   "events_per_candidate": 4000000,
+   "n": 96,
+   "rejected": 0,
+   "failed": 3,
+   "events_used": 312000000,
+   "elapsed_h": 4.496472222222222,
+   "best": 7.35e-05,
+   "best_se": 8.321658488546619e-06,
+   "median": 0.000362,
+   "p10": 0.00018525,
+   "baseline_controls": [
+    {
+     "control_replica_id": "stage4_property_v1_bench_sobol_s1#control01",
+     "replica": 1,
+     "trial_id": "stage4_property_v1_bench_bo_gp_s1_14c8b5914eb3",
+     "status": "success",
+     "cached": false,
+     "wall_s": 48.3,
+     "host": "mimir.sdcc.bnl.gov",
+     "workers": 96,
+     "code_fingerprint": {
+      "git_revision": "67e5634b287895cbc35120a00bdc5b579b26896d-dirty",
+      "main_exe_sha256": "83607e6cde7b05eb7ef76f782af8b76dbcc0c41ef3309e0aeea49802dc1a0b00"
+     },
+     "timestamp": 1788598565.672756,
+     "value": 0.0003915,
+     "se": 2.196019125599775e-05,
+     "drift_vs_first": 0.0,
+     "spread_cv": 0.0
+    },
+    {
+     "control_replica_id": "stage4_property_v1_bench_sobol_s1#control02",
+     "replica": 2,
+     "trial_id": "stage4_property_v1_bench_bo_gp_s1_14c8b5914eb3",
+     "status": "success",
+     "cached": false,
+     "wall_s": 49.8,
+     "host": "mimir.sdcc.bnl.gov",
+     "workers": 96,
+     "code_fingerprint": {
+      "git_revision": "67e5634b287895cbc35120a00bdc5b579b26896d-dirty",
+      "main_exe_sha256": "83607e6cde7b05eb7ef76f782af8b76dbcc0c41ef3309e0aeea49802dc1a0b00"
+     },
+     "timestamp": 1788599522.066032,
+     "value": 0.000394,
+     "se": 2.247856121476004e-05,
+     "drift_vs_first": 0.0063856960408684715,
+     "spread_cv": 0.0045009979706336686
+    },
+    {
+     "control_replica_id": "stage4_property_v1_bench_sobol_s1#control03",
+     "replica": 3,
+     "trial_id": "stage4_property_v1_bench_bo_gp_s1_14c8b5914eb3",
+     "status": "success",
+     "cached": false,
+     "wall_s": 45.5,
+     "host": "mimir.sdcc.bnl.gov",
+     "workers": 96,
+     "code_fingerprint": {
+      "git_revision": "67e5634b287895cbc35120a00bdc5b579b26896d-dirty",
+      "main_exe_sha256": "83607e6cde7b05eb7ef76f782af8b76dbcc0c41ef3309e0aeea49802dc1a0b00"
+     },
+     "timestamp": 1788603200.9858835,
+     "value": 0.0003925,
+     "se": 2.197157254271983e-05,
+     "drift_vs_first": 0.002554278416347444,
+     "spread_cv": 0.0032045137670928528
+    },
+    {
+     "control_replica_id": "stage4_property_v1_bench_sobol_s1#control04",
+     "replica": 4,
+     "trial_id": "stage4_property_v1_bench_bo_gp_s1_14c8b5914eb3",
+     "status": "success",
+     "cached": false,
+     "wall_s": 35.7,
+     "host": "mimir.sdcc.bnl.gov",
+     "workers": 96,
+     "code_fingerprint": {
+      "git_revision": "67e5634b287895cbc35120a00bdc5b579b26896d-dirty",
+      "main_exe_sha256": "83607e6cde7b05eb7ef76f782af8b76dbcc0c41ef3309e0aeea49802dc1a0b00"
+     },
+     "timestamp": 1788613169.8402686,
+     "value": 0.000392,
+     "se": 2.195124467671806e-05,
+     "drift_vs_first": 0.001277139208173722,
+     "spread_cv": 0.0027519068783048266
+    }
+   ],
+   "baseline_control_values": [
+    0.0003915,
+    0.000394,
+    0.0003925,
+    0.000392
+   ],
+   "proposal_sources": {
+    "sobol_init": 99
+   },
+   "ledger_status_counts": {
+    "incomplete_scenario_set": 2,
+    "success": 78
+   },
+   "llm": null
+  }
+ ],
+ "promote": [
+  {
+   "optimizer": "cmaes",
+   "trial_id": "stage4_property_v1_bench_cmaes_s1_eeabcb9bc1ab",
+   "value": 5.3e-05,
+   "se": 1.260952021291849e-05,
+   "raw": 212.0,
+   "cached": false,
+   "resumed": false,
+   "point": {
+    "topfilm_vsound": 4.426744993654007,
+    "topfilm_gap": 5.000000000000004e-05,
+    "topfilm_ph_lifetime": 0.0010000000000000002,
+    "topfilm_density": 5127.714136470502,
+    "bot_vsound": 3.2724935102186983,
+    "bot_gap_thres": 5e-05,
+    "bot_ph_lifetime": 0.5356730429044759,
+    "bot_density": 10997.054652457831,
+    "sub_c11": 417.9038623131187,
+    "sub_c12": 120.25969708885681,
+    "sub_c44": 200.0,
+    "sub_scat": 9.99999999999994e-45,
+    "sub_decay": 1.4490324231659255e-56,
+    "sub_decayTT": 0.8868547644949124,
+    "temperature": 0.02171884128805414,
+    "lattice_deg": 16.85502033243571,
+    "sub_lattice_a": 5.431,
+    "miller": [
+     1,
+     1,
+     2
+    ]
+   }
+  },
+  {
+   "optimizer": "bo_gp",
+   "trial_id": "stage4_property_v1_bench_bo_gp_s1_3110259ca1f1",
+   "value": 5.6e-05,
+   "se": 1.0911985546701782e-05,
+   "raw": 224.0,
+   "cached": false,
+   "resumed": false,
+   "point": {
+    "topfilm_vsound": 6.0,
+    "topfilm_gap": 5.000000000000004e-05,
+    "topfilm_ph_lifetime": 0.0010000000000000002,
+    "topfilm_density": 2000.0,
+    "bot_vsound": 1.5,
+    "bot_gap_thres": 0.0001612115813656486,
+    "bot_ph_lifetime": 1.276952855707658,
+    "bot_density": 22000.0,
+    "sub_c11": 450.0,
+    "sub_c12": 0.0,
+    "sub_c44": 200.0,
+    "sub_scat": 4.2889534630625157e-44,
+    "sub_decay": 5.0000000000000355e-54,
+    "sub_decayTT": 0.5,
+    "temperature": 0.0,
+    "lattice_deg": 0.0,
+    "sub_lattice_a": 5.431,
+    "miller": [
+     1,
+     1,
+     1
+    ]
+   }
+  },
+  {
+   "optimizer": "cmaes",
+   "trial_id": "stage4_property_v1_bench_cmaes_s1_8304ed231044",
+   "value": 5.85e-05,
+   "se": 1.16940155635265e-05,
+   "raw": 234.0,
+   "cached": false,
+   "resumed": false,
+   "point": {
+    "topfilm_vsound": 6.0,
+    "topfilm_gap": 5.000000000000004e-05,
+    "topfilm_ph_lifetime": 0.004120387338247844,
+    "topfilm_density": 2328.8638839002256,
+    "bot_vsound": 4.278743613171995,
+    "bot_gap_thres": 0.00019127920743058647,
+    "bot_ph_lifetime": 0.5,
+    "bot_density": 10109.874418579515,
+    "sub_c11": 450.0,
+    "sub_c12": 27.59950896840552,
+    "sub_c44": 189.91743714475336,
+    "sub_scat": 4.354166284860986e-44,
+    "sub_decay": 4.9999999999999657e-57,
+    "sub_decayTT": 0.8452913778061294,
+    "temperature": 0.03244873255063759,
+    "lattice_deg": 0.0,
+    "sub_lattice_a": 5.431,
+    "miller": [
+     1,
+     2,
+     2
+    ]
+   }
+  },
+  {
+   "optimizer": "cmaes",
+   "trial_id": "stage4_property_v1_bench_cmaes_s1_a2f4c4d35164",
+   "value": 6.15e-05,
+   "se": 1.5509213851311557e-05,
+   "raw": 246.0,
+   "cached": false,
+   "resumed": false,
+   "point": {
+    "topfilm_vsound": 6.0,
+    "topfilm_gap": 5.000000000000004e-05,
+    "topfilm_ph_lifetime": 0.005604957088728648,
+    "topfilm_density": 4821.584616393442,
+    "bot_vsound": 1.5,
+    "bot_gap_thres": 5e-05,
+    "bot_ph_lifetime": 0.8669744971438371,
+    "bot_density": 5163.8952622045035,
+    "sub_c11": 396.85352051751596,
+    "sub_c12": 162.54618135807306,
+    "sub_c44": 171.2408040494973,
+    "sub_scat": 9.99999999999994e-45,
+    "sub_decay": 2.870639242519316e-56,
+    "sub_decayTT": 0.8349412686070117,
+    "temperature": 0.009213755665795116,
+    "lattice_deg": 45.21670055851903,
+    "sub_lattice_a": 5.431,
+    "miller": [
+     1,
+     2,
+     3
+    ]
+   }
+  },
+  {
+   "optimizer": "bo_gp",
+   "trial_id": "stage4_property_v1_bench_bo_gp_s1_2471420f691a",
+   "value": 6.3e-05,
+   "se": 1.40331240794262e-05,
+   "raw": 252.0,
+   "cached": false,
+   "resumed": false,
+   "point": {
+    "topfilm_vsound": 6.0,
+    "topfilm_gap": 5.000000000000004e-05,
+    "topfilm_ph_lifetime": 0.0010000000000000002,
+    "topfilm_density": 2000.0,
+    "bot_vsound": 1.5,
+    "bot_gap_thres": 0.00017497378082178693,
+    "bot_ph_lifetime": 0.8198239587376819,
+    "bot_density": 22000.0,
+    "sub_c11": 450.0,
+    "sub_c12": 0.0,
+    "sub_c44": 200.0,
+    "sub_scat": 5.009358808782096e-44,
+    "sub_decay": 5.0000000000000355e-54,
+    "sub_decayTT": 0.5,
+    "temperature": 0.0,
+    "lattice_deg": 0.0,
+    "sub_lattice_a": 5.431,
+    "miller": [
+     1,
+     1,
+     1
+    ]
+   }
+  },
+  {
+   "optimizer": "cmaes",
+   "trial_id": "stage4_property_v1_bench_cmaes_s1_5c1e62ff8466",
+   "value": 6.55e-05,
+   "se": 1.2439855304624728e-05,
+   "raw": 262.0,
+   "cached": false,
+   "resumed": false,
+   "point": {
+    "topfilm_vsound": 6.0,
+    "topfilm_gap": 0.001670366222399775,
+    "topfilm_ph_lifetime": 0.003337436812440808,
+    "topfilm_density": 15010.886904864794,
+    "bot_vsound": 3.174554206770729,
+    "bot_gap_thres": 0.00012981738953147298,
+    "bot_ph_lifetime": 0.5,
+    "bot_density": 7184.383239418074,
+    "sub_c11": 250.92689126211246,
+    "sub_c12": 0.0,
+    "sub_c44": 5.0,
+    "sub_scat": 9.99999999999994e-45,
+    "sub_decay": 6.129072648276415e-56,
+    "sub_decayTT": 0.8174135229343212,
+    "temperature": 0.028047725371660323,
+    "lattice_deg": 3.8158038553219846,
+    "sub_lattice_a": 5.431,
+    "miller": [
+     1,
+     2,
+     3
+    ]
+   }
+  },
+  {
+   "optimizer": "bo_gp",
+   "trial_id": "stage4_property_v1_bench_bo_gp_s1_dcade8e46130",
+   "value": 6.7e-05,
+   "se": 1.2328828005937951e-05,
+   "raw": 268.0,
+   "cached": false,
+   "resumed": false,
+   "point": {
+    "topfilm_vsound": 6.0,
+    "topfilm_gap": 5.000000000000004e-05,
+    "topfilm_ph_lifetime": 0.0010000000000000002,
+    "topfilm_density": 2000.0,
+    "bot_vsound": 1.5,
+    "bot_gap_thres": 0.00015768427516583985,
+    "bot_ph_lifetime": 0.5,
+    "bot_density": 22000.0,
+    "sub_c11": 450.0,
+    "sub_c12": 0.0,
+    "sub_c44": 200.0,
+    "sub_scat": 8.68765734499504e-44,
+    "sub_decay": 5.0000000000000355e-54,
+    "sub_decayTT": 0.5,
+    "temperature": 0.0,
+    "lattice_deg": 0.0,
+    "sub_lattice_a": 5.431,
+    "miller": [
+     1,
+     1,
+     1
+    ]
+   }
+  },
+  {
+   "optimizer": "cmaes",
+   "trial_id": "stage4_property_v1_bench_cmaes_s1_5c641d3ec466",
+   "value": 6.8e-05,
+   "se": 1.3912994953331527e-05,
+   "raw": 272.0,
+   "cached": false,
+   "resumed": false,
+   "point": {
+    "topfilm_vsound": 6.0,
+    "topfilm_gap": 5.000000000000004e-05,
+    "topfilm_ph_lifetime": 0.013767253424684092,
+    "topfilm_density": 3370.514003777772,
+    "bot_vsound": 2.343400978450697,
+    "bot_gap_thres": 0.00019968754986152988,
+    "bot_ph_lifetime": 0.5,
+    "bot_density": 12614.637955914868,
+    "sub_c11": 308.9450059185578,
+    "sub_c12": 0.0,
+    "sub_c44": 200.0,
+    "sub_scat": 4.0555124198680387e-44,
+    "sub_decay": 1.0556258617963257e-55,
+    "sub_decayTT": 0.8522542146862989,
+    "temperature": 0.00039756186869754906,
+    "lattice_deg": 45.513891585760426,
+    "sub_lattice_a": 5.431,
+    "miller": [
+     1,
+     1,
+     2
+    ]
+   }
+  },
+  {
+   "optimizer": "bo_gp",
+   "trial_id": "stage4_property_v1_bench_bo_gp_s1_631d204462cb",
+   "value": 7.05e-05,
+   "se": 1.3094437204946446e-05,
+   "raw": 282.0,
+   "cached": false,
+   "resumed": false,
+   "point": {
+    "topfilm_vsound": 6.0,
+    "topfilm_gap": 5.000000000000004e-05,
+    "topfilm_ph_lifetime": 0.0010000000000000002,
+    "topfilm_density": 2000.0,
+    "bot_vsound": 1.5,
+    "bot_gap_thres": 0.00019927904363044132,
+    "bot_ph_lifetime": 1.03980200588949,
+    "bot_density": 22000.0,
+    "sub_c11": 450.0,
+    "sub_c12": 0.0,
+    "sub_c44": 200.0,
+    "sub_scat": 4.4344827013229974e-44,
+    "sub_decay": 5.0000000000000355e-54,
+    "sub_decayTT": 0.5,
+    "temperature": 0.0,
+    "lattice_deg": 0.0,
+    "sub_lattice_a": 5.431,
+    "miller": [
+     0,
+     1,
+     1
+    ]
+   }
+  },
+  {
+   "optimizer": "bo_gp",
+   "trial_id": "stage4_property_v1_bench_bo_gp_s1_739efadde57c",
+   "value": 7.2e-05,
+   "se": 1.2112567263560839e-05,
+   "raw": 288.0,
+   "cached": false,
+   "resumed": false,
+   "point": {
+    "topfilm_vsound": 6.0,
+    "topfilm_gap": 5.000000000000004e-05,
+    "topfilm_ph_lifetime": 0.0010000000000000002,
+    "topfilm_density": 2000.0,
+    "bot_vsound": 1.5,
+    "bot_gap_thres": 0.0001558932562780814,
+    "bot_ph_lifetime": 0.5,
+    "bot_density": 22000.0,
+    "sub_c11": 450.0,
+    "sub_c12": 0.0,
+    "sub_c44": 200.0,
+    "sub_scat": 2.9279367340869916e-44,
+    "sub_decay": 5.0000000000000355e-54,
+    "sub_decayTT": 0.5,
+    "temperature": 0.0,
+    "lattice_deg": 0.0,
+    "sub_lattice_a": 5.431,
+    "miller": [
+     0,
+     1,
+     3
+    ]
+   }
+  }
+ ],
+ "v2_reference": {
+  "Si/Nb/Cu (v2 baseline)": 0.00039,
+  "Ge/Nb/Cu (v2 best)": 0.0002494,
+  "GaAs/Nb/Cu": 0.0002686,
+  "Si/Ta/Au (v2 worst)": 0.00107
+ }
+}

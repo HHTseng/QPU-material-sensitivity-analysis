@@ -12,7 +12,7 @@ Commented-out entries are supported commands that are not independently
 swept. Fixed commands are enforced through FIXED_MACRO_COMMANDS and
 FIXED_CONFIG_COMMANDS so a template cannot silently override them.
 
-This file implements parameter_optimization/parameter_set.txt. The current
+This file implements legacy/parameter_set.txt. The current
 runner still uses a Si Geant4 substrate (rho=2329 kg/m^3). Consequently,
 substrate vsound/vtrans are dependent values derived by Stage 1 from the
 sampled cubic stiffness tensor and that fixed density. The three interface
@@ -162,7 +162,7 @@ G4CMP_params = [
 ]
 
 # Fixed (non-swept) overrides applied by Stage 1 regardless of the selected
-# macro template. Values come from parameter_optimization/parameter_set.txt.
+# macro template. Values come from legacy/parameter_set.txt.
 FIXED_MACRO_COMMANDS = (
     # --- Injection scenario (energy protocol, adopted 2026-08-12) -------------
     # Gun energy 10 meV and minEPhonons 38.2 ueV replace the previous

@@ -104,6 +104,48 @@ CREATE INDEX IF NOT EXISTS idx_subruns_status ON sub_runs(trial_id, status);
 """
 
 
+# ---------------------------------------------------------------------------
+# Artifact paths are stored REPOSITORY-RELATIVE (e.g. "data/runs/...").
+# They were absolute before 2026-09-14, which pinned the evidence directory's
+# name and made a checkout non-portable. They are resolved to absolute paths on
+# the way out and relativized on the way in, so every caller still sees absolute
+# paths and nothing downstream had to change. Absolute values already stored are
+# passed through untouched, so a part-migrated ledger still reads correctly.
+# ---------------------------------------------------------------------------
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PATH_COLUMNS = ("run_dir", "macro", "hits_file", "done_marker")
+
+
+def resolve_artifact_path(value, repo_root=REPO_ROOT):
+    """Repository-relative path -> absolute. Absolute and empty pass through."""
+    if not isinstance(value, str) or not value or os.path.isabs(value):
+        return value
+    return os.path.join(repo_root, value)
+
+
+def relativize_artifact_path(value, repo_root=REPO_ROOT):
+    """Absolute path inside the repository -> repository-relative."""
+    if not isinstance(value, str) or not value or not os.path.isabs(value):
+        return value
+    prefix = repo_root.rstrip(os.sep) + os.sep
+    return value[len(prefix):] if value.startswith(prefix) else value
+
+
+def _resolved(row):
+    """sqlite3.Row -> dict with artifact paths made absolute."""
+    if row is None:
+        return None
+    out = dict(row)
+    for key in PATH_COLUMNS:
+        if key in out:
+            out[key] = resolve_artifact_path(out[key])
+    return out
+
+
+def _resolved_all(rows):
+    return [_resolved(r) for r in rows]
+
+
 def compute_cache_key(definition_hash, code_fingerprint, candidate, derived,
                       event_count, events_total, scenario, seed_bank_id,
                       control_replica_id=None):
@@ -393,13 +435,13 @@ class Database:
     # -- lookup -------------------------------------------------------------
     def find_by_cache_key(self, cache_key):
         cur = self.conn.execute("SELECT * FROM trials WHERE cache_key = ?", (cache_key,))
-        return cur.fetchone()
+        return _resolved(cur.fetchone())
 
     def sub_runs(self, trial_id):
         cur = self.conn.execute(
             "SELECT * FROM sub_runs WHERE trial_id = ? ORDER BY replica, position",
             (trial_id,))
-        return cur.fetchall()
+        return _resolved_all(cur.fetchall())
 
     def incomplete_sub_runs(self, trial_id):
         """Sub-runs that still need to run. Resume reruns exactly these."""
@@ -407,7 +449,7 @@ class Database:
             "SELECT * FROM sub_runs WHERE trial_id = ? AND status NOT IN (?, ?, ?) "
             "ORDER BY replica, position",
             (trial_id, STATUS_SUCCESS, STATUS_SUCCESS_ZERO, STATUS_TEARDOWN_SEGV))
-        return cur.fetchall()
+        return _resolved_all(cur.fetchall())
 
     # -- planning -----------------------------------------------------------
     def plan_trial(self, trial_id, campaign_id, cache_key, definition_hash,
@@ -435,7 +477,7 @@ class Database:
                  json.dumps(derived, sort_keys=True), event_count, events_total,
                  events_per_sub_run, n_positions, n_replicas,
                  json.dumps(scenario, sort_keys=True), seed_bank_id,
-                 STATUS_PLANNED, run_dir, now, now),
+                 STATUS_PLANNED, relativize_artifact_path(run_dir), now, now),
             )
             if simulation_identity_hash is not None:
                 self.conn.execute(
@@ -447,7 +489,9 @@ class Database:
                     "macro, hits_file, done_marker, status, updated_at) "
                     "VALUES (?,?,?,?,?,?,?,?,?)",
                     (trial_id, sr["replica"], sr["position_index"], sr.get("seed"),
-                     sr.get("macro"), sr.get("hits_file"), sr.get("done_marker"),
+                     relativize_artifact_path(sr.get("macro")),
+                     relativize_artifact_path(sr.get("hits_file")),
+                     relativize_artifact_path(sr.get("done_marker")),
                      STATUS_PLANNED, now),
                 )
 
@@ -652,7 +696,7 @@ class Database:
         if campaign_id:
             sql += " AND campaign_id = ?"
             args.append(campaign_id)
-        return self.conn.execute(sql, args).fetchall()
+        return _resolved_all(self.conn.execute(sql, args).fetchall())
 
     def has_column(self, table, column):
         """True if `table` carries `column` in this database as it stands."""
@@ -673,7 +717,7 @@ class Database:
             sql += " AND campaign_id = ?"
             args.append(campaign_id)
         sql += " ORDER BY created_at"
-        return self.conn.execute(sql, args).fetchall()
+        return _resolved_all(self.conn.execute(sql, args).fetchall())
 
     def summary(self, campaign_id=None):
         sql = "SELECT status, COUNT(*) AS n FROM trials"

@@ -27,7 +27,7 @@ calculation, optimizer, and reports so each part can be checked independently.
 The final material and macro rendering path is still being compared with the
 earlier implementation. For that reason, `python -m material_scan run` refuses
 to start Geant4. The temporary compatibility programs in
-`parameter_optimization/` remain available for controlled comparison studies;
+`legacy/` remain available for controlled comparison studies;
 they are not the starting point for a new production search.
 
 ## Commands

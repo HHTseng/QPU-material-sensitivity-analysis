@@ -24,7 +24,7 @@ from collections import defaultdict
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2] / "parameter_optimization"
+ROOT = Path(__file__).resolve().parents[2] / "data"
 RUNS = ROOT / "runs"
 DATABASES = (
     ROOT / "stage3_trials.sqlite",
@@ -98,7 +98,13 @@ def database_metadata() -> dict[str, dict[str, object]]:
         for row in connection.execute(query):
             if not row["hits_file"]:
                 continue
-            path = str(Path(row["hits_file"]).resolve())
+            stored = row["hits_file"]
+            # Ledger paths are repository-relative since 2026-09-14;
+            # resolving them against the CWD would silently miss every file.
+            path = Path(stored)
+            if not path.is_absolute():
+                path = ROOT.parent / stored
+            path = str(path.resolve())
             result[path] = dict(row)
         connection.close()
     return result

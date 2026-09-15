@@ -38,7 +38,7 @@ def probe(g4_name, lattice="Si", events=1, timeout=600):
     try:
         template = os.environ.get(
             "SENSITIVITY_MACRO_TEMPLATE",
-            os.path.join(REPO_ROOT, "sensitivity_template_beamOn1e6.mac"))
+            os.path.join(REPO_ROOT, "legacy", "macros", "sensitivity_template_beamOn1e6.mac"))
         with open(template) as handle:
             lines = handle.readlines()
         hits = os.path.join(workdir, "probe_hits.txt")

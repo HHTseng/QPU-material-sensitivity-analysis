@@ -18,6 +18,7 @@ __pycache__/
 backup_pre_mac_sync_*/
 
 # Secrets: never commit API keys
+legacy/.env
 .env
 *.env
 !.env.example
@@ -32,6 +33,7 @@ material_scan_data/
 # Locally retained outputs summarized by the checked files under material_scan/.
 material_scan/experiments/orientation-pilot/results.json
 material_scan/experiments/orientation-pilot/results.sqlite
-parameter_optimization/hit_diagnostics_20260914/
-parameter_optimization/hit_diagnostics_matplotlib_20260914/
+data/hit_diagnostics_*/
+# Local pre-migration ledger safety copies (the tracked .bak-* files remain).
+data/premigration_backup_*/
 parameter_optimization/runs/stage4_property_v1_orientation_pilot/

@@ -163,7 +163,7 @@ class Campaign:
             alloc = ST.neyman_allocation(a.stratified, weights, pilot_sd)
             template = os.environ.get(
                 "SENSITIVITY_MACRO_TEMPLATE",
-                os.path.join(TR.REPO_ROOT, "sensitivity_template_beamOn1e6.mac"))
+                os.path.join(TR.REPO_ROOT, "legacy", "macros", "sensitivity_template_beamOn1e6.mac"))
             tz = float(TR.find_macro_value(
                 template, "/main/gun/setPosition").split()[2])
             design = ST.build_design(f, alloc, tz)

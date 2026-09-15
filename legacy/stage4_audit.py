@@ -31,6 +31,8 @@ import time
 
 import yaml
 
+import experiment_database as EDB
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(HERE)
 for _p in (HERE, REPO_ROOT):
@@ -392,10 +394,10 @@ def check_code_identity(definition_path, database_path, registry_path=None):
         changed = sorted(k for k in set(old_files) | set(new_files)
                          if old_files.get(k) != new_files.get(k))
         renamed_paths = {
-            "parameter_optimization/stage3_" + "con" + "tract.py":
-                "parameter_optimization/experiment_definition.py",
-            "parameter_optimization/stage3_" + "led" + "ger.py":
-                "parameter_optimization/experiment_database.py",
+            "legacy/stage3_" + "con" + "tract.py":
+                "legacy/experiment_definition.py",
+            "legacy/stage3_" + "led" + "ger.py":
+                "legacy/experiment_database.py",
         }
         changed = sorted({renamed_paths.get(path, path) for path in changed})
     # A cold cache is only a finding if it is UNEXPLAINED. The decision to keep
@@ -470,7 +472,8 @@ def _liveness(row, live_processes, conn, columns):
     # 2. Growing artifacts. The run writes hits files continuously, so a file
     #    modified recently proves work is happening even when the process is
     #    invisible and the row has no heartbeat.
-    newest, nbytes = _artifact_activity(row["run_dir"])
+    newest, nbytes = _artifact_activity(
+        EDB.resolve_artifact_path(row["run_dir"]))
     if newest is not None and (now - newest) < LIVENESS_STALE_SECONDS:
         return {"trial": short, "verdict": "alive",
                 "why": f"hits files growing ({nbytes / 1e6:.1f} MB, newest "

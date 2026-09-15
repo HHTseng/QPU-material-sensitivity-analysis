@@ -20,16 +20,17 @@
 # Overridable for testing: DATABASE, SNAPROOT, EVENTS_3200000000_TRIAL, EVENTS_3200000000_RESULT_JSON, AUDIT_CMD,
 # EVENTS_3200000000_OWNER_PID.
 set -uo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."            # legacy/ : code lives here
+DATA=${DATA:-../data}                    # frozen evidence
 
 PY=${PY:-$HOME/.conda/envs/G4CMP/bin/python}
-DATABASE=${DATABASE:-stage4_trials.sqlite}
+DATABASE=${DATABASE:-$DATA/stage4_trials.sqlite}
 FREEZE=$DATABASE.frozen
-SNAPROOT=${SNAPROOT:-snapshots}
+SNAPROOT=${SNAPROOT:-$DATA/snapshots}
 STAMP=${STAMP:-$(date '+%Y%m%d')}
 SNAPDIR=$SNAPROOT/pre_migration_$STAMP
 EVENTS_3200000000_TRIAL=${EVENTS_3200000000_TRIAL:-stage4_property_v1_confirm_3200000000_603969004eaa}
-EVENTS_3200000000_RESULT_JSON=${EVENTS_3200000000_RESULT_JSON:-results/stage4_confirmation_3200000000_primaries_best_random+elasticity_of_SiC.json}
+EVENTS_3200000000_RESULT_JSON=${EVENTS_3200000000_RESULT_JSON:-$DATA/results/stage4_confirmation_3200000000_primaries_best_random+elasticity_of_SiC.json}
 # What gets copied alongside the database. Overridable so the gate can snapshot
 # a disposable tree instead of the repository's real results directory.
 SNAP_ARTIFACTS=${SNAP_ARTIFACTS:-"results runs/stage4_property_v1_confirm_3200000000"}

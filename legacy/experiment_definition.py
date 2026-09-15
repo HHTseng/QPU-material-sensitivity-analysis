@@ -29,32 +29,32 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Files whose content defines "the same computation". A change to any of them
 # invalidates prior trials, so they are hashed into every cache key.
 CODE_IDENTITY_FILES = (
-    "stage1_run_simulations.py",
-    "stage2_compute_QPs.py",
-    "sensitivity_params.py",
-    "sensitivity_utils.py",
-    "sensitivity_memguard.py",
-    "parameter_optimization/experiment_definition.py",
-    "parameter_optimization/experiment_database.py",
-    "parameter_optimization/stage3_trial_runner.py",
+    "legacy/stage1_run_simulations.py",
+    "legacy/stage2_compute_QPs.py",
+    "legacy/sensitivity_params.py",
+    "legacy/sensitivity_utils.py",
+    "legacy/sensitivity_memguard.py",
+    "legacy/experiment_definition.py",
+    "legacy/experiment_database.py",
+    "legacy/stage3_trial_runner.py",
     # Added 2026-08-21 (Stage 4). The factorial audit found these three missing:
     # changing a film lifetime in the catalog, or the interface model, or the
     # macro template changed the generated macro while leaving the cache payload
     # identical -- so a lifetime-bracket run could return nominal cached results.
-    "parameter_optimization/material_catalog.yaml",
-    "parameter_optimization/interface_transmission.py",
+    "legacy/material_catalog.yaml",
+    "legacy/interface_transmission.py",
     # Stage 4 property-space modules. Absent on a v2-only checkout, which is why
     # `code_fingerprint` tolerates a missing OPTIONAL file but not a required one.
-    "parameter_optimization/stage4_space.py",
-    "parameter_optimization/stage4_objectives.py",
+    "legacy/stage4_space.py",
+    "legacy/stage4_objectives.py",
 )
 
 # Files that may legitimately not exist (a Stage 3-only checkout). They are still
 # hashed when present, so adding one later changes the fingerprint -- which is
 # correct: the computation did change.
 OPTIONAL_IDENTITY_FILES = (
-    "parameter_optimization/stage4_space.py",
-    "parameter_optimization/stage4_objectives.py",
+    "legacy/stage4_space.py",
+    "legacy/stage4_objectives.py",
 )
 
 REQUIRED_SECTIONS = ("fixed", "decision", "derived")
@@ -248,7 +248,7 @@ class Definition:
                  for name in CODE_IDENTITY_FILES}
         template = os.environ.get(
             "SENSITIVITY_MACRO_TEMPLATE",
-            os.path.join(REPO_ROOT, "sensitivity_template_beamOn1e6.mac"))
+            os.path.join(REPO_ROOT, "legacy", "macros", "sensitivity_template_beamOn1e6.mac"))
         files["macro_template:" + os.path.basename(template)] = _sha256_file(template)
         missing = [n for n, h in files.items()
                    if h is None and n not in OPTIONAL_IDENTITY_FILES]

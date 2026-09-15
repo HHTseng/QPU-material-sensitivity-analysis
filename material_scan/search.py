@@ -36,7 +36,7 @@ def _canonical(value: Any) -> str:
 
 
 def _historical_module():
-    historical_dir = Path(__file__).resolve().parents[1] / "parameter_optimization"
+    historical_dir = Path(__file__).resolve().parents[1] / "legacy"
     path = str(historical_dir)
     if path not in sys.path:
         sys.path.insert(0, path)

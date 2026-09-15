@@ -1,0 +1,60 @@
+schema: material-scan-derived-constants-1
+material: SiC
+polytype: 3C (zinc blende, cubic)
+record: Materials Project mp-8062
+derived_on: 2026-09-14
+status: derived-not-measured
+
+method:
+  scat:
+    theory: Tamura mass-defect (isotope) scattering, rate = scat * nu^4
+    formula: scat = 4*pi^3 * V0 * Delta / vbar^3
+    inputs: natural isotopic abundances; V0 = a^3/8; vbar = Debye average
+            of the three Christoffel branches over a 160-point Fibonacci sphere
+    validation: reproduces the shipped G4CMP values for Si (1.01x), Ge (1.02x)
+                and GaAs (1.00x)
+    confidence: high -- 1-2% on three independent materials
+  decay:
+    theory: anharmonic downconversion, rate = decay * nu^5
+    formula: calibrated scaling decay ~ 1/nu_Debye^5
+    validation: collapses Si/Ge/GaAs only to within a factor of 3.0
+    confidence: low -- order of magnitude only
+  decayTT:
+    theory: L -> TT branching fraction
+    formula: linear trend against Zener anisotropy 2*C44/(C11-C12)
+    validation: 3 calibration points spanning 1.56-1.85; SiC at 1.94 is an
+                extrapolation just outside that span
+    confidence: moderate
+
+derived:
+  sub_scat:
+    value: 4.78e-43
+    unit: s3
+    alternate: 4.46e-43   # using the projection record's own vsound/vtrans
+  sub_decay:
+    value: 3.93e-57
+    unit: s4
+    range: [2.11e-57, 6.33e-57]
+  sub_decayTT:
+    value: 0.789
+    range: [0.74, 0.80]
+
+warning:
+  id: derived-values-outside-tested-bracket
+  statement: >
+    The earlier robustness study bracketed these constants over the spread of
+    the five complete G4CMP records: scat [1.17e-42, 3.67e-41],
+    decay [7.41e-56, 1.6456e-54], decayTT [0.68, 0.778].  The derived SiC
+    scat is 2.4x BELOW that minimum and the derived decay is 19x BELOW it.
+  consequence: >
+    The reported insensitivity of SiC's recovered fraction (73.8%-76.9%) was
+    measured over a range that does not contain these values.  It cannot be
+    cited as evidence that the borrowed constants did not control the SiC
+    result.  Re-bracket downward before any SiC fabrication claim.
+
+physical_reading: >
+  SiC is stiff and light, so its Debye-average sound speed (8263 m/s) is well
+  above Si (5887 m/s).  Both constants carry a high inverse power of that
+  speed, so isotope scattering and anharmonic decay are both far weaker than
+  in Si.  Phonons travel further and downconvert less, which is the direction
+  that favours SiC -- and the untested direction.

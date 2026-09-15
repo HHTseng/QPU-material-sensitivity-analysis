@@ -98,6 +98,11 @@ def label_results(results_dir, bad, findings, dry_run):
                     rec["invalidation_reason"] = bad[tid]["reason"]
                     hits.append(label)
         if hits:
+            # `labelled_at` is second-resolution, so rewriting it on every pass
+            # made a second reconcile differ from the first purely by clock --
+            # the run was not actually idempotent. Keep the original stamp when
+            # nothing else about the notice changed; a real change re-stamps.
+            previous = doc.get(NOTICE_KEY) or {}
             doc[NOTICE_KEY] = {
                 "labelled_at": time.strftime("%F %T"),
                 "registry": "stage4_invalidations.yaml",
@@ -110,6 +115,13 @@ def label_results(results_dir, bad, findings, dry_run):
                         "the defect was real. Rows marked validity='invalid' must "
                         "not be quoted.",
             }
+            if previous:
+                current = dict(doc[NOTICE_KEY])
+                current.pop("labelled_at", None)
+                kept = dict(previous)
+                kept.pop("labelled_at", None)
+                if current == kept and previous.get("labelled_at"):
+                    doc[NOTICE_KEY]["labelled_at"] = previous["labelled_at"]
         if doc != before:
             changed.append((name, sorted(set(hits))))
             if not dry_run:

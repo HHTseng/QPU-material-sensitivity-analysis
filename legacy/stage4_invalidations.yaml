@@ -58,17 +58,17 @@ decisions:
     # The audit compares the SET of changed identity files against this list.
     # Anything NEW entering the set is unexplained and must warn.
     accepted_changed_identity_files:
-      - parameter_optimization/experiment_definition.py
-      - parameter_optimization/experiment_database.py
-      - parameter_optimization/interface_transmission.py
-      - parameter_optimization/material_catalog.yaml
-      - parameter_optimization/stage3_trial_runner.py
-      - parameter_optimization/stage4_objectives.py
-      - parameter_optimization/stage4_space.py
-      - sensitivity_memguard.py
-      - sensitivity_params.py
-      - stage1_run_simulations.py
-      - stage2_compute_QPs.py
+      - legacy/experiment_definition.py
+      - legacy/experiment_database.py
+      - legacy/interface_transmission.py
+      - legacy/material_catalog.yaml
+      - legacy/stage3_trial_runner.py
+      - legacy/stage4_objectives.py
+      - legacy/stage4_space.py
+      - legacy/sensitivity_memguard.py
+      - legacy/sensitivity_params.py
+      - legacy/stage1_run_simulations.py
+      - legacy/stage2_compute_QPs.py
 
 findings:
   P0_substrate_carrier_dropped:

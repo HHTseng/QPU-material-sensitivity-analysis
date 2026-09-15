@@ -22,6 +22,7 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(HERE)
+DATA_ROOT = os.path.join(REPO_ROOT, "data")
 for _p in (HERE, REPO_ROOT):
     if _p not in sys.path:
         sys.path.insert(0, _p)
@@ -140,7 +141,7 @@ def t4_v2_path_unchanged():
     from experiment_definition import load_definition
     from experiment_database import Database
     import stage3_trial_runner as R
-    database_path = os.path.join(HERE, "stage3_trials.sqlite")
+    database_path = os.path.join(DATA_ROOT, "stage3_trials.sqlite")
     if not os.path.isfile(database_path):
         check("T4 v2 resolver unchanged", True, "skipped: no v2 database present")
         return
@@ -175,7 +176,7 @@ def t5_scoring_equivalence():
     from experiment_database import Database
     import stage3_trial_runner as R
     from stage2_compute_QPs import calculate_QPs
-    database_path = os.path.join(HERE, "stage3_trials.sqlite")
+    database_path = os.path.join(DATA_ROOT, "stage3_trials.sqlite")
     if not os.path.isfile(database_path):
         check("T5 scoring equivalence", True, "skipped: no v2 database present")
         return
@@ -615,9 +616,9 @@ def t14_cache_identity():
     check("T14a a changed film lifetime changes the cache key", keys[0] != keys[1])
 
     tracked = set(CODE_IDENTITY_FILES)
-    want = {"parameter_optimization/material_catalog.yaml",
-            "parameter_optimization/interface_transmission.py",
-            "parameter_optimization/stage4_space.py"}
+    want = {"legacy/material_catalog.yaml",
+            "legacy/interface_transmission.py",
+            "legacy/stage4_space.py"}
     check("T14b catalog, interface model and space are in the code identity",
           want <= tracked, f"missing: {sorted(want - tracked)}")
     check("T14c the macro template is hashed into the fingerprint",
@@ -704,7 +705,7 @@ def t15_realization_propagation(tmpdir):
 
     # -- (b) the generated macro names that carrier, not G4_Si ---------------
     template = os.environ.get("SENSITIVITY_MACRO_TEMPLATE",
-                              os.path.join(REPO_ROOT, "sensitivity_template_beamOn1e6.mac"))
+                              os.path.join(HERE, "macros", "sensitivity_template_beamOn1e6.mac"))
     macro = os.path.join(tmpdir, "t15.mac")
     _write_sub_run_macro(definition, resolved, derived, template, macro,
                          os.path.join(tmpdir, "h.txt"), os.path.join(tmpdir, "h.txt.done"),
@@ -774,7 +775,7 @@ def t15_realization_propagation(tmpdir):
     # simulation identity.  Every earlier point must therefore resolve
     # differently: silently reusing an integer-direction result for a new
     # two-coordinate search would mix two different studies.
-    database_path = os.path.join(HERE, "stage4_trials.sqlite")
+    database_path = os.path.join(DATA_ROOT, "stage4_trials.sqlite")
     if os.path.isfile(database_path):
         import sqlite3
         conn = sqlite3.connect(f"file:{database_path}?mode=ro", uri=True)
@@ -1240,7 +1241,7 @@ def _run_runbook(step, root, database, trial, result_json, audit_ok=True,
     })
     if required_columns is not None:
         env["REQUIRED_COLUMNS"] = required_columns
-    proc = subprocess.run(["bash", os.path.join(HERE, "finish_property_event_comparison.sh"), step],
+    proc = subprocess.run(["bash", os.path.join(HERE, "scripts", "finish_property_event_comparison.sh"), step],
                           cwd=HERE, env=env, capture_output=True, text=True,
                           timeout=300)
     return proc.returncode, proc.stdout + proc.stderr
@@ -1376,7 +1377,7 @@ def t21_post_xl_state_machine(tmpdir):
                 "EVENTS_3200000000_OWNER_PID": "", "PY": sys.executable, "AUDIT_CMD": "true",
                 "SNAP_ARTIFACTS": os.path.join(root5, "runs")})
     closed = subprocess.run(
-        ["bash", os.path.join(HERE, "finish_property_event_comparison.sh"), "close-incomplete",
+        ["bash", os.path.join(HERE, "scripts", "finish_property_event_comparison.sh"), "close-incomplete",
          "best_random timed out at 41.7 h; not obtainable at this watchdog"],
         cwd=HERE, env=env, capture_output=True, text=True, timeout=300)
     rc_all, out_all = _run_runbook("all", root5, database5, trial5, rj5)
@@ -1989,7 +1990,7 @@ def t27_external_review_findings(tmpdir):
     import stage3_trial_runner as TR
 
     # -- 1. the retired comparison script must refuse to run ----------------
-    retired = os.path.join(HERE, "run_property_event_comparison.sh")
+    retired = os.path.join(HERE, "scripts", "run_property_event_comparison.sh")
     proc = subprocess.run(["bash", retired], capture_output=True, text=True,
                           timeout=60)
     check("T27a run_property_event_comparison.sh refuses to run (it hard-codes 32 sub-runs, "
@@ -2074,7 +2075,7 @@ def t27_external_review_findings(tmpdir):
 
     # -- 5. new confirmations must carry their identity ---------------------
     for path in ("results/stage4_smoke_P0_32000000_primaries.json",):
-        full = os.path.join(HERE, path)
+        full = os.path.join(DATA_ROOT, path)
         if not os.path.isfile(full):
             continue
         with open(full) as handle:
@@ -2173,7 +2174,7 @@ def t28_trial_cap_and_censoring(tmpdir):
 
 def t13_inertness_from_pilot():
     """Reports the Geant4 A/B result if the pilot has produced one."""
-    path = os.path.join(HERE, "results", "stage4_pilot.json")
+    path = os.path.join(DATA_ROOT, "results", "stage4_pilot.json")
     if not os.path.isfile(path):
         check("T13 inertness A/B (from the pilot)", True,
               "skipped: run stage4_pilot.py first")
@@ -2530,8 +2531,8 @@ def t31_geometry_matches_hit_test(tmpdir):
           f"centre -> {inside[0]}; +{2 * hw * 1000:.0f}um -> {just_out[0]}; "
           f"+100um (inside the old disk) -> {old_disc[0]}")
 
-    sd = json.load(open(os.path.join(HERE, "results", "stage4_pilot_sd.json"))) \
-        if os.path.isfile(os.path.join(HERE, "results", "stage4_pilot_sd.json")) \
+    sd = json.load(open(os.path.join(DATA_ROOT, "results", "stage4_pilot_sd.json"))) \
+        if os.path.isfile(os.path.join(DATA_ROOT, "results", "stage4_pilot_sd.json")) \
         else {h: 1.0 for h in ST.STRATA}
     alloc = ST.neyman_allocation(128, w, sd)
     design = ST.build_design(fixed, alloc, 0.259875)
