@@ -8,6 +8,13 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from .agentic import (
+    AgenticError,
+    DEFAULT_CONTEXT as DEFAULT_AGENT_CONTEXT,
+    DEFAULT_HOST as DEFAULT_OLLAMA_HOST,
+    DEFAULT_MODEL as DEFAULT_OLLAMA_MODEL,
+    preflight as agentic_preflight,
+)
 from .archive import ArchiveError, create_archive, recover_archive, verify_archive
 from .config import (
     ConfigError,
@@ -23,7 +30,15 @@ from .historical import (
     build_inventory,
     write_inventory_sqlite,
 )
-from .store import SchemaError, Store
+from .design import extend_recorded_design
+from .store import SchemaError, Store, StoreError
+from .simulation import SimulationError, run_resolved
+from .optimization import (
+    OptimizationError,
+    evaluate_starting_points,
+    run_search,
+    select_starting_points,
+)
 
 
 DEFAULT_CATALOG = Path(__file__).with_name("parameters.yaml")
@@ -153,11 +168,159 @@ def _store_doctor(arguments: argparse.Namespace) -> int:
     return 0 if report["integrity"] == "ok" and not report["foreign_key_violations"] else 1
 
 
-def _run_disabled(_arguments: argparse.Namespace) -> int:
-    raise ConfigError(
-        "production run is deliberately disabled in the compatibility slice; "
-        "finish macro/lattice parity and the disposable live smoke first"
+def _recover_controller(arguments: argparse.Namespace) -> int:
+    with Store.open(arguments.store) as store:
+        cleared = store.clear_abandoned_controller(
+            arguments.expected_owner,
+            arguments.expected_token,
+            arguments.inactive_seconds,
+        )
+    print(json.dumps({"cleared": cleared, "store": str(arguments.store)}, sort_keys=True))
+    return 0
+
+
+def _extend_design(arguments: argparse.Namespace) -> int:
+    catalog, spec = _load_spec(arguments)
+    source = json.loads(Path(arguments.recorded_design).read_text(encoding="utf-8"))
+    if "stratified_design" in source:
+        source = source["stratified_design"]
+    counts = dict(source["stratum_counts"])
+    for item in arguments.count:
+        try:
+            name, raw = item.split("=", 1)
+            counts[name] = int(raw)
+        except (ValueError, TypeError) as error:
+            raise ConfigError(f"invalid --count {item!r}; expected NAME=INTEGER") from error
+    design = extend_recorded_design(
+        source,
+        counts,
+        electrode_x_mm=spec.physics["electrode_x_mm"],
+        electrode_y_mm=spec.physics["electrode_y_mm"],
     )
+    destination = Path(arguments.output)
+    if destination.exists():
+        raise ConfigError(f"refusing to overwrite {destination}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(json.dumps(design, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(json.dumps({
+        "path": str(destination.resolve()),
+        "design_hash": design["design_hash"],
+        "sites": len(design["sites_mm"]),
+        "stratum_counts": design["stratum_counts"],
+    }, indent=2, sort_keys=True))
+    return 0
+
+
+def _run(arguments: argparse.Namespace) -> int:
+    result = run_resolved(
+        arguments.resolved_experiment,
+        arguments.output,
+        workers=arguments.workers,
+        timeout_s=arguments.timeout,
+        reuse_from=arguments.reuse_from,
+    )
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
+def _select_starting_points(arguments: argparse.Namespace) -> int:
+    result = select_starting_points(
+        arguments.experiment,
+        arguments.catalog,
+        arguments.historical_database,
+        arguments.reference,
+        arguments.anchor,
+        arguments.output,
+        historical_count=arguments.historical_count,
+        sobol_count=arguments.sobol_count,
+        seed=arguments.seed,
+    )
+    print(json.dumps({
+        "path": str(Path(arguments.output).resolve()),
+        "points": len(result["points"]),
+        "historical_points_available": result["historical_points_available"],
+        "points_key": result["points_key"],
+    }, indent=2, sort_keys=True))
+    return 0
+
+
+def _evaluate_starting_points(arguments: argparse.Namespace) -> int:
+    result = evaluate_starting_points(
+        arguments.experiment,
+        arguments.catalog,
+        arguments.points,
+        arguments.output,
+        parallel_points=arguments.parallel_points,
+        workers_per_point=arguments.workers_per_point,
+        limit=arguments.limit,
+    )
+    print(json.dumps({
+        "path": str((Path(arguments.output) / "summary.json").resolve()),
+        "complete": result["complete"],
+        "requested": result["requested"],
+    }, indent=2, sort_keys=True))
+    return 0
+
+
+def _search(arguments: argparse.Namespace) -> int:
+    agent_options = None
+    if arguments.method == "agentic":
+        if not arguments.ollama_model_digest:
+            raise AgenticError(
+                "agentic search requires --ollama-model-digest to pin model content"
+            )
+        agent_options = {
+            "host": arguments.ollama_host,
+            "model": arguments.ollama_model,
+            "expected_model_digest": arguments.ollama_model_digest,
+            "timeout": arguments.agent_timeout,
+            "temperature": arguments.agent_temperature,
+            "num_ctx": arguments.agent_context,
+            "pool_size": arguments.agent_pool_size,
+            "retries": arguments.agent_retries,
+            "allow_model_fallback": arguments.allow_model_fallback,
+        }
+    result = run_search(
+        arguments.experiment,
+        arguments.catalog,
+        arguments.initial_results,
+        arguments.output,
+        method=arguments.method,
+        seed=arguments.seed,
+        steps=arguments.steps,
+        workers=arguments.workers,
+        max_attempts=arguments.max_attempts,
+        task_timeout_s=arguments.task_timeout,
+        agent_options=agent_options,
+    )
+    print(json.dumps({
+        "path": str((Path(arguments.output) / "search.json").resolve()),
+        "complete_steps": result["complete_steps"],
+        "requested_steps": result["requested_steps"],
+        "adaptive_best": result.get("adaptive_best"),
+    }, indent=2, sort_keys=True))
+    return 0
+
+
+def _agentic_preflight(arguments: argparse.Namespace) -> int:
+    if (arguments.warmup or arguments.require_gpu) and not arguments.expected_digest:
+        raise AgenticError(
+            "warm/GPU agentic preflight requires --expected-digest"
+        )
+    result = agentic_preflight(
+        host=arguments.ollama_host,
+        model=arguments.ollama_model,
+        expected_digest=arguments.expected_digest,
+        num_ctx=arguments.context,
+        timeout=arguments.timeout,
+        warmup=arguments.warmup,
+    )
+    print(json.dumps(result, indent=2, sort_keys=True))
+    if arguments.require_gpu and not result["ready"]:
+        raise AgenticError(
+            "the exact model is not 100% GPU-resident at the requested context"
+        )
+    return 0
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -210,9 +373,110 @@ def _parser() -> argparse.ArgumentParser:
     command.add_argument("store")
     command.set_defaults(action=_store_doctor)
 
-    command = commands.add_parser("run", help="reserved until production cutover gates pass")
+    command = commands.add_parser(
+        "recover-controller",
+        help="clear one exact controller whose heartbeat has stopped",
+    )
+    command.add_argument("store")
+    command.add_argument("--expected-owner", required=True)
+    command.add_argument("--expected-token", required=True)
+    command.add_argument("--inactive-seconds", type=float, default=600.0)
+    command.set_defaults(action=_recover_controller)
+
+    command = commands.add_parser("extend-design", help="extend selected strata without moving old sites")
+    command.add_argument("recorded_design")
+    command.add_argument("--experiment", required=True)
+    command.add_argument("--catalog", default=str(DEFAULT_CATALOG))
+    command.add_argument("--count", action="append", required=True, metavar="NAME=INTEGER")
+    command.add_argument("--output", required=True)
+    command.set_defaults(action=_extend_design)
+
+    command = commands.add_parser("run", help="run one fully resolved, verified experiment")
     command.add_argument("resolved_experiment")
-    command.set_defaults(action=_run_disabled)
+    command.add_argument("--output", required=True)
+    command.add_argument("--workers", type=int, default=1)
+    command.add_argument("--timeout", type=float, default=0.0,
+                         help="absolute seconds per task; 0 leaves the physical bounce limit in control")
+    command.add_argument(
+        "--reuse-from", action="append", default=[], metavar="COMPLETED_RESULT_DIRECTORY",
+        help="reuse exact complete task identities after checksum, carrier, and score checks",
+    )
+    command.set_defaults(action=_run)
+
+    command = commands.add_parser(
+        "select-starting-points",
+        help="select named anchors, diverse earlier vectors, and fresh Sobol vectors",
+    )
+    command.add_argument("experiment")
+    command.add_argument("--catalog", default=str(DEFAULT_CATALOG))
+    command.add_argument("--historical-database", required=True)
+    command.add_argument("--reference", required=True)
+    command.add_argument("--anchor", required=True)
+    command.add_argument("--historical-count", type=int, default=14)
+    command.add_argument("--sobol-count", type=int, default=16)
+    command.add_argument("--seed", type=int, default=20260921)
+    command.add_argument("--output", required=True)
+    command.set_defaults(action=_select_starting_points)
+
+    command = commands.add_parser(
+        "evaluate-starting-points", help="evaluate the common optimizer starting points"
+    )
+    command.add_argument("experiment")
+    command.add_argument("--catalog", default=str(DEFAULT_CATALOG))
+    command.add_argument("--points", required=True)
+    command.add_argument("--output", required=True)
+    command.add_argument("--parallel-points", type=int, default=1)
+    command.add_argument("--workers-per-point", type=int, default=1)
+    command.add_argument("--limit", type=int, help="evaluate only this many leading points")
+    command.set_defaults(action=_evaluate_starting_points)
+
+    command = commands.add_parser(
+        "search", help="run one restartable optimizer comparison"
+    )
+    command.add_argument("experiment")
+    command.add_argument("--catalog", default=str(DEFAULT_CATALOG))
+    command.add_argument("--initial-results", required=True)
+    command.add_argument(
+        "--method", choices=("bo_gp", "cmaes", "sobol", "random", "agentic"),
+        required=True,
+    )
+    command.add_argument("--seed", type=int, required=True)
+    command.add_argument("--steps", type=int, default=120)
+    command.add_argument("--workers", type=int, default=1)
+    command.add_argument("--max-attempts", type=int)
+    command.add_argument(
+        "--task-timeout", type=float, default=0.0,
+        help="absolute seconds per simulation task; 0 uses the simulator default",
+    )
+    command.add_argument("--ollama-host", default=DEFAULT_OLLAMA_HOST)
+    command.add_argument("--ollama-model", default=DEFAULT_OLLAMA_MODEL)
+    command.add_argument(
+        "--ollama-model-digest",
+        help="required exact Ollama content digest for an agentic search",
+    )
+    command.add_argument("--agent-timeout", type=float, default=900.0)
+    command.add_argument("--agent-temperature", type=float, default=0.0)
+    command.add_argument("--agent-context", type=int, default=DEFAULT_AGENT_CONTEXT)
+    command.add_argument("--agent-pool-size", type=int, default=12)
+    command.add_argument("--agent-retries", type=int, default=2)
+    command.add_argument(
+        "--allow-model-fallback", action="store_true",
+        help="label and use ordinary GP-EI if the model cannot provide a valid pool",
+    )
+    command.add_argument("--output", required=True)
+    command.set_defaults(action=_search)
+
+    command = commands.add_parser(
+        "agentic-preflight", help="check exact Ollama model identity and GPU residency"
+    )
+    command.add_argument("--ollama-host", default=DEFAULT_OLLAMA_HOST)
+    command.add_argument("--ollama-model", default=DEFAULT_OLLAMA_MODEL)
+    command.add_argument("--expected-digest")
+    command.add_argument("--context", type=int, default=DEFAULT_AGENT_CONTEXT)
+    command.add_argument("--timeout", type=float, default=30.0)
+    command.add_argument("--warmup", action="store_true")
+    command.add_argument("--require-gpu", action="store_true")
+    command.set_defaults(action=_agentic_preflight)
     return parser
 
 
@@ -221,7 +485,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     arguments = parser.parse_args(argv)
     try:
         return int(arguments.action(arguments))
-    except (ArchiveError, ConfigError, HistoricalError, SchemaError, OSError, ValueError) as error:
+    except (
+        ArchiveError, ConfigError, HistoricalError, SchemaError, StoreError,
+        AgenticError, SimulationError, OptimizationError, OSError, ValueError,
+    ) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
 

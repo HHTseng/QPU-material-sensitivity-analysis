@@ -37,6 +37,8 @@ import time
 import yaml
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(HERE)
+DATA_ROOT = os.path.join(REPO_ROOT, "data")
 NOTICE_KEY = "_invalidation_notice"
 
 
@@ -262,9 +264,9 @@ def backfill_identity(results_dir, database_path, dry_run):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--results", default=os.path.join(HERE, "results"))
-    ap.add_argument("--runs-root", default=os.path.join(HERE, "runs"))
-    ap.add_argument("--database", default=os.path.join(HERE, "stage4_trials.sqlite"))
+    ap.add_argument("--results", default=os.path.join(DATA_ROOT, "results"))
+    ap.add_argument("--runs-root", default=os.path.join(DATA_ROOT, "runs"))
+    ap.add_argument("--database", default=os.path.join(DATA_ROOT, "stage4_trials.sqlite"))
     ap.add_argument("--registry",
                     default=os.path.join(HERE, "stage4_invalidations.yaml"))
     ap.add_argument("--dry-run", action="store_true")

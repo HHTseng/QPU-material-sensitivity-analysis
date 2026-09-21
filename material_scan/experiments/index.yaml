@@ -1,5 +1,5 @@
 schema: material-scan-index-1
-updated: 2026-09-14
+updated: 2026-09-21
 
 experiments:
   - id: spatial-strata-512-baseline-view
@@ -9,6 +9,64 @@ experiments:
     recorded_designs:
       - {generation: disc-proximity-regions, design_hash: 50b2353e2f5059dd, preserve: true}
       - {generation: rectangle-distance-regions, design_hash: fa659c7d860acdee, preserve: true}
+  - id: live-smoke-baseline
+    definition: live-smoke-baseline.yaml
+    mode: verified-disposable-check
+    recorded_designs:
+      - {generation: one-retained-site, design_hash: 00b96436543510fc, preserve: false}
+  - id: spatial-refinement
+    definition: spatial-refinement.yaml
+    values: [spatial-refinement-baseline.yaml, spatial-refinement-sic.yaml, spatial-refinement-nb-anchor.yaml]
+    mode: verified-completed-study
+    status: complete
+    local_report: ../../material_scan_data/experiments/spatial-refinement/report.json
+    conclusion: initial targeted extension; later nested levels complete the convergence study
+    recorded_designs:
+      - {generation: targeted-nested-extension, design_hash: 9ca28e7e5ad34a61, preserve: true}
+  - id: spatial-refinement-1245
+    definition: spatial-refinement-1245.yaml
+    mode: verified-completed-study
+    status: complete
+    recorded_designs:
+      - {generation: targeted-nested-extension, design_hash: 86ceb02854753869, preserve: true}
+  - id: spatial-refinement-1617
+    definition: spatial-refinement-1617.yaml
+    mode: verified-completed-study
+    status: complete
+    recorded_designs:
+      - {generation: targeted-nested-extension, design_hash: 52733a6be0e07ced, preserve: true}
+  - id: spatial-refinement-2361
+    definition: spatial-refinement-2361.yaml
+    mode: verified-completed-study
+    status: complete
+    checked_result: spatial-refinement-2361-result.json
+    conclusion: all declared spatial checks pass for all three matched points
+    recorded_designs:
+      - {generation: targeted-nested-extension, design_hash: 8d6f9b224ce5f834, preserve: true}
+  - id: material-search
+    definition: material-search.yaml
+    starting_points: material-search-starting-points.json
+    confirmation_definition: material-search-confirmation.yaml
+    mode: verified-optimizer-comparison
+    status: reported-with-incomplete-methods
+    methods: [bo_gp, cmaes, sobol, random, agentic]
+    results: material-search-results.json
+    confirmation_points: material-search-confirmation-points.json
+    confirmation_results: material-search-confirmation-results.json
+    incomplete_attempts: [material-search-bo-attempt.json, material-search-sobol-attempt.json]
+    completion:
+      common_starting_points: 32
+      cmaes: three seeds, 120 points per seed, all complete
+      random: one seed, 64 points, complete
+      sobol: one seed, 49 of 64 points; point 50 stopped with no completed task
+      bo_gp: one seed, zero of 120 new points; first point stopped with no completed task
+    conclusion: >
+      CMA-ES produced three confirmed improvements. Seeds 101 and 303 define a
+      tied leading region. The current expected-improvement search cannot be
+      compared because its first widened-range point was not evaluable in a
+      practical time.
+    agentic_status: pending-ollama-and-gpu-preflight
+    agentic_comparison: agentic-comparison-status.json
 
 families:
   material-factorial:

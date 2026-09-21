@@ -34,6 +34,6 @@ material_scan_data/
 material_scan/experiments/orientation-pilot/results.json
 material_scan/experiments/orientation-pilot/results.sqlite
 data/hit_diagnostics_*/
-# Local pre-migration ledger safety copies (the tracked .bak-* files remain).
+# Local pre-migration database safety copies (the tracked .bak-* files remain).
 data/premigration_backup_*/
 parameter_optimization/runs/stage4_property_v1_orientation_pilot/

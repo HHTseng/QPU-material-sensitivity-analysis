@@ -1,0 +1,34 @@
+{
+  "schema": "material-scan-incomplete-search-1",
+  "experiment_spec_key": "fef98f9824d5faec920abdd68fef88ee36f522832052c52c30c04331706768c0",
+  "method": "sobol",
+  "seed": 101,
+  "requested_points": 64,
+  "completed_points": 49,
+  "incomplete_point": 50,
+  "proposal": {
+    "bot_density": 20144.522719085217,
+    "bot_gap_thres": 0.000323393607698381,
+    "bot_ph_lifetime": 1.5215682919467344,
+    "bot_vsound": 3.1192617318592966,
+    "sub_c11": 780.214152559638,
+    "sub_c12": 163.80665376782417,
+    "sub_c44": 579.7642286727205,
+    "sub_decay": 4.484227774899679e-55,
+    "sub_decayTT": 0.5218457845039666,
+    "sub_scat": 4.237079905949471e-43,
+    "topfilm_density": 15985.11272110045,
+    "topfilm_gap": 0.0023125960185798812,
+    "topfilm_ph_lifetime": 0.0011066126607120045,
+    "topfilm_vsound": 2.17016635928303
+  },
+  "simulation": {
+    "manifest_key": "4bfcc79049f54fd32572fbe91be5e7557a5efd0944d9e511124cf37b3090bfd3",
+    "declared_tasks": 512,
+    "simultaneous_tasks": 20,
+    "completed_tasks": 0,
+    "observed_elapsed_seconds_lower_bound": 3600,
+    "candidate_completion_hours_lower_bound": 25.6
+  },
+  "interpretation": "Forty-nine Sobol points completed. The fiftieth produced no completed task in one hour and was stopped without assigning an objective value. Its elapsed time is a lower bound and not a quasiparticle measurement. The partial run can compare coverage through point 49 but cannot be called a complete 64-point run."
+}

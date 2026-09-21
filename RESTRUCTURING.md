@@ -1,13 +1,13 @@
 # Repository restructuring — 2026-09-14 / 15
 
 Two phases. Phase 1 moved the code out; phase 2 renamed the evidence directory
-and made the ledger paths portable.
+and made the database paths portable.
 
 Branch: `Material_optimization_v3_scan_parameters_revised`
 
 Flattens the tree to **three top-level directories with one job each**, moves all
 code out of `parameter_optimization/`, and leaves the experimental evidence
-exactly where it is. No raw data, ledger, or result file was deleted or moved.
+exactly where it is. No raw data, database, or result file was deleted or moved.
 
 ## Before and after
 
@@ -87,12 +87,12 @@ deliberately kept:
 At the end of phase 1 `parameter_optimization/` kept its name, because two
 constraints pinned it:
 
-1. **677 absolute ledger paths.** Every `run_dir` value in
+1. **677 absolute database paths.** Every `run_dir` value in
    `stage4_trials.sqlite` is absolute and contains
    `.../parameter_optimization/runs/`. Renaming the directory silently breaks
-   every historical run lookup; the only repair is rewriting a ledger that must
+   every historical run lookup; the only repair is rewriting a database that must
    stay read-only.
-2. **An open gate.** `material_scan/docs/issues.yaml` carries
+2. **An unresolved check.** `material_scan/docs/issues.yaml` carries
    `second-independent-copy` at severity `must-be-resolved-before-deletion`:
    *"Do not untrack, move, or delete historical raw artifacts."*
 
@@ -105,7 +105,7 @@ The move broke real things; each was found by the test suites, not by guesswork.
 | File | Change |
 |---|---|
 | `legacy/experiment_definition.py` | `CODE_IDENTITY_FILES` — all 12 identity paths repointed. `code_fingerprint()` **raises** on a missing required file, so this was load-bearing. |
-| `legacy/tests_stage4.py` | added `DATA_ROOT`; repointed ledgers, `results/`, macro template, and the two runbook scripts |
+| `legacy/tests_stage4.py` | added `DATA_ROOT`; repointed databases, `results/`, macro template, and the two runbook scripts |
 | `legacy/stage4_invalidations.yaml` | `accepted_changed_identity_files` — a **live** audit comparison, not a historical record |
 | `legacy/stage4_audit.py` | module rename map |
 | `legacy/{stage3_trial_runner,stage4_optimize,stage4_probe_g4_density,stage1_run_simulations}.py` | default macro template now `legacy/macros/` |
@@ -127,8 +127,8 @@ evidence directory for **data**, which was correct; phase 2 repointed them.
 | `python -m material_scan --help` | works | works |
 | `code_fingerprint()` | 13 files, none missing | 13 files, none missing |
 
-The gate count is the reason this record can be trusted. An intermediate state
-passed **192/192** — green, but two gates had silently stopped running because
+The test count is the reason this record can be trusted. An intermediate state
+passed **192/192**, but two tests had silently stopped running because
 their data paths still pointed at the code directory. `T15h2` (the 637-trial
 cache check) was guarded by `os.path.isfile`, and `T27h` vanished through a bare
 `continue` with no check emitted at all. Both are exactly the failure the
@@ -150,16 +150,16 @@ seeing green.
 # Phase 2 — `data/` rename and repository-relative paths (2026-09-15)
 
 Lifts the phase 1 limitation. `parameter_optimization/` is now `data/`, and
-ledger artifact paths are repository-relative instead of absolute.
+database artifact paths are repository-relative instead of absolute.
 
-## The gate
+## The required check
 
 `second-independent-copy` in `material_scan/docs/issues.yaml` was suspended once,
 on explicit instruction, and restored immediately afterwards. Its open rules are
 now byte-identical to their pre-migration text. **Deletion stayed forbidden
 throughout**: this migration renamed and rewrote, and deleted nothing.
 
-Before touching anything, all four live ledgers were snapshotted with SQLite's
+Before touching anything, all four live databases were copied with SQLite's
 backup API into `data/premigration_backup_20260914/` (untracked).
 
 ## Scale
@@ -167,7 +167,7 @@ backup API into `data/premigration_backup_20260914/` (untracked).
 The pin was far larger than the 677 `run_dir` values phase 1 identified. Every
 sub-run carried three more absolute paths:
 
-| Ledger | run_dir | macro | hits_file | done_marker |
+| Database | run_dir | macro | hits_file | done_marker |
 |---|---:|---:|---:|---:|
 | `stage4_trials.sqlite` | 677 | 134,048 | 134,048 | 134,048 |
 | `stage3_trials.sqlite` | 20 | 640 | 640 | 640 |
@@ -187,7 +187,7 @@ risky edit. Instead the conversion happens at one boundary in
 - `relativize_artifact_path()` — absolute → relative, applied on write
 
 Every caller still sees absolute paths, so no consumer logic changed. Values
-already absolute pass through untouched, so a part-migrated ledger still reads.
+already absolute pass through untouched, so a partly migrated database still reads.
 
 A global `row_factory` returning dicts would have been the tidier choke point,
 but `has_column()` does positional `row[1]` access on PRAGMA results over the
@@ -205,7 +205,7 @@ path-bearing rows instead.
 | `legacy/scripts/finish_property_event_comparison.sh` | `$DATA` → `../data` |
 | `material_scan/tools/hit_data.py` | `ROOT` → `data`; relative paths resolve against the repo root, not the CWD |
 | `material_scan/experiments/spatial-strata-512-baseline.yaml` | design and historical-result paths |
-| `README.md`, `data/README.md` | layout and the relative-path contract |
+| `README.md`, `data/README.md` | layout and the relative-path specification |
 
 `legacy/stage3_report.py` needed no change: it reads through `observations()`,
 which now resolves.
@@ -221,7 +221,7 @@ in-place edit would invalidate. Restoring one requires running
 
 | Check | Result |
 |---|---|
-| absolute paths left in live ledgers | **0** of 407,089 |
+| absolute paths left in live databases | **0** of 407,089 |
 | resolved `run_dir` / `hits_file` sampled | **240/240 exist on disk** |
 | `hit_data` sub-run index | 135,424 indexed, 134,619 present |
 | missing files | 805 — all `planned` (797) or `timeout` (8); **no successful sub-run lost** |
@@ -233,7 +233,7 @@ The 194 tracked deletions under `runs/` that predated this work were restored
 with `git restore` — `git mv` refuses to move tracked files missing from disk,
 and deleting them was forbidden, so restoring was both required and correct.
 
-## A pre-existing flaky gate, fixed
+## A pre-existing intermittent test, fixed
 
 `T26d reconcile is idempotent` failed intermittently during this work. It was
 **not** caused by the migration: `git diff` shows `stage4_reconcile.py` moved
@@ -245,7 +245,7 @@ invalidation notice unconditionally, including
 twice and compares the output, so it passed only when both runs landed inside the
 same wall-clock second — roughly a coin flip.
 
-The gate asserted a property the code did not have, so the fix is in the code,
+The test asserted a property the code did not have, so the fix is in the code,
 not the test: the previous `labelled_at` is preserved when nothing else about the
 notice changed, and a genuine change still re-stamps. Reconcile is now actually
 idempotent, and the suite passed 194/194 three times consecutively.
@@ -253,7 +253,7 @@ idempotent, and the suite passed 194/194 three times consecutively.
 ## A regression the restructuring introduced, found by re-running the audit
 
 Reproducing the earlier findings under the new layout surfaced one problem that
-the test suites did not catch, because no gate covers it: `stage4_audit.py`
+the test suites did not catch, because no test covers it: `stage4_audit.py`
 dropped from **15/15, 0 warnings** to **14/15, 1 warning**.
 
     [WARN] the cold cache is the accepted, recorded one (no NEW identity file
@@ -274,7 +274,7 @@ made it worse: the recorded decision could then never match a stored fingerprint
 again.
 
 This is precisely the risk the blueprint's R0 names: *"a cleanup that merely
-moves files can accidentally break ledger paths, drop invalidation labels, or
+moves files can accidentally break database paths, drop invalidation labels, or
 make a partial run look complete."* The invalidation label was being dropped.
 
 **Fix.** `stage4_audit.py` now normalizes both sides to current spelling

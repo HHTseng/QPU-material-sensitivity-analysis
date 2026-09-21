@@ -1,11 +1,50 @@
 schema: material-scan-issues-1
-updated: 2026-09-14
+updated: 2026-09-21
 
 earlier_result_validity:
   path: ../../legacy/stage4_invalidations.yaml
   policy: preserve read-only and inspect without schema changes
 
 open:
+  - id: low-yield-repeat-variation
+    severity: prevents-final-property-ranking
+    statement: >
+      The identical niobium-compatible anchor changed by 34.9% between two
+      independent random-number sets, about 5.7 times their combined reported
+      standard error, while the reference changed by only 0.29%.
+    consequence: >
+      Repeat the compatible anchor and the tied CMA-ES 101/303 finalists with
+      another unused random-number set before choosing a final property vector.
+
+  - id: material-property-boundaries
+    severity: prevents-fabrication-interpretation
+    statement: >
+      Every confirmed CMA-ES finalist uses sub_c44 = 5 GPa, the exact lower
+      search limit, and each touches at least one additional limit.
+    consequence: >
+      Replace independent numerical ranges with physically supported material
+      relations and fabrication limits before a wider search or material claim.
+
+  - id: expected-improvement-run-time
+    severity: prevents-current-bo-comparison
+    statement: >
+      The first widened-range expected-improvement point completed none of 512
+      tasks in one hour. The lower bound is 8.53 hours for one screening point.
+    consequence: >
+      Restrict the method to a physically and computationally feasible local
+      region or include measured run time in candidate selection before trying
+      additional Gaussian-process steps.
+
+  - id: agentic-runtime-preflight
+    severity: blocks-agentic-comparison
+    statement: >
+      The current Mimir shell exposes eight RTX A6000 devices through PCI, but
+      nvidia-smi cannot communicate with the driver and Ollama is not installed.
+    consequence: >
+      Agentic code and mocked replay can be tested, but no live four-GPU model
+      inference or optimizer improvement may be claimed until the pinned model
+      passes agentic-preflight with at most four visible GPUs.
+
   - id: second-independent-copy
     severity: must-be-resolved-before-deletion
     statement: A second independent storage filesystem has not been selected.
@@ -16,22 +55,55 @@ open:
     statement: Many historical rows do not identify all loaded libraries and external data.
     consequence: Read and rescore them, but do not return them as new simulations.
 
-  - id: direct-simulation-readiness
-    severity: prevents-new-simulation-launch
-    statement: The new path has not yet completed a disposable live Geant4 check and full data recovery check.
-    consequence: Do not begin a new property search until both checks pass.
-
 resolved:
+  - id: spatial-integration
+    resolved_at: 2026-09-21
+    statement: >
+      Nested targeted extensions reached 2,361 sites and eight replicas. The
+      reference, SiC anchor, and niobium-compatible anchor all pass the declared
+      overall, uncertainty, paired-change, site-leverage, region-change, and
+      ranking checks. Final region changes are at most 1.1%, and no site
+      supplies more than 0.8% of the objective.
+    evidence:
+      experiment: ../experiments/spatial-refinement-2361.yaml
+      result: ../experiments/spatial-refinement-2361-result.json
+
+  - id: direct-simulation-readiness
+    resolved_at: 2026-09-20
+    statement: >
+      The current path reproduces the retained baseline lattice byte for byte
+      and every active macro command numerically. A verified one-site Geant4
+      run completed through material_scan, confirmed G4_Si and its density in
+      the log, published 21 hit rows, scored them, and passed SQLite integrity.
+      Archive 6bab46d25237723a2ef8ae8d2b825c7382f393fc43a647f05c4dde688f4dd8e9
+      was recovered into a temporary directory; all four requested member
+      hashes matched and both SQLite copies returned PRAGMA integrity_check=ok.
+      The optimizer space now comes directly from the experiment definition,
+      records its implementation hash and complete transcript, and rejects
+      exact-physics failures before Geant4.
+    evidence:
+      experiment: ../experiments/live-smoke-baseline.yaml
+      local_result: ../../material_scan_data/experiments/live-smoke-baseline/result.json
+      tests: material_scan/tests/test_design_space_simulation.py
+
   - id: absolute-artifact-paths
     resolved_at: 2026-09-15
     statement: >
-      Ledger artifact paths were absolute and pinned the evidence directory's
+      Stored artifact paths were absolute and pinned the evidence directory's
       name. `second-independent-copy` was suspended once, under explicit
       instruction, to rename `parameter_optimization/` to `data/` and rewrite
       407,089 stored paths to repository-relative form. Nothing was deleted or
-      untracked; every live ledger was backed up first and all four verify with
+      untracked; every active result database was backed up first and all four verify with
       zero absolute paths remaining. The rule above is back in force.
-    tool: legacy/migrate_ledger_paths.py
+    evidence: All 407,089 stored artifact paths are repository-relative.
+
+  - id: renewable-controller-ownership
+    resolved_at: 2026-09-21
+    statement: >
+      Long simulations renew controller ownership every 60 seconds with a
+      five-minute expiry. Recovery clears only the exact requested owner and
+      token after its heartbeat has remained inactive for the requested time.
+    evidence: material_scan/tests/test_store_archive_history.py
 
   - id: strat512-live-state
     resolved_at: 2026-09-09T08:05:00-04:00

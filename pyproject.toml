@@ -20,3 +20,6 @@ material-scan = "material_scan.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["material_scan*"]
+
+[tool.setuptools.package-data]
+material_scan = ["*.yaml", "*.md", "scripts/*.sh"]

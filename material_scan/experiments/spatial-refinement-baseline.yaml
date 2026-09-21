@@ -1,0 +1,23 @@
+parameters:
+  topfilm_vsound: 2.444
+  topfilm_gap: 1.5384e-3
+  topfilm_ph_lifetime: 0.00417
+  topfilm_density: 8570.0
+  bot_vsound: 2.608
+  bot_gap_thres: 1.8e-4
+  bot_ph_lifetime: 5.1
+  bot_density: 8960.0
+  sub_c11: 165.6
+  sub_c12: 63.9
+  sub_c44: 79.5
+  sub_scat: 2.43e-42
+  sub_decay: 7.41e-56
+  sub_decayTT: 0.74
+  sub_lattice_a: 5.431
+  temperature: 0.0
+  lattice_deg: 45.0
+  orientation_polar_cos: 1.0
+  orientation_azimuth_turns: 0.0
+physics:
+  miller: [0, 0, 1]
+  realization: {schema: stage4_realization_v1, mode: pseudo_si_base, substrate_carrier: G4_Si, base_lattice_map: Si, lattice_map: PseudoCubic}

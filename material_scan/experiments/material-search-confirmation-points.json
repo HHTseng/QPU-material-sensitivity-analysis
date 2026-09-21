@@ -1,0 +1,129 @@
+{
+  "experiment_spec_key": "3a352df3cd4589c9b549b249404844641893a7d3660c71db184841b12f8611f7",
+  "points": [
+    {
+      "name": "reference",
+      "screening_value": 0.002245943100697631,
+      "source": "common-screening; repeated with full spatial design and unused seeds",
+      "values": {
+        "bot_density": 8960.0,
+        "bot_gap_thres": 0.00018,
+        "bot_ph_lifetime": 5.1,
+        "bot_vsound": 2.608,
+        "sub_c11": 165.6,
+        "sub_c12": 63.9,
+        "sub_c44": 79.5,
+        "sub_decay": 7.41e-56,
+        "sub_decayTT": 0.74,
+        "sub_scat": 2.43e-42,
+        "topfilm_density": 8570.0,
+        "topfilm_gap": 0.0015384,
+        "topfilm_ph_lifetime": 0.00417,
+        "topfilm_vsound": 2.444
+      }
+    },
+    {
+      "name": "compatible-anchor",
+      "screening_value": 0.000506219947342225,
+      "source": "common-screening; repeated with full spatial design and unused seeds",
+      "values": {
+        "bot_density": 7184.383239418074,
+        "bot_gap_thres": 0.00012981738953147298,
+        "bot_ph_lifetime": 0.5,
+        "bot_vsound": 3.174554206770729,
+        "sub_c11": 250.92689126211246,
+        "sub_c12": 0.0,
+        "sub_c44": 5.0,
+        "sub_decay": 6.129072648276415e-56,
+        "sub_decayTT": 0.8174135229343212,
+        "sub_scat": 9.99999999999994e-45,
+        "topfilm_density": 15010.886904864794,
+        "topfilm_gap": 0.001670366222399775,
+        "topfilm_ph_lifetime": 0.003337436812440808,
+        "topfilm_vsound": 6.0
+      }
+    },
+    {
+      "name": "cma-101-best",
+      "screening_value": 0.0002595938060630914,
+      "source": "cma-101 step-0087; screening value not reused",
+      "values": {
+        "bot_density": 10319.615045411578,
+        "bot_gap_thres": 0.0003064448209256207,
+        "bot_ph_lifetime": 1.1192527480791334,
+        "bot_vsound": 2.9370145920866455,
+        "sub_c11": 931.1052914102013,
+        "sub_c12": 95.35132694468996,
+        "sub_c44": 5.0,
+        "sub_decay": 4.605632131376339e-56,
+        "sub_decayTT": 0.8136614458473828,
+        "sub_scat": 1.950723487023598e-45,
+        "topfilm_density": 8884.286887158985,
+        "topfilm_gap": 0.0018597363725457714,
+        "topfilm_ph_lifetime": 0.001,
+        "topfilm_vsound": 5.2221703024391655
+      }
+    },
+    {
+      "name": "cma-202-best",
+      "screening_value": 0.0002537300372799465,
+      "source": "cma-202 step-0108; screening value not reused",
+      "values": {
+        "bot_density": 9331.908182142206,
+        "bot_gap_thres": 5.8225583788231135e-05,
+        "bot_ph_lifetime": 0.5094603839518561,
+        "bot_vsound": 3.0292784509722166,
+        "sub_c11": 940.4547548226906,
+        "sub_c12": 189.30382297531156,
+        "sub_c44": 5.0,
+        "sub_decay": 2.696121544108237e-56,
+        "sub_decayTT": 0.7624690235657265,
+        "sub_scat": 1e-45,
+        "topfilm_density": 9190.954684074393,
+        "topfilm_gap": 0.0017456483248089224,
+        "topfilm_ph_lifetime": 0.00800655611377835,
+        "topfilm_vsound": 4.44942359356825
+      }
+    },
+    {
+      "name": "cma-303-best",
+      "screening_value": 0.00023219955003906718,
+      "source": "cma-303 step-0072; screening value not reused",
+      "values": {
+        "bot_density": 15055.140855217653,
+        "bot_gap_thres": 7.964976021121693e-05,
+        "bot_ph_lifetime": 0.5,
+        "bot_vsound": 1.9964846480854213,
+        "sub_c11": 1090.2514329815901,
+        "sub_c12": 0.0,
+        "sub_c44": 5.0,
+        "sub_decay": 5.942592400201972e-57,
+        "sub_decayTT": 0.7678718947699178,
+        "sub_scat": 2.5586068260426833e-44,
+        "topfilm_density": 6014.875068028133,
+        "topfilm_gap": 0.0020531975876926455,
+        "topfilm_ph_lifetime": 0.0012189051410871473,
+        "topfilm_vsound": 6.0
+      }
+    }
+  ],
+  "points_key": "edc297eccbdc770f1ea1c7685ec0b442c69bc3047bf34f487da387de89b1c82f",
+  "purpose": "Full-spatial confirmation of the reference, compatible anchor, and each CMA-ES seed winner.",
+  "schema": "material-scan-starting-points-1",
+  "search_variables": [
+    "bot_density",
+    "bot_gap_thres",
+    "bot_ph_lifetime",
+    "bot_vsound",
+    "sub_c11",
+    "sub_c12",
+    "sub_c44",
+    "sub_decay",
+    "sub_decayTT",
+    "sub_scat",
+    "topfilm_density",
+    "topfilm_gap",
+    "topfilm_ph_lifetime",
+    "topfilm_vsound"
+  ]
+}

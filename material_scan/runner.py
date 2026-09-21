@@ -101,7 +101,7 @@ def sha256_file(path: Path, chunk_bytes: int = 1024 * 1024) -> str:
 
 
 def validate_nonempty_output(path: Path) -> None:
-    """Minimal raw-output gate; a scientific parser may add stricter checks."""
+    """Minimal raw-output check; a scientific parser may add stricter checks."""
 
     if not path.is_file():
         raise RunError(f"expected output was not created: {path}")

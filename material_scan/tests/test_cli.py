@@ -42,12 +42,34 @@ class CliTests(unittest.TestCase):
             self.assertEqual(resolved.sampling.design.recorded_hash, "fa659c7d860acdee")
             self.assertEqual(len(resolved.sampling.tasks), 4096)
 
-    def test_production_run_is_explicitly_gated(self):
+    def test_run_refuses_an_unresolved_historical_build(self):
+        with tempfile.TemporaryDirectory() as directory:
+            resolved_path = Path(directory) / "resolved.json"
+            self.assertEqual(main([
+                "freeze", str(EXPERIMENT), "--catalog", str(CATALOG),
+                "--output", str(resolved_path),
+            ]), 0)
+            errors = io.StringIO()
+            with contextlib.redirect_stderr(errors):
+                code = main([
+                    "run", str(resolved_path),
+                    "--output", str(Path(directory) / "run"),
+                ])
+        self.assertEqual(code, 2)
+        self.assertIn("build.mode=verified", errors.getvalue())
+
+    def test_agentic_search_requires_a_pinned_model_digest(self):
         errors = io.StringIO()
         with contextlib.redirect_stderr(errors):
-            code = main(["run", "anything.json"])
+            code = main([
+                "search", "unused-experiment.yaml",
+                "--initial-results", "unused-results.json",
+                "--method", "agentic",
+                "--seed", "101",
+                "--output", "unused-output",
+            ])
         self.assertEqual(code, 2)
-        self.assertIn("deliberately disabled", errors.getvalue())
+        self.assertIn("requires --ollama-model-digest", errors.getvalue())
 
 
 if __name__ == "__main__":

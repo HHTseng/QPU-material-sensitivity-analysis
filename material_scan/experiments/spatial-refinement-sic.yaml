@@ -1,0 +1,31 @@
+parameters:
+  topfilm_vsound: 2.56
+  topfilm_gap: 5.4e-4
+  topfilm_ph_lifetime: 0.0032391345908296698
+  topfilm_density: 7310.0
+  bot_vsound: 3.65
+  bot_gap_thres: 2.19769477378577e-4
+  bot_ph_lifetime: 2.657830536907085
+  bot_density: 10490.0
+  sub_c11: {value: 384.0, origin: material, source: 'SiC mp-8062 elastic tensor'}
+  sub_c12: {value: 127.0, origin: material, source: 'SiC mp-8062 elastic tensor'}
+  sub_c44: {value: 241.0, origin: material, source: 'SiC mp-8062 elastic tensor'}
+  sub_scat: 1.4612400804627297e-43
+  sub_decay: 6.5588631961413265e-56
+  sub_decayTT: 0.9432507706806064
+  sub_lattice_a: {value: 3.07873852111218, origin: material, source: 'SiC mp-8062 lattice'}
+  temperature: 0.056437374930828815
+  lattice_deg: 63.81921119056642
+  orientation_polar_cos: 0.7276068751089989
+  orientation_azimuth_turns: 0.125
+physics:
+  miller: [2, 2, 3]
+  realization:
+    schema: stage4_realization_v1
+    mode: pseudo_si_base
+    substrate_carrier: G4_CALCIUM_FLUORIDE
+    base_lattice_map: Si
+    lattice_map: PseudoCubic
+    material_density_kg_m3: 3226.6291385651007
+    density_tolerance: 0.03
+    label: elasticity_of_SiC

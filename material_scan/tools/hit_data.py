@@ -99,7 +99,7 @@ def database_metadata() -> dict[str, dict[str, object]]:
             if not row["hits_file"]:
                 continue
             stored = row["hits_file"]
-            # Ledger paths are repository-relative since 2026-09-14;
+            # Stored artifact paths are repository-relative since 2026-09-14;
             # resolving them against the CWD would silently miss every file.
             path = Path(stored)
             if not path.is_absolute():

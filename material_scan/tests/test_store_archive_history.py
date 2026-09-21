@@ -239,6 +239,28 @@ class StoreTests(unittest.TestCase):
                          ["controller_lost", None])
         self.assertEqual(self.store.task_row("task")["completeness_state"], "complete")
 
+    def test_abandoned_controller_clear_requires_exact_stale_heartbeat(self) -> None:
+        lease = self.store.acquire_controller("controller-a", 1000, now=1)
+        lease = self.store.renew_controller(lease, 1000, now=50)
+        with self.assertRaises(LeaseBusy):
+            self.store.clear_abandoned_controller(
+                "controller-a", lease.token, 60, now=100
+            )
+        with self.assertRaises(LeaseBusy):
+            self.store.clear_abandoned_controller(
+                "controller-a", "wrong-token", 60, now=111
+            )
+        self.assertTrue(
+            self.store.clear_abandoned_controller(
+                "controller-a", lease.token, 60, now=111
+            )
+        )
+        self.assertFalse(
+            self.store.clear_abandoned_controller(
+                "controller-a", lease.token, 60, now=112
+            )
+        )
+
 
 def make_historical_database(path: Path) -> None:
     connection = sqlite3.connect(path)

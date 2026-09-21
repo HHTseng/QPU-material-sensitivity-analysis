@@ -22,7 +22,7 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(normalized_macro_bytes(left), normalized_macro_bytes(right))
         self.assertNotEqual(normalized_macro_bytes(left), normalized_macro_bytes(changed))
 
-    def test_numeric_gate_matches_known_bad_token(self):
+    def test_numeric_check_matches_known_bad_token(self):
         self.assertEqual(
             validate_macro_lines(["/g4cmp/clearance 1e-06e-6 mm\n"]),
             ["/g4cmp/clearance 1e-06e-6 mm"],

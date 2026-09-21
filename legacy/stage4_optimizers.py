@@ -618,7 +618,7 @@ class GPBayesOpt(BaseOptimizer):
                                                              "exhausted, no GP yet")
                         for p in self._random_feasible(n - len(out))]
             return out
-        if self.n_observations < min(self.n_init, self.n_min_fit):
+        if self.n_observations < self.n_min_fit:
             # Design fully dispatched but not yet reported: waiting is better
             # than fitting a GP on 3 points and calling the result Bayesian.
             return []
@@ -719,7 +719,7 @@ class CMAES(BaseOptimizer):
     coordinates as every other method.
     """
 
-    def __init__(self, space=None, seed=0, popsize=None, sigma0=0.3,
+    def __init__(self, space=None, seed=0, popsize=None, sigma0=0.3, mean0=None,
                  reeval_every=6, sigma_min=0.03, stagnation=8, max_popsize=64,
                  synchronous=True, **kw):
         super().__init__(space, seed=seed, **kw)
@@ -743,6 +743,13 @@ class CMAES(BaseOptimizer):
         self._best_at_restart = None
         self._gens_without_gain = 0
         self._init_strategy(int(popsize or max(8, 4 + int(3 * math.log(d)))))
+        if mean0 is not None:
+            initial_mean = np.asarray(mean0, dtype=float).ravel()
+            if initial_mean.size != d or not np.all(np.isfinite(initial_mean)):
+                raise ValueError(f"mean0 must contain {d} finite unit coordinates")
+            if np.any(initial_mean < 0.0) or np.any(initial_mean > 1.0):
+                raise ValueError("mean0 coordinates must lie in [0, 1]")
+            self.mean = initial_mean.copy()
 
     def _init_strategy(self, lam):
         d = self.d
@@ -863,6 +870,12 @@ class CMAES(BaseOptimizer):
     def _maybe_update(self):
         keys = [k for k, _ in self._gen_points]
         if not keys or not all(k in self._gen_results for k in keys):
+            return
+        # A sequential driver asks and reports one member at a time.  In
+        # synchronous mode, having every member *asked so far* reported does
+        # not mean the declared population is complete.  Wait for all lambda
+        # members before applying the rank-mu update.
+        if self.synchronous and len(keys) < self.lam:
             return
         if len(keys) < max(4, self.mu + 1):
             return

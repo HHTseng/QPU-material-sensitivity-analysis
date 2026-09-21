@@ -1,0 +1,78 @@
+schema: material-scan-experiment-1
+id: spatial-refinement-1617
+purpose: Double only the 0.20 to 0.50 mm region that remained unresolved at 1245 sites.
+
+parameters:
+  topfilm_vsound: {mode: search, bounds: [1.5, 6.0], scale: linear, default: 2.444, prior: {kind: uniform}}
+  topfilm_gap: {mode: search, bounds: [5.0e-5, 3.5e-3], scale: log, default: 1.5384e-3, prior: {kind: log-uniform}}
+  topfilm_ph_lifetime: {mode: search, bounds: [1.0e-3, 1.0], scale: log, default: 0.00417, prior: {kind: log-uniform}}
+  topfilm_density: {mode: search, bounds: [2000.0, 20000.0], scale: linear, default: 8570.0, prior: {kind: uniform}}
+  bot_vsound: {mode: search, bounds: [1.5, 6.0], scale: linear, default: 2.608, prior: {kind: uniform}}
+  bot_gap_thres: {mode: search, bounds: [5.0e-5, 4.0e-4], scale: linear, default: 1.8e-4, prior: {kind: uniform}}
+  bot_ph_lifetime: {mode: search, bounds: [0.5, 50.0], scale: log, default: 5.1, prior: {kind: log-uniform}}
+  bot_density: {mode: search, bounds: [2000.0, 22000.0], scale: linear, default: 8960.0, prior: {kind: uniform}}
+  sub_c11: {mode: search, bounds: [20.0, 450.0], scale: linear, default: 165.6, prior: {kind: uniform}}
+  sub_c12: {mode: search, bounds: [0.0, 250.0], scale: linear, default: 63.9, prior: {kind: uniform}}
+  sub_c44: {mode: search, bounds: [5.0, 200.0], scale: linear, default: 79.5, prior: {kind: uniform}}
+  sub_scat: {mode: search, bounds: [9.0e-45, 5.0e-41], scale: log, default: 2.43e-42, prior: {kind: log-uniform}}
+  sub_decay: {mode: search, bounds: [5.0e-57, 5.0e-54], scale: log, default: 7.41e-56, prior: {kind: log-uniform}}
+  sub_decayTT: {mode: search, bounds: [0.5, 1.0], scale: linear, default: 0.74, prior: {kind: uniform}}
+  sub_lattice_a: {mode: search, bounds: [3.0, 10.0], scale: linear, default: 5.431, prior: {kind: uniform}}
+  temperature: {mode: search, bounds: [0.0, 0.1], scale: linear, default: 0.0, prior: {kind: uniform}}
+  lattice_deg: {mode: search, bounds: [0.0, 90.0], scale: linear, default: 45.0, prior: {kind: uniform}}
+  orientation_polar_cos: {mode: search, bounds: [-1.0, 1.0], scale: linear, default: 1.0, prior: {kind: uniform}}
+  orientation_azimuth_turns: {mode: search, bounds: [0.0, 1.0], scale: linear, default: 0.0, prior: {kind: uniform}}
+
+constraints:
+  - {name: cubic-c11-minus-c12, kind: linear, terms: {sub_c11: 1.0, sub_c12: -1.0}, operator: '>', rhs: 0.0}
+  - {name: cubic-c11-plus-two-c12, kind: linear, terms: {sub_c11: 1.0, sub_c12: 2.0}, operator: '>', rhs: 0.0}
+
+sampling:
+  kind: recorded-stratified
+  design_file: spatial-refinement-1617-sites.json
+  replicas: 8
+  seed: {algorithm: historical-position-v1, base: 20260728, bank_id: 9}
+
+event_counts:
+  events_per_task: 31250
+  events_total: 404250000
+  gun_energy_eV: 0.010
+
+physics:
+  resolvable: [realization, miller]
+  realization:
+    schema: stage4_realization_v1
+    mode: pseudo_si_base
+    substrate_carrier: G4_Si
+    base_lattice_map: Si
+    lattice_map: PseudoCubic
+  junction_gap_eV: 1.91e-4
+  substrate_thickness_um: 525.0
+  electrode_x_mm: [-2.0, 0.0, 2.0, -2.0, 0.0, 2.0, -2.0, 0.0, 2.0, 1.0, -1.0, 1.0, -1.0, -3.0, 1.0, -1.0, 3.0]
+  electrode_y_mm: [-2.0, -2.0, -2.0, 0.0, 0.0, 0.0, 2.0, 2.0, 2.0, -3.0, -1.0, 1.0, 3.0, -1.0, -1.0, 1.0, 1.0]
+
+analysis:
+  objective: device_junction_qps_per_eV
+  risk_95: report-only
+  uncertainty: hierarchical-site-and-replica-bootstrap
+  environment: {python: '3.12', numpy: '2.4.6', pandas: '3.0.3', blas: runtime-recorded-on-analysis}
+
+search: {}
+
+build:
+  mode: verified
+  executable_sha256: 83607e6cde7b05eb7ef76f782af8b76dbcc0c41ef3309e0aeea49802dc1a0b00
+  runtime_input_sha256:
+    libMain.so: c523c4de87e7560674bfa9ad2eaeb15c3770638b534dc5b51150df1581f05fd7
+    libG4cmp.so: 1a1179879f1212adb312302f55acb1229a5a2fba93394d009e16e369eca4100e
+    sensitivity_template_beamOn1e6.mac: a587ecbcd3142250111ed80de78bd42a9fa9b8272256b62e8aa0f9b9995b227a
+    Si/config.txt: 3c25c333397ac57e93d237946b9a64d6831111b31c8f3852360870fe12b6ffe2
+  geant4_revision: '10.7.4'
+  g4cmp_revision: 'local source snapshot; libG4cmp.so sha256 recorded above'
+  detector_revision: 'local source snapshot; libMain.so sha256 recorded above'
+  compiler: 'GCC 11.5.0 20240719 (Red Hat 11.5.0-11)'
+
+provenance:
+  parent_design_hash: 86ceb02854753869
+  refined_strata: [S3_le_0.50]
+  convergence_rule: material_scan/docs/results.md regional 5 percent rule

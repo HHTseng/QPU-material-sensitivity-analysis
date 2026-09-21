@@ -1,0 +1,190 @@
+{
+  "candidates": {
+    "cma-101-best": {
+      "confirmed_standard_error": 1.3247647246373706e-05,
+      "confirmed_value": 0.0003118154670495159,
+      "paired_difference_from_compatible_anchor": {
+        "confidence_interval_95": [
+          -0.0003275418750022035,
+          -0.00023602808225860943
+        ],
+        "n_sites": 2361,
+        "relative_to_b": -0.47470479626686274,
+        "sites_favouring_a": 1731,
+        "standard_error": 2.3345355291733186e-05,
+        "value": -0.00028178497863040646,
+        "z": -12.070280152480233
+      },
+      "paired_difference_from_reference": {
+        "confidence_interval_95": [
+          -0.002132770926762901,
+          -0.001953812611558289
+        ],
+        "n_sites": 2361,
+        "relative_to_b": -0.8676003103997524,
+        "sites_favouring_a": 2334,
+        "standard_error": 4.5652631429747934e-05,
+        "value": -0.002043291769160595,
+        "z": -44.75737115624743
+      },
+      "resolved_below_compatible_anchor": true,
+      "resolved_below_reference": true,
+      "screening_to_confirmation": -0.16747617262402104,
+      "screening_value": 0.0002595938060630914
+    },
+    "cma-202-best": {
+      "confirmed_standard_error": 1.5549704854339042e-05,
+      "confirmed_value": 0.0003638355395948629,
+      "paired_difference_from_compatible_anchor": {
+        "confidence_interval_95": [
+          -0.0002769886696719523,
+          -0.00018254114249816652
+        ],
+        "n_sites": 2361,
+        "relative_to_b": -0.38706996896183576,
+        "sites_favouring_a": 1615,
+        "standard_error": 2.4093756932088217e-05,
+        "value": -0.00022976490608505942,
+        "z": -9.536283890166464
+      },
+      "paired_difference_from_reference": {
+        "confidence_interval_95": [
+          -0.0020811124896079067,
+          -0.0019014309036225893
+        ],
+        "n_sites": 2361,
+        "relative_to_b": -0.8455121134185146,
+        "sites_favouring_a": 2329,
+        "standard_error": 4.583713928196872e-05,
+        "value": -0.001991271696615248,
+        "z": -43.442320524539554
+      },
+      "resolved_below_compatible_anchor": true,
+      "resolved_below_reference": true,
+      "screening_to_confirmation": -0.3026243737418306,
+      "screening_value": 0.0002537300372799465
+    },
+    "cma-303-best": {
+      "confirmed_standard_error": 1.8000028987267204e-05,
+      "confirmed_value": 0.0003068781220717043,
+      "paired_difference_from_compatible_anchor": {
+        "confidence_interval_95": [
+          -0.00033554841007500577,
+          -0.00023789623714143027
+        ],
+        "n_sites": 2361,
+        "relative_to_b": -0.4830224197015221,
+        "sites_favouring_a": 1830,
+        "standard_error": 2.4911268605503944e-05,
+        "value": -0.000286722323608218,
+        "z": -11.50974396963746
+      },
+      "paired_difference_from_reference": {
+        "confidence_interval_95": [
+          -0.0021375059315310325,
+          -0.0019589522967457806
+        ],
+        "n_sites": 2361,
+        "relative_to_b": -0.8696967520827038,
+        "sites_favouring_a": 2329,
+        "standard_error": 4.5549396628890864e-05,
+        "value": -0.0020482291141384066,
+        "z": -44.96720627994587
+      },
+      "resolved_below_compatible_anchor": true,
+      "resolved_below_reference": true,
+      "screening_to_confirmation": -0.24334928644795328,
+      "screening_value": 0.00023219955003906718
+    },
+    "compatible-anchor": {
+      "confirmed_standard_error": 2.090392984535915e-05,
+      "confirmed_value": 0.0005936004456799223,
+      "paired_difference_from_compatible_anchor": null,
+      "paired_difference_from_reference": {
+        "confidence_interval_95": [
+          -0.0018497319792943664,
+          -0.0016732816017660111
+        ],
+        "n_sites": 2361,
+        "relative_to_b": -0.7479518399191212,
+        "sites_favouring_a": 2299,
+        "standard_error": 4.50128514102947e-05,
+        "value": -0.0017615067905301888,
+        "z": -39.133419353374315
+      },
+      "resolved_below_compatible_anchor": null,
+      "resolved_below_reference": true,
+      "screening_to_confirmation": -0.1472042330386223,
+      "screening_value": 0.000506219947342225
+    },
+    "reference": {
+      "confirmed_standard_error": 4.701747646705286e-05,
+      "confirmed_value": 0.002355107236210111,
+      "paired_difference_from_compatible_anchor": null,
+      "paired_difference_from_reference": null,
+      "resolved_below_compatible_anchor": null,
+      "resolved_below_reference": null,
+      "screening_to_confirmation": -0.04635208700226712,
+      "screening_value": 0.002245943100697631
+    }
+  },
+  "design_hash": "8d6f9b224ce5f834",
+  "events_per_task": 31250,
+  "pairwise_finalists": {
+    "cma-101-best-minus-cma-202-best": {
+      "a": "cma-101-best",
+      "b": "cma-202-best",
+      "confidence_interval_95": [
+        -8.933046309431133e-05,
+        -1.4709681996382678e-05
+      ],
+      "n_sites": 2361,
+      "relative_to_b": -0.14297688621422813,
+      "resolved_lower": "cma-101-best",
+      "sites_favouring_a": 1230,
+      "standard_error": 1.903591354538996e-05,
+      "value": -5.2020072545347e-05,
+      "z": -2.7327331793826626
+    },
+    "cma-101-best-minus-cma-303-best": {
+      "a": "cma-101-best",
+      "b": "cma-303-best",
+      "confidence_interval_95": [
+        -3.207056246385922e-05,
+        4.194525241948241e-05
+      ],
+      "n_sites": 2361,
+      "relative_to_b": 0.016088944185659298,
+      "resolved_lower": null,
+      "sites_favouring_a": 830,
+      "standard_error": 1.8881585429423886e-05,
+      "value": 4.9373449778115915e-06,
+      "z": 0.2614899578357197
+    },
+    "cma-202-best-minus-cma-303-best": {
+      "a": "cma-202-best",
+      "b": "cma-303-best",
+      "confidence_interval_95": [
+        1.6169640050231593e-05,
+        9.77451949960856e-05
+      ],
+      "n_sites": 2361,
+      "relative_to_b": 0.1856027309429705,
+      "resolved_lower": "cma-303-best",
+      "sites_favouring_a": 787,
+      "standard_error": 2.0810090547411737e-05,
+      "value": 5.6957417523158595e-05,
+      "z": 2.7370095960607292
+    }
+  },
+  "ranking": [
+    "cma-303-best",
+    "cma-101-best",
+    "cma-202-best",
+    "compatible-anchor",
+    "reference"
+  ],
+  "replicas": 8,
+  "schema": "material-scan-confirmation-report-1",
+  "sites": 2361
+}

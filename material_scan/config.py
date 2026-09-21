@@ -767,6 +767,13 @@ def resolve_experiment(
     """Resolve a source experiment once; the returned object cannot be mutated."""
 
     resolved_values = _mapping(resolved_values, "resolved values")
+    physics_values: Mapping[str, Any] = {}
+    if "parameters" in resolved_values or "physics" in resolved_values:
+        _reject_unknown(resolved_values, ("parameters", "physics"), "resolved values envelope")
+        physics_values = _mapping(resolved_values.get("physics", {}), "resolved physics values")
+        resolved_values = _mapping(
+            resolved_values.get("parameters", {}), "resolved parameter values"
+        )
     declared = {parameter.name for parameter in spec.parameters}
     unknown = sorted(set(resolved_values) - declared)
     if unknown:
@@ -826,6 +833,38 @@ def resolve_experiment(
         )
     except SamplingError as exc:
         raise ConfigError(str(exc)) from exc
+    physics = dict(_thaw(spec.physics))
+    permitted_physics = physics.pop("resolvable", [])
+    if not isinstance(permitted_physics, Sequence) or isinstance(permitted_physics, (str, bytes)):
+        raise ConfigError("physics.resolvable must be a list of field names")
+    unknown_physics = sorted(set(physics_values) - set(permitted_physics))
+    if unknown_physics:
+        raise ConfigError(f"resolved physics values contain undeclared field(s) {unknown_physics}")
+    if "miller" in physics_values:
+        miller = physics_values["miller"]
+        if (
+            not isinstance(miller, Sequence)
+            or isinstance(miller, (str, bytes))
+            or len(miller) != 3
+            or any(not isinstance(value, int) or isinstance(value, bool) for value in miller)
+            or all(value == 0 for value in miller)
+        ):
+            raise ConfigError("resolved physics miller must be three integers, not all zero")
+    if "realization" in physics_values:
+        realization = _mapping(physics_values["realization"], "resolved realization", nonempty=True)
+        required = {"schema", "mode", "substrate_carrier", "base_lattice_map", "lattice_map"}
+        missing = sorted(required - set(realization))
+        if missing:
+            raise ConfigError(f"resolved realization is missing {missing}")
+        if realization["schema"] != "stage4_realization_v1":
+            raise ConfigError("resolved realization has an unsupported schema")
+        if realization["mode"] not in ("pseudo_si_base", "native_g4cmp", "custom_material"):
+            raise ConfigError("resolved realization has an unsupported mode")
+        if any(not isinstance(realization[name], str) or not realization[name]
+               for name in ("substrate_carrier", "base_lattice_map", "lattice_map")):
+            raise ConfigError("resolved realization names must be non-empty strings")
+    physics.update(_thaw(physics_values))
+
     return ResolvedExperiment(
         experiment_id=spec.experiment_id,
         purpose=spec.purpose,
@@ -833,7 +872,7 @@ def resolve_experiment(
         constraints=spec.constraints,
         sampling=sampling,
         event_counts=spec.event_counts,
-        physics=spec.physics,
+        physics=_freeze(physics),
         analysis=spec.analysis,
         search=spec.search,
         build=spec.build,

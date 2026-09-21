@@ -1,0 +1,84 @@
+schema: material-scan-experiment-1
+id: live-smoke-baseline
+purpose: Exercise rendering, Geant4 execution, publication, scoring, and storage at one retained site.
+
+parameters:
+  topfilm_vsound: {mode: fixed, value: 2.444}
+  topfilm_gap: {mode: fixed, value: 1.5384e-3}
+  topfilm_ph_lifetime: {mode: fixed, value: 0.00417}
+  topfilm_density: {mode: fixed, value: 8570.0}
+  bot_vsound: {mode: fixed, value: 2.608}
+  bot_gap_thres: {mode: fixed, value: 1.80e-4}
+  bot_ph_lifetime: {mode: fixed, value: 5.1}
+  bot_density: {mode: fixed, value: 8960.0}
+  sub_c11: {mode: fixed, value: 165.6}
+  sub_c12: {mode: fixed, value: 63.9}
+  sub_c44: {mode: fixed, value: 79.5}
+  sub_scat: {mode: fixed, value: 2.43e-42}
+  sub_decay: {mode: fixed, value: 7.41e-56}
+  sub_decayTT: {mode: fixed, value: 0.74}
+  sub_lattice_a: {mode: fixed, value: 5.431}
+  temperature: {mode: fixed, value: 0.0}
+  lattice_deg: {mode: fixed, value: 45.0}
+  orientation_polar_cos: {mode: fixed, value: 1.0}
+  orientation_azimuth_turns: {mode: fixed, value: 0.0}
+
+constraints:
+  - name: cubic-c11-minus-c12
+    kind: linear
+    terms: {sub_c11: 1.0, sub_c12: -1.0}
+    operator: '>'
+    rhs: 0.0
+  - name: cubic-c11-plus-two-c12
+    kind: linear
+    terms: {sub_c11: 1.0, sub_c12: 2.0}
+    operator: '>'
+    rhs: 0.0
+
+sampling:
+  kind: recorded-stratified
+  design_file: live-smoke-site.json
+  replicas: 1
+  seed: {algorithm: historical-position-v1, base: 20260728, bank_id: 9}
+
+event_counts:
+  events_per_task: 1000
+  events_total: 1000
+  gun_energy_eV: 0.010
+
+physics:
+  realization:
+    schema: stage4_realization_v1
+    mode: pseudo_si_base
+    substrate_carrier: G4_Si
+    base_lattice_map: Si
+    lattice_map: PseudoCubic
+  junction_gap_eV: 1.91e-4
+  substrate_thickness_um: 525.0
+  electrode_x_mm: [-2.0, 0.0, 2.0, -2.0, 0.0, 2.0, -2.0, 0.0, 2.0, 1.0, -1.0, 1.0, -1.0, -3.0, 1.0, -1.0, 3.0]
+  electrode_y_mm: [-2.0, -2.0, -2.0, 0.0, 0.0, 0.0, 2.0, 2.0, 2.0, -3.0, -1.0, 1.0, 3.0, -1.0, -1.0, 1.0, 1.0]
+
+analysis:
+  objective: device_junction_qps_per_eV
+  risk_95: report-only
+  uncertainty: hierarchical-site-and-replica-bootstrap
+  environment: {python: '3.12', numpy: '2.4.6', pandas: '3.0.3', blas: runtime-recorded-on-analysis}
+
+search: {}
+
+build:
+  mode: verified
+  executable_sha256: 83607e6cde7b05eb7ef76f782af8b76dbcc0c41ef3309e0aeea49802dc1a0b00
+  runtime_input_sha256:
+    libMain.so: c523c4de87e7560674bfa9ad2eaeb15c3770638b534dc5b51150df1581f05fd7
+    libG4cmp.so: 1a1179879f1212adb312302f55acb1229a5a2fba93394d009e16e369eca4100e
+    sensitivity_template_beamOn1e6.mac: a587ecbcd3142250111ed80de78bd42a9fa9b8272256b62e8aa0f9b9995b227a
+    Si/config.txt: 3c25c333397ac57e93d237946b9a64d6831111b31c8f3852360870fe12b6ffe2
+  geant4_revision: '10.7.4'
+  g4cmp_revision: 'local source snapshot; libG4cmp.so sha256 recorded above'
+  detector_revision: 'local source snapshot; libMain.so sha256 recorded above'
+  compiler: 'GCC 11.5.0 20240719 (Red Hat 11.5.0-11)'
+
+provenance:
+  status: disposable live-path check; not a spatial estimate
+  reference_task: data/runs/stage4_property_v1_strat512/stage4_property_v1_strat512_e39029f467c3

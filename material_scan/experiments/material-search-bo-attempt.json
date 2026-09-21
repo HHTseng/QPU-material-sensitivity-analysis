@@ -1,0 +1,35 @@
+{
+  "schema": "material-scan-incomplete-search-1",
+  "experiment_spec_key": "fef98f9824d5faec920abdd68fef88ee36f522832052c52c30c04331706768c0",
+  "method": "bo_gp",
+  "seed": 101,
+  "common_starting_points": 32,
+  "requested_model_selected_points": 120,
+  "completed_model_selected_points": 0,
+  "proposal": {
+    "bot_density": 22000.0,
+    "bot_gap_thres": 0.000382,
+    "bot_ph_lifetime": 0.5,
+    "bot_vsound": 2.0493994459228158,
+    "sub_c11": 946.1754609667673,
+    "sub_c12": 0.0,
+    "sub_c44": 600.0,
+    "sub_decay": 5e-57,
+    "sub_decayTT": 1.0,
+    "sub_scat": 1.5597839783973007e-44,
+    "topfilm_density": 2000.0,
+    "topfilm_gap": 0.0035,
+    "topfilm_ph_lifetime": 0.001,
+    "topfilm_vsound": 1.5
+  },
+  "simulation": {
+    "manifest_key": "b806f3d9e3b5b11823bde878b042d6b37c0a7446da07dca40f5a9badd4f36638",
+    "declared_tasks": 512,
+    "simultaneous_tasks": 60,
+    "completed_tasks": 0,
+    "observed_elapsed_seconds_lower_bound": 3600,
+    "candidate_completion_hours_lower_bound": 8.533333333333333,
+    "requested_search_days_lower_bound_if_repeated": 42.666666666666664
+  },
+  "interpretation": "The first expected-improvement proposal selected the minimum substrate decay face and a near-minimum scattering value. No task finished in one hour. The attempt was stopped without reporting an objective value to the Gaussian process. The elapsed-time estimates are lower bounds based only on the observed first group of simultaneous tasks; they are not quasiparticle measurements."
+}

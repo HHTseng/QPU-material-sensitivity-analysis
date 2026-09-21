@@ -35,6 +35,8 @@ import experiment_database as EDB
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(HERE)
+DATA_ROOT = os.path.join(REPO_ROOT, "data")
+MACRO_ROOT = os.path.join(HERE, "macros")
 for _p in (HERE, REPO_ROOT):
     if _p not in sys.path:
         sys.path.insert(0, _p)
@@ -65,12 +67,12 @@ def check_energy_protocol(definition_path, param_set):
     e_definition = float(fixed["gun_energy_eV"])
     min_definition = float(fixed["min_e_phonons_eV"])
 
-    templates = sorted(f for f in os.listdir(REPO_ROOT)
+    templates = sorted(f for f in os.listdir(MACRO_ROOT)
                        if f.startswith("sensitivity_template_beamOn")
                        and f.endswith(".mac"))
     bad = []
     for name in templates:
-        text = open(os.path.join(REPO_ROOT, name)).read()
+        text = open(os.path.join(MACRO_ROOT, name)).read()
         for cmd, want in (("/main/gun/setEnergy", e_definition),
                           ("/g4cmp/minEPhonons", min_definition)):
             found = None
@@ -241,7 +243,7 @@ def check_database_status(database_path, registry_path=None):
 
     # Manifests claim zero failures; the database is the authority.
     mismatches = []
-    runs_dir = os.path.join(HERE, "runs")
+    runs_dir = os.path.join(DATA_ROOT, "runs")
     if os.path.isdir(runs_dir):
         for campaign in sorted(os.listdir(runs_dir)):
             cdir = os.path.join(runs_dir, campaign)
@@ -658,11 +660,11 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--definition", default=os.path.join(HERE, "stage4_config.yaml"))
-    ap.add_argument("--database", default=os.path.join(HERE, "stage4_trials.sqlite"))
+    ap.add_argument("--database", default=os.path.join(DATA_ROOT, "stage4_trials.sqlite"))
     ap.add_argument("--registry",
                     default=os.path.join(HERE, "stage4_invalidations.yaml"))
     ap.add_argument("--param-set", default=os.path.join(HERE, "parameter_set.txt"))
-    ap.add_argument("--results", default=os.path.join(HERE, "results"))
+    ap.add_argument("--results", default=os.path.join(DATA_ROOT, "results"))
     ap.add_argument("--json", default=None)
     ap.add_argument("--strict", action="store_true",
                     help="treat warnings as failures")

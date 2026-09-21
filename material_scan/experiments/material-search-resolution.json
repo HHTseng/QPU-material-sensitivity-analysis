@@ -1,0 +1,275 @@
+{
+  "candidates": {
+    "baseline": {
+      "128-sites-2-replicas": {
+        "maximum_site_leverage": 0.03216195400828531,
+        "relative_standard_error": 0.07286132878367559,
+        "relative_to_full": 0.010937913247259345,
+        "standard_error": 0.0001729793301920531,
+        "value": 0.002374089699978251,
+        "zero_hit_fraction": 0.03515625
+      },
+      "128-sites-4-replicas": {
+        "maximum_site_leverage": 0.031841334154540456,
+        "relative_standard_error": 0.06171757449686054,
+        "relative_to_full": 0.010906173973536104,
+        "standard_error": 0.00014651845770198742,
+        "value": 0.0023740151633703708,
+        "zero_hit_fraction": 0.033203125
+      },
+      "128-sites-8-replicas": {
+        "maximum_site_leverage": 0.0285358416923505,
+        "relative_standard_error": 0.058609932829613645,
+        "relative_to_full": 0.019763020287096422,
+        "standard_error": 0.0001403599233407371,
+        "value": 0.002394814608451793,
+        "zero_hit_fraction": 0.0283203125
+      },
+      "2361-sites-8-replicas": {
+        "maximum_site_leverage": 0.007614577660896192,
+        "relative_standard_error": 0.019780818257957734,
+        "relative_to_full": 0.0,
+        "standard_error": 4.6453334342277426e-05,
+        "value": 0.0023484030709189424,
+        "zero_hit_fraction": 0.01768318509106311
+      },
+      "256-sites-2-replicas": {
+        "maximum_site_leverage": 0.01976179343068416,
+        "relative_standard_error": 0.05120212580281501,
+        "relative_to_full": 0.03867418000987821,
+        "standard_error": 0.00012489353777451315,
+        "value": 0.0024392256340194122,
+        "zero_hit_fraction": 0.033203125
+      },
+      "256-sites-4-replicas": {
+        "maximum_site_leverage": 0.015687331301798255,
+        "relative_standard_error": 0.04414867335754989,
+        "relative_to_full": 0.02098630349608488,
+        "standard_error": 0.00010585471653356762,
+        "value": 0.002397687370496385,
+        "zero_hit_fraction": 0.0322265625
+      },
+      "256-sites-8-replicas": {
+        "maximum_site_leverage": 0.013325194631990972,
+        "relative_standard_error": 0.038386600879042894,
+        "relative_to_full": 0.04443455997452728,
+        "standard_error": 9.415286305737322e-05,
+        "value": 0.0024527533280180543,
+        "zero_hit_fraction": 0.0302734375
+      },
+      "512-sites-2-replicas": {
+        "maximum_site_leverage": 0.00979376758208809,
+        "relative_standard_error": 0.036314718779899655,
+        "relative_to_full": 0.0366467268619064,
+        "standard_error": 8.840688849762833e-05,
+        "value": 0.0024344643568205713,
+        "zero_hit_fraction": 0.0302734375
+      },
+      "512-sites-8-replicas": {
+        "maximum_site_leverage": 0.00823409362741442,
+        "relative_standard_error": 0.028711868917517796,
+        "relative_to_full": 0.02856028919261755,
+        "standard_error": 6.935277693201675e-05,
+        "value": 0.0024154741417652184,
+        "zero_hit_fraction": 0.03466796875
+      }
+    },
+    "nb-anchor": {
+      "128-sites-2-replicas": {
+        "maximum_site_leverage": 0.08387956550756762,
+        "relative_standard_error": 0.18585890677951916,
+        "relative_to_full": 0.11384022141310646,
+        "standard_error": 9.10637030735975e-05,
+        "value": 0.0004899614694367304,
+        "zero_hit_fraction": 0.3515625
+      },
+      "128-sites-4-replicas": {
+        "maximum_site_leverage": 0.05632920481962761,
+        "relative_standard_error": 0.14186143369227805,
+        "relative_to_full": -0.004831322052361253,
+        "standard_error": 6.210121185493406e-05,
+        "value": 0.0004377596520675402,
+        "zero_hit_fraction": 0.359375
+      },
+      "128-sites-8-replicas": {
+        "maximum_site_leverage": 0.0509982066425724,
+        "relative_standard_error": 0.12094807183633816,
+        "relative_to_full": 0.007596972173636196,
+        "standard_error": 5.360741121384974e-05,
+        "value": 0.0004432266707516349,
+        "zero_hit_fraction": 0.380859375
+      },
+      "2361-sites-8-replicas": {
+        "maximum_site_leverage": 0.006807845679437577,
+        "relative_standard_error": 0.03876990854824949,
+        "relative_to_full": 0.0,
+        "standard_error": 1.705429647542126e-05,
+        "value": 0.00043988487757707853,
+        "zero_hit_fraction": 0.5182126217704363
+      },
+      "256-sites-2-replicas": {
+        "maximum_site_leverage": 0.04270280033830031,
+        "relative_standard_error": 0.12544762732068854,
+        "relative_to_full": -0.027610647682481892,
+        "standard_error": 5.3658889228864676e-05,
+        "value": 0.00042773937120144616,
+        "zero_hit_fraction": 0.408203125
+      },
+      "256-sites-4-replicas": {
+        "maximum_site_leverage": 0.02535673994219312,
+        "relative_standard_error": 0.10061453354458293,
+        "relative_to_full": 0.06442849110528326,
+        "standard_error": 4.711034023123484e-05,
+        "value": 0.00046822599649940194,
+        "zero_hit_fraction": 0.4072265625
+      },
+      "256-sites-8-replicas": {
+        "maximum_site_leverage": 0.022239608159948045,
+        "relative_standard_error": 0.08029483883876795,
+        "relative_to_full": 0.02690935179501075,
+        "standard_error": 3.6270936718588014e-05,
+        "value": 0.0004517218944971053,
+        "zero_hit_fraction": 0.421875
+      },
+      "512-sites-2-replicas": {
+        "maximum_site_leverage": 0.02138077644928016,
+        "relative_standard_error": 0.09401248364764869,
+        "relative_to_full": -0.08540325840315033,
+        "standard_error": 3.7822846303827105e-05,
+        "value": 0.00040231727570972514,
+        "zero_hit_fraction": 0.443359375
+      },
+      "512-sites-8-replicas": {
+        "maximum_site_leverage": 0.01103432894682697,
+        "relative_standard_error": 0.05536505711129711,
+        "relative_to_full": 0.019002009668530162,
+        "standard_error": 2.4817031089443014e-05,
+        "value": 0.0004482435742738384,
+        "zero_hit_fraction": 0.44287109375
+      }
+    },
+    "sic": {
+      "128-sites-2-replicas": {
+        "maximum_site_leverage": 0.07615668300186093,
+        "relative_standard_error": 0.1332039216467869,
+        "relative_to_full": 0.03634670094882364,
+        "standard_error": 0.00016533124173946209,
+        "value": 0.0012411889957554426,
+        "zero_hit_fraction": 0.04296875
+      },
+      "128-sites-4-replicas": {
+        "maximum_site_leverage": 0.05212796500006921,
+        "relative_standard_error": 0.10683972865761451,
+        "relative_to_full": 0.05325726874430137,
+        "standard_error": 0.00013477212888664592,
+        "value": 0.0012614420738426375,
+        "zero_hit_fraction": 0.052734375
+      },
+      "128-sites-8-replicas": {
+        "maximum_site_leverage": 0.05469957314170104,
+        "relative_standard_error": 0.08584027039081106,
+        "relative_to_full": 0.019423595246554237,
+        "standard_error": 0.00010480418031423747,
+        "value": 0.0012209209015429246,
+        "zero_hit_fraction": 0.0615234375
+      },
+      "2361-sites-8-replicas": {
+        "maximum_site_leverage": 0.005835561855756774,
+        "relative_standard_error": 0.028346941551117277,
+        "relative_to_full": 0.0,
+        "standard_error": 3.394994347389438e-05,
+        "value": 0.001197658075834155,
+        "zero_hit_fraction": 0.03748411689961881
+      },
+      "256-sites-2-replicas": {
+        "maximum_site_leverage": 0.043883967718498305,
+        "relative_standard_error": 0.09528960584987545,
+        "relative_to_full": 0.09779880141180697,
+        "standard_error": 0.0001252855921947788,
+        "value": 0.0013147876001519065,
+        "zero_hit_fraction": 0.044921875
+      },
+      "256-sites-4-replicas": {
+        "maximum_site_leverage": 0.0528316192246323,
+        "relative_standard_error": 0.08588860274677522,
+        "relative_to_full": 0.0677002862430256,
+        "standard_error": 0.0001098291807443379,
+        "value": 0.0012787398703893987,
+        "zero_hit_fraction": 0.0556640625
+      },
+      "256-sites-8-replicas": {
+        "maximum_site_leverage": 0.04282486071136163,
+        "relative_standard_error": 0.06643755393102226,
+        "relative_to_full": 0.06086925069099314,
+        "standard_error": 8.441280720379619e-05,
+        "value": 0.0012705586254941966,
+        "zero_hit_fraction": 0.06103515625
+      },
+      "512-sites-2-replicas": {
+        "maximum_site_leverage": 0.05413927567713683,
+        "relative_standard_error": 0.08229680414389177,
+        "relative_to_full": 0.03070816952513833,
+        "standard_error": 0.000101590134680127,
+        "value": 0.0012344359630600214,
+        "zero_hit_fraction": 0.0556640625
+      },
+      "512-sites-8-replicas": {
+        "maximum_site_leverage": 0.05070159392079464,
+        "relative_standard_error": 0.06750401736196535,
+        "relative_to_full": 0.04853744416310013,
+        "standard_error": 8.477082526293201e-05,
+        "value": 0.0012557893378164413,
+        "zero_hit_fraction": 0.065185546875
+      }
+    }
+  },
+  "full_level": "2361-sites-8-replicas",
+  "ranking": {
+    "128-sites-2-replicas": [
+      "nb-anchor",
+      "sic",
+      "baseline"
+    ],
+    "128-sites-4-replicas": [
+      "nb-anchor",
+      "sic",
+      "baseline"
+    ],
+    "128-sites-8-replicas": [
+      "nb-anchor",
+      "sic",
+      "baseline"
+    ],
+    "2361-sites-8-replicas": [
+      "nb-anchor",
+      "sic",
+      "baseline"
+    ],
+    "256-sites-2-replicas": [
+      "nb-anchor",
+      "sic",
+      "baseline"
+    ],
+    "256-sites-4-replicas": [
+      "nb-anchor",
+      "sic",
+      "baseline"
+    ],
+    "256-sites-8-replicas": [
+      "nb-anchor",
+      "sic",
+      "baseline"
+    ],
+    "512-sites-2-replicas": [
+      "nb-anchor",
+      "sic",
+      "baseline"
+    ],
+    "512-sites-8-replicas": [
+      "nb-anchor",
+      "sic",
+      "baseline"
+    ]
+  },
+  "schema": "material-scan-resolution-report-1"
+}

@@ -1,0 +1,199 @@
+{
+  "candidates": {
+    "baseline": {
+      "change_from_previous": -0.0028186304696937773,
+      "change_in_combined_standard_errors": -0.10199596929525398,
+      "combined_standard_error": 6.508090995106377e-05,
+      "contribution_fraction_by_stratum": {
+        "S0_junction": 0.011344450585379154,
+        "S1_le_0.05": 0.14363809988470358,
+        "S2_le_0.20": 0.23966843991148823,
+        "S3_le_0.50": 0.26246016322051147,
+        "S4_bulk": 0.3428888463979176
+      },
+      "contributions_by_stratum": {
+        "S0_junction": 2.66413425925926e-05,
+        "S1_le_0.05": 0.0003373201548701997,
+        "S2_le_0.20": 0.0005628381002904909,
+        "S3_le_0.50": 0.000616362253300936,
+        "S4_bulk": 0.0008052412198647233
+      },
+      "criteria": {
+        "each_refined_stratum_changes_at_most_5_percent": true,
+        "maximum_site_leverage_at_most_10_percent": true,
+        "overall_change_at_most_5_percent": true,
+        "overall_change_within_two_combined_standard_errors": true,
+        "reduction_change_at_most_5_percentage_points": true
+      },
+      "maximum_site_leverage": 0.007614577660896192,
+      "means_by_stratum": {
+        "S0_junction": 1.002968191721133,
+        "S1_le_0.05": 0.12793604505632042,
+        "S2_le_0.20": 0.01712754435107376,
+        "S3_le_0.50": 0.0034533839342188485,
+        "S4_bulk": 0.001024487004103967
+      },
+      "paired_difference_from_baseline": null,
+      "passes_candidate_checks": true,
+      "previous_value": 0.0023550410614120183,
+      "reduction_change_percentage_points": null,
+      "reduction_from_baseline": null,
+      "reduction_from_baseline_previous": null,
+      "refined_stratum_change": {
+        "S1_le_0.05": 0.0,
+        "S3_le_0.50": -0.010654876236726785,
+        "S4_bulk": 0.0
+      },
+      "relative_standard_error": 0.019780818257957734,
+      "spatial_r95": 0.3356469561640034,
+      "spatial_r95_standard_error": 0.011983935809133048,
+      "standard_error": 4.6453334342277426e-05,
+      "value": 0.0023484030709189424,
+      "zero_hit_fraction": 0.01768318509106311
+    },
+    "elasticity_of_SiC": {
+      "change_from_previous": -7.54021434563424e-05,
+      "change_in_combined_standard_errors": -0.0019194015351107015,
+      "combined_standard_error": 4.7052580802938576e-05,
+      "contribution_fraction_by_stratum": {
+        "S0_junction": 0.0011917161895513815,
+        "S1_le_0.05": 0.06990016928887294,
+        "S2_le_0.20": 0.1083078559936505,
+        "S3_le_0.50": 0.2793294519378084,
+        "S4_bulk": 0.5412708065901168
+      },
+      "contributions_by_stratum": {
+        "S0_junction": 1.4272685185185186e-06,
+        "S1_le_0.05": 8.371650225099326e-05,
+        "S2_le_0.20": 0.00012971577840707822,
+        "S3_le_0.50": 0.0003345411739316447,
+        "S4_bulk": 0.0006482573527259204
+      },
+      "criteria": {
+        "each_refined_stratum_changes_at_most_5_percent": true,
+        "maximum_site_leverage_at_most_10_percent": true,
+        "overall_change_at_most_5_percent": true,
+        "overall_change_within_two_combined_standard_errors": true,
+        "reduction_change_at_most_5_percentage_points": true
+      },
+      "maximum_site_leverage": 0.005835561855756774,
+      "means_by_stratum": {
+        "S0_junction": 0.053732461873638344,
+        "S1_le_0.05": 0.03175131414267835,
+        "S2_le_0.20": 0.003947338935574229,
+        "S3_le_0.50": 0.0018743833017077797,
+        "S4_bulk": 0.0008247606019151848
+      },
+      "paired_difference_from_baseline": {
+        "confidence_interval_95": [
+          -0.0012308637994819572,
+          -0.0010706261906876183
+        ],
+        "n_sites": 2361,
+        "relative_to_b": -0.4900117059694081,
+        "sites_favouring_a": 2117,
+        "standard_error": 4.0876941018964004e-05,
+        "value": -0.0011507449950847878,
+        "z": -28.151445935030306
+      },
+      "passes_candidate_checks": true,
+      "previous_value": 0.001197748388629979,
+      "reduction_change_percentage_points": 0.13991198308683783,
+      "reduction_from_baseline": -0.4900117059694079,
+      "reduction_from_baseline_previous": -0.4914108258002763,
+      "refined_stratum_change": {
+        "S1_le_0.05": 0.0,
+        "S3_le_0.50": -0.00026988732204302757,
+        "S4_bulk": 0.0
+      },
+      "relative_standard_error": 0.028346941551117277,
+      "spatial_r95": 0.08971887875112085,
+      "spatial_r95_standard_error": 0.0035323139789060947,
+      "standard_error": 3.394994347389438e-05,
+      "value": 0.001197658075834155,
+      "zero_hit_fraction": 0.03748411689961881
+    },
+    "nb_gap_compatible_anchor": {
+      "change_from_previous": 0.0024053332097087954,
+      "change_in_combined_standard_errors": 0.043719027222885974,
+      "combined_standard_error": 2.4143510691891664e-05,
+      "contribution_fraction_by_stratum": {
+        "S0_junction": 0.007288417898051144,
+        "S1_le_0.05": 0.08870164064487313,
+        "S2_le_0.20": 0.13384113001746745,
+        "S3_le_0.50": 0.2419450878039898,
+        "S4_bulk": 0.5282237236356184
+      },
+      "contributions_by_stratum": {
+        "S0_junction": 3.2060648148148154e-06,
+        "S1_le_0.05": 3.901851033595603e-05,
+        "S2_le_0.20": 5.887468909251152e-05,
+        "S3_le_0.50": 0.00010642798532903356,
+        "S4_bulk": 0.0002323576280047626
+      },
+      "criteria": {
+        "each_refined_stratum_changes_at_most_5_percent": true,
+        "maximum_site_leverage_at_most_10_percent": true,
+        "overall_change_at_most_5_percent": true,
+        "overall_change_within_two_combined_standard_errors": true,
+        "reduction_change_at_most_5_percentage_points": true
+      },
+      "maximum_site_leverage": 0.006807845679437577,
+      "means_by_stratum": {
+        "S0_junction": 0.12069891067538127,
+        "S1_le_0.05": 0.014798623279098873,
+        "S2_le_0.20": 0.0017915966386554622,
+        "S3_le_0.50": 0.0005962998102466793,
+        "S4_bulk": 0.0002956224350205198
+      },
+      "paired_difference_from_baseline": {
+        "confidence_interval_95": [
+          -0.001991316354399693,
+          -0.0018257200322840351
+        ],
+        "n_sites": 2361,
+        "relative_to_b": -0.8126876586799263,
+        "sites_favouring_a": 2331,
+        "standard_error": 4.224395972338217e-05,
+        "value": -0.0019085181933418641,
+        "z": -45.17848719293928
+      },
+      "passes_candidate_checks": true,
+      "previous_value": 0.0004388293467758837,
+      "reduction_change_percentage_points": 0.0976164865989615,
+      "reduction_from_baseline": -0.8126876586799261,
+      "reduction_from_baseline_previous": -0.8136638235459157,
+      "refined_stratum_change": {
+        "S1_le_0.05": 0.0,
+        "S3_le_0.50": 0.010017141632740367,
+        "S4_bulk": 0.0
+      },
+      "relative_standard_error": 0.03876990854824949,
+      "spatial_r95": 0.04078347184878429,
+      "spatial_r95_standard_error": 0.0016193154647088997,
+      "standard_error": 1.705429647542126e-05,
+      "value": 0.00043988487757707853,
+      "zero_hit_fraction": 0.5182126217704363
+    }
+  },
+  "design_hash": "8d6f9b224ce5f834",
+  "events_per_task": 31250,
+  "previous_design_hash": "52733a6be0e07ced",
+  "previous_sites": 1617,
+  "ranking": [
+    "nb_gap_compatible_anchor",
+    "elasticity_of_SiC",
+    "baseline"
+  ],
+  "ranking_passes": true,
+  "ranking_previous": [
+    "nb_gap_compatible_anchor",
+    "elasticity_of_SiC",
+    "baseline"
+  ],
+  "replicas": 8,
+  "resolved_ranking_inversions": [],
+  "schema": "material-scan-refinement-report-1",
+  "sites": 2361,
+  "spatial_converged": true
+}

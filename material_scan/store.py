@@ -433,6 +433,42 @@ class Store:
             ).rowcount
         return changed == 1
 
+    def clear_abandoned_controller(
+        self,
+        expected_owner: str,
+        expected_token: str,
+        inactive_s: float,
+        *,
+        now: float | None = None,
+    ) -> bool:
+        """Fence one exact controller after its heartbeat has stopped."""
+
+        _require_nonempty("expected_owner", expected_owner)
+        _require_nonempty("expected_token", expected_token)
+        if inactive_s <= 0:
+            raise ValueError("inactive_s must be positive")
+        moment = self._clock() if now is None else float(now)
+        with self._transaction() as connection:
+            row = connection.execute(
+                "SELECT owner,token,heartbeat_at FROM controller_lease WHERE singleton=1"
+            ).fetchone()
+            if row is None:
+                return False
+            if row["owner"] != expected_owner or row["token"] != expected_token:
+                raise LeaseBusy("the current controller does not match the expected owner and token")
+            inactive_for = moment - float(row["heartbeat_at"])
+            if inactive_for < float(inactive_s):
+                raise LeaseBusy(
+                    f"controller heartbeat is only {inactive_for:.1f} seconds old; "
+                    f"required {float(inactive_s):.1f}"
+                )
+            changed = connection.execute(
+                "DELETE FROM controller_lease "
+                "WHERE singleton=1 AND owner=? AND token=? AND heartbeat_at=?",
+                (expected_owner, expected_token, float(row["heartbeat_at"])),
+            ).rowcount
+        return changed == 1
+
     def _leased_transaction(self, lease: ControllerLease, now: float | None = None):
         moment = self._clock() if now is None else float(now)
 

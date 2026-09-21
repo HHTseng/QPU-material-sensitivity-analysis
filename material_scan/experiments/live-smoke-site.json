@@ -1,0 +1,24 @@
+{
+  "sites_mm": [[-2.002443, -1.999722, 0.259875]],
+  "stratum": ["smoke"],
+  "nearest_electrode": [0],
+  "stratum_weights": {"smoke": 1.0},
+  "stratum_counts": {"smoke": 1},
+  "band_edges_mm": [],
+  "junction_half_extent_mm": [0.005, 0.005],
+  "injection_law": "uniform_surface",
+  "position_seed": 20260727,
+  "half_span_mm": 4.0,
+  "gun_energy_eV": 0.01,
+  "normalization_basis": "per_injected_eV",
+  "electrode_weights": [
+    0.058823529411764705, 0.058823529411764705, 0.058823529411764705,
+    0.058823529411764705, 0.058823529411764705, 0.058823529411764705,
+    0.058823529411764705, 0.058823529411764705, 0.058823529411764705,
+    0.058823529411764705, 0.058823529411764705, 0.058823529411764705,
+    0.058823529411764705, 0.058823529411764705, 0.058823529411764705,
+    0.058823529411764705, 0.058823529411764705
+  ],
+  "geometry_source": "disposable live-path check at one retained site; not a scientific spatial estimate",
+  "design_hash": "00b96436543510fc"
+}

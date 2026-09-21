@@ -121,8 +121,26 @@ Candidates are rejected before Geant4 when any of these conditions fails:
 - the modeled upper-film gap is at least `1.5384e-3 eV` for a
   niobium-compatible search.
 
-Temperature should be fixed at the intended operating temperature in the next
-search. It is an operating condition, not a material design coordinate.
+The current material search fixes temperature at `0.020 K`. Temperature is an
+operating condition, not a material design coordinate. Lattice constant and
+crystal direction are also fixed in the primary 14-property search; direction
+can be studied conditionally after material finalists exist.
+
+## Current material search
+
+The varying coordinates are upper- and lower-film speed, gap or threshold,
+lifetime, and density; substrate `C11`, `C12`, `C44`, scattering, total decay,
+and transverse-transverse decay fraction. The upper-film gap is constrained to
+at least `1.5384e-3 eV`. The experimentally supported extensions are
+`C11 <= 1100 GPa`, `C12 <= 400 GPa`, `C44 <= 600 GPa`, and
+`sub_scat >= 1e-45 s3`.
+
+Each search calculation uses 128 recorded spatial sites, four replicas, and
+31,250 source phonons per site-replica task: 16,000,000 source phonons per
+candidate. This setting preserved the ordering of the three spatial-check
+anchors and put each within 5.3% of its refined value. It is used only to find
+promising vectors. Finalists must be repeated with the refined spatial design
+and unused random seeds.
 
 ## Material projection
 

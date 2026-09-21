@@ -305,7 +305,10 @@ def t8_optimizer_sanity(quick=True):
             return math.exp(-2.0 + (val if kind == "interior" else -val))
         return truth
 
-    allowance = 60 if quick else 100
+    # The synchronous implementation has 12 members per generation.  Use at
+    # least eight complete generations; the former 60-point setting exercised
+    # only five after the premature four-member update was corrected.
+    allowance = 96 if quick else 120
     for kind in ("interior", "boundary"):
         truth = make(kind)
         scores = {}
