@@ -68,6 +68,58 @@ class SearchReportTests(unittest.TestCase):
         body = markdown(report, Path("comparison.png"))
         self.assertIn("bo-101 | bo_gp (stalled) | 0/120", body)
         self.assertIn("runtime observations, not objective measurements", body)
+        self.assertIn("**Agentic conclusion: not run.**", body)
+
+    def test_agentic_pilot_is_not_presented_as_full_comparison(self):
+        report = {
+            "initial_points": 32,
+            "source_phonons_per_candidate": 16_000_000,
+            "initial_best": {"value": 5.0e-4, "standard_error": 8.0e-5},
+            "comparison_requested_steps": 120,
+            "runs": {
+                "agentic-pilot": {
+                    "method": "agentic",
+                    "steps": 1,
+                    "requested_steps": 1,
+                    "best": 5.0e-4,
+                    "best_standard_error": 8.0e-5,
+                    "best_source": "common-start",
+                    "improvement_from_initial": 0.0,
+                    "best_step": 0,
+                    "failures": 0,
+                    "agent_selected": 1,
+                    "fallback_selected": 0,
+                    "best_optimizer_value": 5.4e-4,
+                    "best_optimizer_standard_error": 8.3e-5,
+                },
+            },
+            "pending": {"agentic-full": "agentic"},
+            "incomplete": {},
+            "methods": {
+                "agentic": {
+                    "complete_runs": 1,
+                    "seeds": 1,
+                    "best_median": 5.0e-4,
+                    "best_minimum": 5.0e-4,
+                    "best_maximum": 5.0e-4,
+                    "improvement_median": 0.0,
+                    "optimizer_only_median": 5.4e-4,
+                    "pilot_runs": 1,
+                    "equal_budget_runs": 0,
+                },
+            },
+        }
+
+        body = markdown(report, Path("comparison.png"))
+
+        self.assertIn("deployment pilot; not equal-budget evidence", body)
+        self.assertIn("deployment pilot complete", body)
+        self.assertIn("agentic-full | agentic | not run", body)
+        self.assertIn("8.0% higher", body)
+        self.assertIn("one-standard-error intervals overlap", body)
+        self.assertIn("not an equal-budget comparison", body)
+        self.assertIn("establishes no resolved improvement", body)
+        self.assertNotIn("Agentic conclusion: not run", body)
 
 
 if __name__ == "__main__":

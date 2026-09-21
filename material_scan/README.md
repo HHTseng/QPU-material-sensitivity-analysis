@@ -93,8 +93,11 @@ conda run -n G4CMP python -m material_scan search \
 conda run -n G4CMP python -m unittest discover -s material_scan/tests -v
 ```
 
-The optional local-language-model method has not run. Its exact model and GPU
-checks are kept in the
+The exact local-language-model configuration has passed a four-GPU Mimir
+preflight and a one-point equal-policy pilot. The pilot did not improve the
+common incumbent and is not an equal-budget method comparison. The three
+120-point runs remain pending; model identity, deployment checks, and comparison
+rules are kept in the
 [separate plan](../AGENTIC_MATERIAL_OPTIMIZATION_PLAN.md) so they do not obscure
 the normal simulation path.
 

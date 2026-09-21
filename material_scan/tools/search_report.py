@@ -267,6 +267,12 @@ def build_report(
     if len(agent_identities) > 1:
         raise ValueError("agentic runs use different model/runtime/search identities")
 
+    requested_budgets = [
+        item["requested_steps"] for item in run_reports.values()
+    ] + [
+        item["requested_points"] for item in status_reports.values()
+    ]
+    comparison_budget = max(requested_budgets, default=0)
     methods: dict[str, Any] = {}
     for method in sorted({item["method"] for item in run_reports.values()}):
         members = [item for item in run_reports.values() if item["method"] == method]
@@ -286,12 +292,21 @@ def build_report(
             "optimizer_only_maximum": max(adaptive_values),
             "improvement_median": median(improvements),
             "improvement_range": [min(improvements), max(improvements)],
+            "pilot_runs": sum(
+                item["method"] == "agentic"
+                and item["requested_steps"] < comparison_budget
+                for item in members
+            ),
+            "equal_budget_runs": sum(
+                item["requested_steps"] == comparison_budget for item in members
+            ),
         }
     return {
         "schema": "material-scan-search-report-1",
         "experiment_spec_key": spec.spec_key,
         "source_phonons_per_candidate": int(spec.event_counts["events_total"]),
         "initial_points": len(initial_items),
+        "comparison_requested_steps": comparison_budget,
         "initial_best": {
             "name": initial_best_item["name"],
             "value": initial_best,
@@ -326,18 +341,22 @@ def plot(report: Mapping[str, Any], output: Path) -> None:
     for label, values in report["curves"].items():
         method = report["runs"][label]["method"]
         color = colors.get(method, "#666666")
+        marker = "o" if len(values) <= 2 else None
         axes[0].plot(range(1, len(values) + 1), values, color=color, alpha=0.78,
-                     linewidth=1.6, label=label)
+                     linewidth=1.6, marker=marker, markersize=6, zorder=2,
+                     label=label)
         events = report["source_phonons_per_candidate"]
         axes[1].plot(
             [events * index for index in range(1, len(values) + 1)], values,
-            color=color, alpha=0.78, linewidth=1.6, label=label,
+            color=color, alpha=0.78, linewidth=1.6, marker=marker, markersize=6,
+            zorder=2, label=label,
         )
         elapsed = report.get("elapsed_curves", {}).get(label)
         if has_elapsed and elapsed:
             axes[2].plot(
                 [seconds / 3600.0 for seconds in elapsed], values,
-                color=color, alpha=0.78, linewidth=1.6, label=label,
+                color=color, alpha=0.78, linewidth=1.6, marker=marker, markersize=6,
+                zorder=2, label=label,
             )
     for label, method in report.get("pending", {}).items():
         axes[0].plot(
@@ -355,7 +374,7 @@ def plot(report: Mapping[str, Any], output: Path) -> None:
         )
     for axis in axes:
         axis.axhline(report["initial_best"]["value"], color="black", linestyle="--",
-                     linewidth=1.2, label="best common start")
+                     linewidth=1.2, zorder=1, label="best common start")
         axis.set_yscale("log")
         axis.grid(True, which="both", alpha=0.22)
     axes[0].set_xlabel("Completed optimizer-selected candidates")
@@ -423,10 +442,20 @@ def markdown(report: Mapping[str, Any], figure: Path) -> str:
                 f"({item['simultaneous_tasks']} concurrent) | "
                 f"≥{elapsed:.2f} h | {lower_text} |"
             )
-    lines.extend(["", "Method summary over seeds:", ""])
+    lines.extend([
+        "",
+        "Descriptive method summary over recorded runs (candidate budgets may differ):",
+        "",
+    ])
     for method, item in report["methods"].items():
+        qualifier = ""
+        if method == "agentic" and item.get("pilot_runs") and not item.get(
+            "equal_budget_runs"
+        ):
+            qualifier = " (deployment pilot; not equal-budget evidence)"
         lines.append(
-            f"- {method}: {item['complete_runs']}/{item['seeds']} runs complete; median best "
+            f"- {method}{qualifier}: {item['complete_runs']}/{item['seeds']} requested runs "
+            "complete; median best "
             f"`{item['best_median']:.6e}`; range "
             f"`{item['best_minimum']:.6e}` to `{item['best_maximum']:.6e}`; "
             f"median improvement {100*item['improvement_median']:.1f}%; "
@@ -448,7 +477,42 @@ def markdown(report: Mapping[str, Any], figure: Path) -> str:
         "stalls and aggregate CMA-ES behavior. This is a retrospective workflow comparison, "
         "not a blinded optimizer benchmark, even when source-phonon counts match.",
     ])
-    if "agentic" in report.get("pending", {}).values():
+    agentic_runs = [
+        item for item in report["runs"].values() if item["method"] == "agentic"
+    ]
+    agentic_full_runs = [
+        item for item in agentic_runs
+        if item["requested_steps"] >= report.get("comparison_requested_steps", 0)
+    ]
+    agentic_pending = "agentic" in report.get("pending", {}).values()
+    if agentic_pending and agentic_runs and not agentic_full_runs:
+        best_pilot = min(agentic_runs, key=lambda item: item["best_optimizer_value"])
+        candidate = best_pilot["best_optimizer_value"]
+        initial = report["initial_best"]["value"]
+        relative = candidate / initial - 1.0
+        candidate_se = best_pilot["best_optimizer_standard_error"]
+        initial_se = float(report["initial_best"]["standard_error"])
+        intervals_overlap = (
+            candidate - candidate_se <= initial + initial_se
+            and initial - initial_se <= candidate + candidate_se
+        )
+        direction = "higher" if relative >= 0.0 else "lower"
+        overlap_text = (
+            "the reported one-standard-error intervals overlap"
+            if intervals_overlap
+            else "the reported one-standard-error intervals do not overlap"
+        )
+        lines.extend([
+            "",
+            "**Agentic conclusion: deployment pilot complete; full equal-budget campaign not "
+            "run.** "
+            f"The best agent-selected pilot candidate was `{candidate:.6e} ± "
+            f"{candidate_se:.2e}`, {abs(100 * relative):.1f}% {direction} than the common "
+            f"incumbent; {overlap_text}. This pilot validates the execution path but is not "
+            "an equal-budget comparison or sample-efficiency evidence, so it establishes no "
+            "resolved improvement.",
+        ])
+    elif agentic_pending:
         lines.extend([
             "",
             "**Agentic conclusion: not run.** The current evidence cannot show an improvement "

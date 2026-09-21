@@ -1,0 +1,42 @@
+{
+  "schema": "material-scan-agentic-preflight-1",
+  "recorded_at": "2026-09-21T18:29:19-04:00",
+  "host": "mimir.sdcc.bnl.gov",
+  "deployment": {
+    "gpu_model": "NVIDIA RTX A6000",
+    "selected_gpu_count": 4,
+    "server_visible_gpu_count": 4,
+    "ollama_context_length": 65536,
+    "ollama_num_parallel": 1,
+    "ollama_max_loaded_models": 1,
+    "ollama_sched_spread": true,
+    "ollama_cloud_disabled": true,
+    "vulkan_disabled": true
+  },
+  "runtime": {
+    "name": "Ollama",
+    "version": "0.34.1",
+    "official_archive_sha256": "f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034"
+  },
+  "preflight": {
+    "context_matches": true,
+    "fully_on_gpu": true,
+    "model": {
+      "digest": "754a872f1290d6a685e7be7997962d6518823c32036358794b650db505f6bf99",
+      "name": "qwen3:235b-a22b-thinking-2507-q4_K_M",
+      "artifact_size_bytes": 142154087123
+    },
+    "ollama_version": "0.34.1",
+    "ready": true,
+    "requested_context_length": 65536,
+    "running": {
+      "context_length": 65536,
+      "digest": "754a872f1290d6a685e7be7997962d6518823c32036358794b650db505f6bf99",
+      "gpu_fraction": 1.0,
+      "name": "qwen3:235b-a22b-thinking-2507-q4_K_M",
+      "size_bytes": 158172908091,
+      "size_vram_bytes": 158172908091
+    },
+    "warmup_complete": true
+  }
+}

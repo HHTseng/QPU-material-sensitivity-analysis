@@ -2,9 +2,12 @@
 
 Status: implemented and covered by local replay tests on branch
 `Agentic_Material_optimization`, which began from
-`Material_optimization_v3_scan_parameters_revised` at commit `da7637f`. A live
-Ollama comparison has not run because the required model and working GPU driver
-are not available in the current shell.
+`Material_optimization_v3_scan_parameters_revised` at commit `da7637f`. The exact
+production model passed the four-GPU preflight, and separately labelled one-point
+deployment and equal-policy pilots completed end to end. The equal-policy pilot
+validates execution, not optimizer effectiveness. The three 120-point comparison
+runs and full-spatial confirmation remain pending; no agentic improvement is
+resolved.
 
 ## Decision
 
@@ -85,9 +88,9 @@ Production model: pin
 alias. It is a 235B-total/22B-active open-weight model with tool-oriented
 reasoning and a 142 GB Ollama artifact. The unquantized Qwen3-235B thinking
 model family has published science and materials-reasoning results; the exact
-Ollama Q4 artifact has not itself been validated on MatSciBench. Four 48 GB RTX
-A6000 GPUs provide 192 GB gross memory, enough to attempt the quantized weights
-plus a conservative context/cache, subject to the mandatory residency check.
+Ollama Q4 artifact has not itself been validated on MatSciBench. The 142 GB
+artifact plus its 65,536-token context passed the mandatory exact-residency check
+on four 48 GB RTX A6000 GPUs.
 
 Development model: `qwen3.8:27b`. It fits on one A6000 and is suitable for parser,
 prompt, replay, and short acceptance tests. Development results from this model
@@ -142,7 +145,10 @@ making the simulation objective more trustworthy.
   digest change is a different campaign.
 - Use temperature `0` for comparison runs and a recorded prompt seed. This is
   an auditability choice rather than a claim that zero temperature is generally
-  best; diversity comes from competing mechanisms and a candidate pool.
+  best or deterministic; diversity comes from competing mechanisms and a
+  candidate pool. The two live pilots used the same prompt hash, model digest,
+  seed, implementation hash, and Ollama version yet generated different pools.
+  Saved traces, not regenerated responses, are authoritative.
 - Save each exact system prompt, user prompt, reasoning/response fields, parse
   errors, accepted candidates, and final selection in a per-call JSON trace.
 - Keep rationales outside parameter dictionaries so they cannot leak into the
@@ -161,23 +167,27 @@ making the simulation objective more trustworthy.
 
 ## Four-GPU Mimir deployment
 
-Mimir exposes eight RTX A6000 devices through PCI, but this current shell cannot
-communicate with the NVIDIA driver and has no `ollama` executable. Therefore live
-inference is blocked here and no GPU result will be claimed during implementation.
+The isolated production deployment passed on Mimir with exactly four of the
+server's eight RTX A6000 GPUs exposed. Ollama `0.34.1` loaded
+`qwen3:235b-a22b-thinking-2507-q4_K_M` at digest
+`754a872f1290d6a685e7be7997962d6518823c32036358794b650db505f6bf99`.
+The structured warm-up reported a 65,536-token context and exact full residency:
+`size_vram = size = 158172908091` bytes. The checked record is
+[`agentic-preflight.json`](material_scan/experiments/agentic-preflight.json).
 
-The production launcher will:
+The production launcher now:
 
-1. accept exactly one to four explicit GPU UUIDs (four recommended for the 142 GB
+1. accepts exactly one to four explicit GPU UUIDs (four recommended for the 142 GB
    production model);
-2. set `CUDA_VISIBLE_DEVICES` to only those devices;
-3. set `OLLAMA_CONTEXT_LENGTH=65536`, `OLLAMA_NUM_PARALLEL=1`, and
-   `OLLAMA_MAX_LOADED_MODELS=1`, disable Ollama's Vulkan backend, and expose the
+2. sets `CUDA_VISIBLE_DEVICES` to only those devices;
+3. sets `OLLAMA_CONTEXT_LENGTH=65536`, `OLLAMA_NUM_PARALLEL=1`, and
+   `OLLAMA_MAX_LOADED_MODELS=1`, disables Ollama's Vulkan backend, and exposes the
    chosen UUIDs through CUDA only;
-4. start an isolated Ollama server, verify the pinned tag/full digest and server
-   version, and require the API process record to report exact full-model GPU
+4. starts an isolated Ollama server, verifies the pinned tag/full digest and server
+   version, and requires the API process record to report exact full-model GPU
    residency and the requested context after a structured-output warm-up;
-5. fall back to a 32768-token context only if the 64K preflight is out of memory;
-6. leave the Geant4 worker count independent of the LLM GPU allocation.
+5. falls back to a 32768-token context only if the 64K preflight is out of memory;
+6. leaves the Geant4 worker count independent of the LLM GPU allocation.
 
 The prompt is intentionally compact, so the campaign does not depend on the
 model's advertised maximum context.
@@ -213,17 +223,28 @@ The report will show:
 The primary question is whether the three agentic seeds improve the distribution
 of best confirmed objective values at equal simulation cost. A lower screening
 minimum alone is not enough. Leading candidates must be re-run with unused random
-seeds and the converged 2,361-site design before claiming an improvement. If no
-agentic run is complete, the plot and report must say `not run`; if intervals
-overlap, the conclusion is `no resolved improvement`. A future blinded methods
-benchmark would need a frozen common prior-information cutoff for every method.
+seeds and the converged 2,361-site design before claiming an improvement. A
+pilot and a pending full run must be labelled separately. Improvement is resolved
+only when the predeclared paired agentic-versus-comparator difference interval
+excludes zero in the favorable direction. A future blinded methods benchmark
+would need a frozen common prior-information cutoff for every method.
+
+The equal-policy one-point pilot generated 12 valid candidates, selected one by
+GP expected improvement without fallback, and completed all 512 simulation tasks
+in 21.75 seconds. Its objective was `5.395803e-4 ± 8.31e-5`, 6.59% above the
+common-start best point estimate of `5.062199e-4 ± 8.74e-5`; the reported
+one-standard-error intervals overlap. This is no resolved improvement or
+regression, and one point cannot rank methods. An earlier one-point deployment
+run used a 3,600-second task timeout and is excluded from the equal-policy report.
 
 ## Implementation checks
 
-1. Unit tests and mocked-agent replay pass in the `G4CMP` environment.
-2. The preflight sees the exact production model digest and four or fewer GPUs.
-3. A no-simulation proposal smoke test produces valid, nonduplicate points and a
-   complete audit trace.
-4. Run a short, separately labelled pilot before the three full seeds.
-5. Generate the equal-source-count comparison, then confirm only genuinely competitive
-   candidates with the full spatial design.
+1. Complete: unit tests and mocked-agent replay pass in the `G4CMP` environment.
+2. Complete: the preflight saw the exact production digest on exactly four GPUs.
+3. Complete: structured warm-up and live calls produced valid, nonduplicate pools
+   and complete audit traces.
+4. Complete: separately labelled deployment and equal-policy pilots ran before
+   the three full seeds.
+5. Pending: run all three 120-point seeds, generate the equal-source-count
+   comparison, and confirm only genuinely competitive candidates with the full
+   spatial design.

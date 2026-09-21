@@ -54,13 +54,23 @@ measured values with uncertainty, and recorded failures; strict code validates
 the pool and the existing Gaussian process chooses the candidate. The language
 model cannot supply objective values or change the experiment.
 
-The parser, GP selection, saved source record, strict failure behavior, and network-free
-transcript replay pass mocked tests. A live comparison has **not** run: this
-Mimir shell has no Ollama executable and cannot access the NVIDIA driver. The
-[current comparison](../experiments/agentic-comparison-status.md) therefore
-labels agentic as `not run`; no improvement or regression is claimed. A valid
-comparison requires the same 32 starting points and equal source-phonon counts,
-followed by full-spatial confirmation with unused seeds.
+The parser, GP selection, saved source record, strict failure behavior, and
+network-free transcript replay pass mocked tests. The exact production model
+also passed its four-GPU, 65,536-token-context residency preflight. A separately
+labelled equal-policy pilot generated 12 valid candidates, selected one through
+GP expected improvement without fallback, and completed all 512 simulation
+tasks in 21.75 seconds. Its screening objective was
+`5.395803e-4 ± 8.31e-5`, 6.59% above the common-start best point estimate of
+`5.062199e-4 ± 8.74e-5`; it did not improve the incumbent, and the reported
+one-standard-error intervals overlap.
+
+This one-point pilot validates the execution path but cannot rank methods or
+establish a regression. An earlier pilot with a 3,600-second task timeout is
+deployment-only and excluded from the equal-policy report. The full three-seed,
+120-point-per-seed campaign and full-spatial confirmation remain pending, so no
+resolved agentic improvement is claimed. See the
+[current comparison](../experiments/agentic-comparison-status.md) and
+[preflight record](../experiments/agentic-preflight.json).
 
 ### Corrected real-material projection
 
@@ -325,7 +335,10 @@ checksums identify them without rewriting their original field names.
    repeat-to-repeat variation for sparse low-hit candidates.
 9. The reported upper-tail quantity is diagnostic only until its site-level
    interval and an external engineering limit are available.
-10. No fabrication optimum or logical-error reduction has been established.
+10. The one-point equal-policy agentic pilot completed without fallback but did
+   not improve the common incumbent. It is deployment evidence only; no agentic
+   performance ranking is resolved.
+11. No fabrication optimum or logical-error reduction has been established.
 
 ## Recommended order of new work
 
@@ -344,12 +357,16 @@ checksums identify them without rewriting their original field names.
    and 8–10 complete generations. For Gaussian-process search, use a local
    feasible region and reject or model measured run time before expected
    improvement is evaluated. Do not convert timeouts into low-QP observations.
-5. Obtain SiC scattering, total decay, and transverse-transverse decay values
+5. Run the agentic seeds 101, 202, and 303 for 120 points each under the retained
+   no-timeout policy before making an agentic-versus-CMA claim. Confirm only a
+   genuinely competitive agentic point with unused seeds and the 2,361-site
+   design.
+6. Obtain SiC scattering, total decay, and transverse-transverse decay values
    from literature or first-principles calculation before spending extensive
    simulation time on SiC systematics.
-6. Project the leading physically allowed region onto named compounds. Add the
+7. Project the leading physically allowed region onto named compounds. Add the
    explicit density construction before testing Be3N2 or BP.
-7. Before fabrication guidance, bracket film lifetimes, test an independently
+8. Before fabrication guidance, bracket film lifetimes, test an independently
    justified interface model, and repeat the leading comparisons with
    additional random-number sets. Revisit crystal direction only if those
    checks reveal meaningful direction sensitivity.

@@ -35,15 +35,16 @@ open:
       region or include measured run time in candidate selection before trying
       additional Gaussian-process steps.
 
-  - id: agentic-runtime-preflight
-    severity: blocks-agentic-comparison
+  - id: agentic-full-comparison
+    severity: prevents-agentic-performance-claim
     statement: >
-      The current Mimir shell exposes eight RTX A6000 devices through PCI, but
-      nvidia-smi cannot communicate with the driver and Ollama is not installed.
+      The exact production model passed its four-GPU preflight and one
+      equal-policy agent-selected point completed without fallback, but none of
+      the three planned 120-point agentic comparison seeds is complete.
     consequence: >
-      Agentic code and mocked replay can be tested, but no live four-GPU model
-      inference or optimizer improvement may be claimed until the pinned model
-      passes agentic-preflight with at most four visible GPUs.
+      Run seeds 101, 202, and 303 for 120 points each under the retained
+      no-timeout policy. Only then compare with CMA-ES and perform paired
+      full-spatial confirmation for a genuinely competitive candidate.
 
   - id: second-independent-copy
     severity: must-be-resolved-before-deletion
@@ -56,6 +57,21 @@ open:
     consequence: Read and rescore them, but do not return them as new simulations.
 
 resolved:
+  - id: agentic-runtime-preflight
+    resolved_at: 2026-09-21
+    statement: >
+      Ollama 0.34.1 loaded the exact 142 GB
+      qwen3:235b-a22b-thinking-2507-q4_K_M artifact at digest
+      754a872f1290d6a685e7be7997962d6518823c32036358794b650db505f6bf99
+      across exactly four RTX A6000 GPUs. Structured warm-up verified a 65,536
+      token context and exact full GPU residency. The equal-policy pilot then
+      generated 12 valid candidates and completed one selected point without
+      fallback.
+    evidence:
+      preflight: ../experiments/agentic-preflight.json
+      comparison: ../experiments/agentic-comparison-status.json
+      local_pilot: ../../material_scan_data/experiments/material-search/agentic-pilot-equal-policy-101/search.json
+
   - id: spatial-integration
     resolved_at: 2026-09-21
     statement: >

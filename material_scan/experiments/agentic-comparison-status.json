@@ -1,5 +1,29 @@
 {
-  "agent_identity": null,
+  "agent_identity": {
+    "implementation_sha256": "9a4d156faf7a251a7b522e5426fc56e6215b74c6aab1a4b9a9eb6c93e86987fb",
+    "knowledge_sha256": "5dabc954836ace9caadfcade91b311803c473339dd028c63c996014357295cd1",
+    "model": "qwen3:235b-a22b-thinking-2507-q4_K_M",
+    "model_digest": "754a872f1290d6a685e7be7997962d6518823c32036358794b650db505f6bf99",
+    "ollama_version": "0.34.1",
+    "options": {
+      "allow_model_fallback": false,
+      "expected_model_digest": "754a872f1290d6a685e7be7997962d6518823c32036358794b650db505f6bf99",
+      "host": "http://127.0.0.1:11435",
+      "model": "qwen3:235b-a22b-thinking-2507-q4_K_M",
+      "n_candidates": 16384,
+      "n_init": 0,
+      "n_min_fit": 32,
+      "n_polish": 16,
+      "num_ctx": 65536,
+      "pool_size": 12,
+      "refit_every": 5,
+      "retries": 2,
+      "temperature": 0.0,
+      "timeout": 1800.0,
+      "xi": 0.0
+    }
+  },
+  "comparison_requested_steps": 120,
   "experiment_spec_key": "fef98f9824d5faec920abdd68fef88ee36f522832052c52c30c04331706768c0",
   "incomplete": {
     "bo-101": {
@@ -88,11 +112,29 @@
   },
   "initial_points": 32,
   "methods": {
+    "agentic": {
+      "best_maximum": 0.000506219947342225,
+      "best_median": 0.000506219947342225,
+      "best_minimum": 0.000506219947342225,
+      "complete_runs": 1,
+      "equal_budget_runs": 0,
+      "improvement_median": 0.0,
+      "improvement_range": [
+        0.0,
+        0.0
+      ],
+      "optimizer_only_maximum": 0.0005395803458332152,
+      "optimizer_only_median": 0.0005395803458332152,
+      "optimizer_only_minimum": 0.0005395803458332152,
+      "pilot_runs": 1,
+      "seeds": 1
+    },
     "cmaes": {
       "best_maximum": 0.0002595938060630914,
       "best_median": 0.0002537300372799465,
       "best_minimum": 0.00023219955003906718,
       "complete_runs": 3,
+      "equal_budget_runs": 3,
       "improvement_median": 0.49877511028143107,
       "improvement_range": [
         0.48719166949856363,
@@ -101,6 +143,7 @@
       "optimizer_only_maximum": 0.0002595938060630914,
       "optimizer_only_median": 0.0002537300372799465,
       "optimizer_only_minimum": 0.00023219955003906718,
+      "pilot_runs": 0,
       "seeds": 3
     },
     "random": {
@@ -108,6 +151,7 @@
       "best_median": 0.000506219947342225,
       "best_minimum": 0.000506219947342225,
       "complete_runs": 1,
+      "equal_budget_runs": 0,
       "improvement_median": 0.0,
       "improvement_range": [
         0.0,
@@ -116,6 +160,7 @@
       "optimizer_only_maximum": 0.0007252207073164148,
       "optimizer_only_median": 0.0007252207073164148,
       "optimizer_only_minimum": 0.0007252207073164148,
+      "pilot_runs": 0,
       "seeds": 1
     },
     "sobol": {
@@ -123,6 +168,7 @@
       "best_median": 0.000506219947342225,
       "best_minimum": 0.000506219947342225,
       "complete_runs": 0,
+      "equal_budget_runs": 0,
       "improvement_median": 0.0,
       "improvement_range": [
         0.0,
@@ -131,13 +177,120 @@
       "optimizer_only_maximum": 0.0007566497947810584,
       "optimizer_only_median": 0.0007566497947810584,
       "optimizer_only_minimum": 0.0007566497947810584,
+      "pilot_runs": 0,
       "seeds": 1
     }
   },
   "pending": {
-    "agentic": "agentic"
+    "agentic-full": "agentic"
   },
   "runs": {
+    "agentic-pilot-101": {
+      "agent_selected": 1,
+      "attempts": 1,
+      "best": 0.000506219947342225,
+      "best_by_completed_step": {},
+      "best_optimizer_standard_error": 8.307649466499412e-05,
+      "best_optimizer_value": 0.0005395803458332152,
+      "best_optimizer_values": {
+        "bot_density": 7184.383239418074,
+        "bot_gap_thres": 0.0001298173895314,
+        "bot_ph_lifetime": 0.5,
+        "bot_vsound": 3.174554206770729,
+        "sub_c11": 250.92689126211246,
+        "sub_c12": 0.0,
+        "sub_c44": 5.0,
+        "sub_decay": 6.129072648276415e-56,
+        "sub_decayTT": 0.8174135229343212,
+        "sub_scat": 1e-44,
+        "topfilm_density": 15010.886904864794,
+        "topfilm_gap": 0.0035,
+        "topfilm_ph_lifetime": 0.0033374368124408,
+        "topfilm_vsound": 6.0
+      },
+      "best_proposal_attempt": null,
+      "best_source": "common-start",
+      "best_standard_error": 8.735424438574645e-05,
+      "best_step": 0,
+      "best_values": {
+        "bot_density": 7184.383239418074,
+        "bot_gap_thres": 0.00012981738953147298,
+        "bot_ph_lifetime": 0.5,
+        "bot_vsound": 3.174554206770729,
+        "sub_c11": 250.92689126211246,
+        "sub_c12": 0.0,
+        "sub_c44": 5.0,
+        "sub_decay": 6.129072648276415e-56,
+        "sub_decayTT": 0.8174135229343212,
+        "sub_scat": 9.99999999999994e-45,
+        "topfilm_density": 15010.886904864794,
+        "topfilm_gap": 0.001670366222399775,
+        "topfilm_ph_lifetime": 0.003337436812440808,
+        "topfilm_vsound": 6.0
+      },
+      "closest_bounds": [
+        {
+          "name": "bot_ph_lifetime",
+          "unit_distance": 0.0,
+          "value": 0.5
+        },
+        {
+          "name": "sub_c12",
+          "unit_distance": 0.0,
+          "value": 0.0
+        },
+        {
+          "name": "sub_c44",
+          "unit_distance": 0.0,
+          "value": 5.0
+        },
+        {
+          "name": "topfilm_vsound",
+          "unit_distance": 0.0,
+          "value": 6.0
+        },
+        {
+          "name": "topfilm_gap",
+          "unit_distance": 0.10011919006612964,
+          "value": 0.001670366222399775
+        }
+      ],
+      "complete": true,
+      "elapsed_seconds": 21.75180659093894,
+      "failures": 0,
+      "fallback_selected": 0,
+      "implementation_sha256": "9a4d156faf7a251a7b522e5426fc56e6215b74c6aab1a4b9a9eb6c93e86987fb",
+      "improvement_from_initial": 0.0,
+      "method": "agentic",
+      "optimizer_state": {
+        "agent_model": "qwen3:235b-a22b-thinking-2507-q4_K_M",
+        "agent_model_digest": "754a872f1290d6a685e7be7997962d6518823c32036358794b650db505f6bf99",
+        "agent_selected": 1,
+        "fallback_selected": 0,
+        "gp_fits": 1,
+        "gp_nll": 24.336400493312635,
+        "iteration": 1,
+        "knowledge_sha256": "5dabc954836ace9caadfcade91b311803c473339dd028c63c996014357295cd1",
+        "n_init": 0,
+        "n_observations": 33,
+        "n_pending": 0,
+        "n_rejected": 0,
+        "ollama_version": "0.34.1",
+        "optimizer": "agentic",
+        "proposal_sources": {
+          "agent_gp_ei": 1
+        },
+        "seed": 101
+      },
+      "proposal_sources": {
+        "agent_gp_ei": 1
+      },
+      "requested_steps": 1,
+      "seed": 101,
+      "simulated_source_phonons": 16000000,
+      "steps": 1,
+      "task_timeout_s": 0.0
+    },
     "cma-101": {
       "agent_selected": 0,
       "attempts": 120,

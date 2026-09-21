@@ -60,12 +60,16 @@ experiments:
       random: one seed, 64 points, complete
       sobol: one seed, 49 of 64 points; point 50 stopped with no completed task
       bo_gp: one seed, zero of 120 new points; first point stopped with no completed task
+      agentic_pilot: one of one point complete without fallback; deployment evidence only
+      agentic: zero of three planned 120-point seeds complete
     conclusion: >
       CMA-ES produced three confirmed improvements. Seeds 101 and 303 define a
       tied leading region. The current expected-improvement search cannot be
       compared because its first widened-range point was not evaluable in a
-      practical time.
-    agentic_status: pending-ollama-and-gpu-preflight
+      practical time. The one-point agentic pilot did not improve the common
+      incumbent; no agentic performance claim is resolved.
+    agentic_status: preflight-and-equal-policy-pilot-complete-full-campaign-pending
+    agentic_preflight: agentic-preflight.json
     agentic_comparison: agentic-comparison-status.json
 
 families:
