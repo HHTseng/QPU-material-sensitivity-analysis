@@ -106,8 +106,8 @@ $$
 
 $$
 \mathrm{EI}_t(x) =
-\bigl[J_{\min} - \mu_t(x) - \xi\bigr]\Phi\bigl(z_t(x)\bigr)
-+ \sigma_t(x)\phi\bigl(z_t(x)\bigr),
+\bigl[J_{\min} - \mu_t(x) - \xi\bigr]\Phi\bigl(z_t(x)\bigr) +
+\sigma_t(x)\phi\bigl(z_t(x)\bigr),
 $$
 
 $$
