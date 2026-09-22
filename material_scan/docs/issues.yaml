@@ -1,5 +1,5 @@
 schema: material-scan-issues-1
-updated: 2026-09-21
+updated: 2026-09-22
 
 earlier_result_validity:
   path: ../../legacy/stage4_invalidations.yaml
@@ -35,17 +35,6 @@ open:
       region or include measured run time in candidate selection before trying
       additional Gaussian-process steps.
 
-  - id: agentic-full-comparison
-    severity: prevents-agentic-performance-claim
-    statement: >
-      The exact production model passed its four-GPU preflight and one
-      equal-policy agent-selected point completed without fallback, but none of
-      the three planned 120-point agentic comparison seeds is complete.
-    consequence: >
-      Run seeds 101, 202, and 303 for 120 points each under the retained
-      no-timeout policy. Only then compare with CMA-ES and perform paired
-      full-spatial confirmation for a genuinely competitive candidate.
-
   - id: second-independent-copy
     severity: must-be-resolved-before-deletion
     statement: A second independent storage filesystem has not been selected.
@@ -57,6 +46,18 @@ open:
     consequence: Read and rescore them, but do not return them as new simulations.
 
 resolved:
+  - id: agentic-full-comparison
+    resolved_at: 2026-09-22
+    statement: >
+      Seeds 101, 202, and 303 each completed 120 scored agentic candidates with
+      no GP fallback. Their median best objective improved the common incumbent
+      by 23.5% but remained 52.5% higher than the equal-budget CMA-ES median.
+      Three failed attempts were censored at 600 seconds per task; therefore
+      wall-time and failure efficiency are not equal-policy comparisons with
+      older traditional records.
+    evidence:
+      comparison: ../experiments/agentic-comparison-status.json
+
   - id: agentic-runtime-preflight
     resolved_at: 2026-09-21
     statement: >

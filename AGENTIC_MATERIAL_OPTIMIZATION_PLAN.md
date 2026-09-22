@@ -3,11 +3,10 @@
 Status: implemented and covered by local replay tests on branch
 `Agentic_Material_optimization`, which began from
 `Material_optimization_v3_scan_parameters_revised` at commit `da7637f`. The exact
-production model passed the four-GPU preflight, and separately labelled one-point
-deployment and equal-policy pilots completed end to end. The equal-policy pilot
-validates execution, not optimizer effectiveness. The three 120-point comparison
-runs and full-spatial confirmation remain pending; no agentic improvement is
-resolved.
+production model passed the four-GPU preflight, and all three 120-point agentic
+runs completed end to end. Their median best screening value improves the common
+incumbent by 23.5%, but remains 52.5% higher than the CMA-ES median. The screening
+comparison is complete; no agentic superiority or new material optimum is claimed.
 
 ## Decision
 
@@ -204,13 +203,13 @@ therefore a retrospective workflow comparison, not a blinded contest of innate
 optimizer sample efficiency. Equal starting observations and source-phonon counts
 remain mandatory, and this information advantage must stay visible in reports.
 
-The agentic campaign will use the exact same `material-search.yaml`, 32 completed
+The agentic campaign used the exact same `material-search.yaml`, 32 completed
 common starting points, 120 adaptive evaluations per seed, source-phonon count per
 candidate, and seeds `101`, `202`, and `303` used for the retained CMA-ES runs.
 BO, CMA-ES, Sobol, random, and agentic inputs must share the same
 `experiment_spec_key` and `initial_points_key`.
 
-The report will show:
+The report shows:
 
 - best-so-far objective versus completed adaptive candidates;
 - best-so-far objective versus cumulative simulated source phonons;
@@ -220,7 +219,7 @@ The report will show:
 - wall time as an operational diagnostic, never as a substitute for equal
   simulated source-phonon count.
 
-The primary question is whether the three agentic seeds improve the distribution
+The primary question was whether the three agentic seeds improve the distribution
 of best confirmed objective values at equal simulation cost. A lower screening
 minimum alone is not enough. Leading candidates must be re-run with unused random
 seeds and the converged 2,361-site design before claiming an improvement. A
@@ -229,13 +228,13 @@ only when the predeclared paired agentic-versus-comparator difference interval
 excludes zero in the favorable direction. A future blinded methods benchmark
 would need a frozen common prior-information cutoff for every method.
 
-The equal-policy one-point pilot generated 12 valid candidates, selected one by
-GP expected improvement without fallback, and completed all 512 simulation tasks
-in 21.75 seconds. Its objective was `5.395803e-4 ± 8.31e-5`, 6.59% above the
-common-start best point estimate of `5.062199e-4 ± 8.74e-5`; the reported
-one-standard-error intervals overlap. This is no resolved improvement or
-regression, and one point cannot rank methods. An earlier one-point deployment
-run used a 3,600-second task timeout and is excluded from the equal-policy report.
+The production campaign completed 360 scored agentic points in 363 attempts,
+with no GP fallback. Seeds 101, 202, and 303 improved the common incumbent by
+27.8%, 15.3%, and 23.5%. CMA-ES improved it by 48.7%, 49.9%, and 54.1% at the
+same 120-point budget. The agentic method therefore improved over the prior in
+every seed but did not outperform CMA-ES. A 600-second task timeout censored
+three pathological attempts; older traditional records had no equivalent
+timeout, so wall-time and failure-rate comparisons are not equal-policy evidence.
 
 ## Implementation checks
 
@@ -245,6 +244,6 @@ run used a 3,600-second task timeout and is excluded from the equal-policy repor
    and complete audit traces.
 4. Complete: separately labelled deployment and equal-policy pilots ran before
    the three full seeds.
-5. Pending: run all three 120-point seeds, generate the equal-source-count
-   comparison, and confirm only genuinely competitive candidates with the full
-   spatial design.
+5. Complete: all three 120-point seeds and the equal-source-count comparison are
+   recorded. No agentic candidate beat the CMA-ES screening finalists, so no new
+   full-spatial confirmation was promoted.

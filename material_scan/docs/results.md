@@ -1,6 +1,6 @@
 # Experiments and current conclusions
 
-Last updated: 2026-09-21.
+Last updated: 2026-09-22.
 
 ## What has been completed
 
@@ -56,19 +56,16 @@ model cannot supply objective values or change the experiment.
 
 The parser, GP selection, saved source record, strict failure behavior, and
 network-free transcript replay pass mocked tests. The exact production model
-also passed its four-GPU, 65,536-token-context residency preflight. A separately
-labelled equal-policy pilot generated 12 valid candidates, selected one through
-GP expected improvement without fallback, and completed all 512 simulation
-tasks in 21.75 seconds. Its screening objective was
-`5.395803e-4 ± 8.31e-5`, 6.59% above the common-start best point estimate of
-`5.062199e-4 ± 8.74e-5`; it did not improve the incumbent, and the reported
-one-standard-error intervals overlap.
+passed its four-GPU, 65,536-token-context residency preflight. All three
+120-point searches then completed: seeds 101, 202, and 303 reached
+`3.654020e-4`, `4.290081e-4`, and `3.870108e-4`, improving the common incumbent
+by 27.8%, 15.3%, and 23.5%. No GP fallback was used. Three pathological
+simulation attempts were censored by the recorded 600-second per-task policy.
 
-This one-point pilot validates the execution path but cannot rank methods or
-establish a regression. An earlier pilot with a 3,600-second task timeout is
-deployment-only and excluded from the equal-policy report. The full three-seed,
-120-point-per-seed campaign and full-spatial confirmation remain pending, so no
-resolved agentic improvement is claimed. See the
+The agentic median best value was `3.870108e-4`, 52.5% higher than the CMA-ES
+median `2.537300e-4` at the same 120-point budget. Agentic search therefore
+improved the common incumbent in every seed but did not outperform CMA-ES. No
+agentic finalist was promoted to costly full-spatial confirmation. See the
 [current comparison](../experiments/agentic-comparison-status.md) and
 [preflight record](../experiments/agentic-preflight.json).
 
@@ -335,9 +332,9 @@ checksums identify them without rewriting their original field names.
    repeat-to-repeat variation for sparse low-hit candidates.
 9. The reported upper-tail quantity is diagnostic only until its site-level
    interval and an external engineering limit are available.
-10. The one-point equal-policy agentic pilot completed without fallback but did
-   not improve the common incumbent. It is deployment evidence only; no agentic
-   performance ranking is resolved.
+10. Three 120-point agentic runs improved the common incumbent by a median
+    23.5% without fallback, but their median best value remained 52.5% above
+    CMA-ES. The current comparison does not show agentic superiority.
 11. No fabrication optimum or logical-error reduction has been established.
 
 ## Recommended order of new work
