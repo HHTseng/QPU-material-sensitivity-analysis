@@ -331,45 +331,60 @@ def plot(report: Mapping[str, Any], output: Path) -> None:
     figure, axes = plt.subplots(
         1, columns, figsize=(6.2 * columns, 4.8), constrained_layout=True
     )
-    colors = {
-        "bo_gp": "#2166ac",
-        "cmaes": "#b2182b",
-        "sobol": "#1b7837",
-        "random": "#762a83",
-        "agentic": "#e08214",
+    styles = {
+        "bo_gp": [("#56B4E9", "-", "|")],
+        "cmaes": [
+            ("#0072B2", "-", None),
+            ("#D55E00", "--", None),
+            ("#CC79A7", "-.", None),
+        ],
+        "sobol": [("#009E73", "-", "D")],
+        "random": [("#6B6B6B", ":", "s")],
+        "agentic": [("#E69F00", "-", "o")],
     }
+    method_counts: Counter[str] = Counter()
+    run_styles: dict[str, tuple[str, str, str | None]] = {}
+    for label, item in report["runs"].items():
+        method = item["method"]
+        variants = styles.get(method, [("#333333", "-", None)])
+        run_styles[label] = variants[method_counts[method] % len(variants)]
+        method_counts[method] += 1
+
     for label, values in report["curves"].items():
-        method = report["runs"][label]["method"]
-        color = colors.get(method, "#666666")
-        marker = "o" if len(values) <= 2 else None
-        axes[0].plot(range(1, len(values) + 1), values, color=color, alpha=0.78,
-                     linewidth=1.6, marker=marker, markersize=6, zorder=2,
-                     label=label)
+        color, linestyle, marker = run_styles[label]
+        marker_positions = [len(values) - 1] if marker and values else None
+        axes[0].plot(
+            range(1, len(values) + 1), values, color=color, linestyle=linestyle,
+            linewidth=1.8, marker=marker, markevery=marker_positions, markersize=6,
+            zorder=2, label=label,
+        )
         events = report["source_phonons_per_candidate"]
         axes[1].plot(
             [events * index for index in range(1, len(values) + 1)], values,
-            color=color, alpha=0.78, linewidth=1.6, marker=marker, markersize=6,
-            zorder=2, label=label,
+            color=color, linestyle=linestyle, linewidth=1.8, marker=marker,
+            markevery=marker_positions, markersize=6, zorder=2, label=label,
         )
         elapsed = report.get("elapsed_curves", {}).get(label)
         if has_elapsed and elapsed:
             axes[2].plot(
                 [seconds / 3600.0 for seconds in elapsed], values,
-                color=color, alpha=0.78, linewidth=1.6, marker=marker, markersize=6,
-                zorder=2, label=label,
+                color=color, linestyle=linestyle, linewidth=1.8, marker=marker,
+                markevery=marker_positions, markersize=6, zorder=2, label=label,
             )
     for label, method in report.get("pending", {}).items():
+        color = styles.get(method, [("#333333", "-", None)])[0][0]
         axes[0].plot(
-            [], [], marker="x", linestyle="none", color=colors.get(method, "#666666"),
+            [], [], marker="x", linestyle="none", color=color,
             label=f"{label} (not run)",
         )
     for label, item in report.get("incomplete", {}).items():
         if label in report["curves"]:
             continue
         method = item["method"]
+        color = styles.get(method, [("#333333", "-", None)])[0][0]
         axes[0].plot(
             [], [], marker="|", markersize=9, linestyle="none",
-            color=colors.get(method, "#666666"),
+            color=color,
             label=f"{label} ({item['status']}, 0 scored)",
         )
     for axis in axes:

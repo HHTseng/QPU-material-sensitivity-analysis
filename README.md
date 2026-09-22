@@ -45,7 +45,7 @@ $$
 \widehat J(x)=
 \sum_{h=1}^{H}W_h\frac{1}{n_hR}
 \sum_{i\in h}\sum_{r=1}^{R}
-\frac{\sum_e w_eQ_{e,i,r}(x)}{N_{\rm task}E_{\rm gun}},
+\frac{\sum_e w_eQ_{e,i,r}(x)}{N_{\mathrm{task}}E_{\mathrm{gun}}},
 \qquad
 \sum_hW_h=\sum_ew_e=1.
 $$
@@ -85,7 +85,7 @@ flowchart LR
 At iteration $t$, the local model proposes a pool
 
 $$
-P_t=\operatorname{LLM}(\mathcal K,\mathcal D_t,\mathcal F_t),
+P_t=\mathrm{LLM}\,(\mathcal K,\mathcal D_t,\mathcal F_t),
 \qquad |P_t|=12,
 $$
 
@@ -98,14 +98,14 @@ $$
 The existing heteroscedastic GP then selects
 
 $$
-x_{t+1}=\arg\max_{x\in A_t}\operatorname{EI}_t(x),
+x_{t+1}=\arg\max_{x\in A_t}\mathrm{EI}_t(x),
 $$
 
 where, for minimization,
 
 $$
 z=\frac{J_{\min}-\mu_t(x)-\xi}{\sigma_t(x)},\qquad
-\operatorname{EI}_t(x)=
+\mathrm{EI}_t(x)=
 (J_{\min}-\mu_t(x)-\xi)\Phi(z)+\sigma_t(x)\phi(z).
 $$
 
@@ -164,7 +164,7 @@ Let $J_0=(5.062199\pm0.873542)\times10^{-4}$ be the best common start.
 The agentic pilot gives
 
 $$
-1-\frac{J_{\rm agent,1}}{J_0}=-0.0659,
+1-\frac{J_{\mathrm{agent},1}}{J_0}=-0.0659,
 $$
 
 so its selected point is numerically worse and the incumbent remains $J_0$.
@@ -201,7 +201,7 @@ An agentic improvement may be claimed only after all three 120-point seeds and
 a paired full-spatial comparison satisfy
 
 $$
-\sup\operatorname{CI}_{95\%}\!\left[J_{\rm agent}-J_{\rm comparator}\right]<0.
+\sup\,\mathrm{CI}_{95\%}\!\left[J_{\mathrm{agent}}-J_{\mathrm{comparator}}\right]<0.
 $$
 
 ## Running the agentic search on Mimir

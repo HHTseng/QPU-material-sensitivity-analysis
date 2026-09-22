@@ -6,11 +6,11 @@ For material parameters `x`, injection condition `ξ`, transport realization
 `ω`, and electrode `e`, let `Q_e(x, ξ, ω)` be the quasiparticles delivered to
 that electrode. The present computable quantity is
 
-\[
+$$
 J(x)=\mathbb E_{\xi,\omega}\left[
-  \frac{1}{E_{\rm gun}}\sum_e w_e Q_e(x,\xi,\omega)
+  \frac{1}{E_{\mathrm{gun}}}\sum_e w_e Q_e(x,\xi,\omega)
 \right],\qquad \sum_e w_e=1.
-\]
+$$
 
 The current run has one 10 meV phonon gun and fixed energy, so division by
 energy changes every value by the same constant. It is nevertheless explicit
@@ -24,10 +24,10 @@ time-dependent conversion from local quasiparticle density to qubit error.
 
 The program also reports
 
-\[
-R_{0.95}=\operatorname{CVaR}_{0.95}
-\left[\max_e Q_e/E_{\rm gun}\right],
-\]
+$$
+R_{0.95}=\mathrm{CVaR}_{0.95}\,
+\left[\max_e Q_e/E_{\mathrm{gun}}\right],
+$$
 
 the mean worst-electrode burden among the upper five percent of injections.
 There is no independently justified upper limit yet, so this remains a second
@@ -51,9 +51,9 @@ The sites are nested when the total is increased from 128 to 256 to 512. Near
 electrodes are deliberately oversampled. If region `h` has true area fraction
 `W_h` and mean response `μ_h`, the estimator is
 
-\[
+$$
 \widehat J=\sum_h W_h\widehat\mu_h.
-\]
+$$
 
 An equal average over all sites is wrong because it gives the oversampled
 electrode regions too much physical area. Candidate and reference comparisons
@@ -93,11 +93,11 @@ reuse this cubic shortcut.
 
 The Gaussian process embeds the two sphere coordinates as
 
-\[
+$$
 (x,y,z)=(\sqrt{1-z^2}\cos\phi,
          \sqrt{1-z^2}\sin\phi,
          z).
-\]
+$$
 
 Its Matérn-5/2 covariance uses one fitted length scale for equatorial motion
 and one for polar motion. Other physical inputs retain independent fitted

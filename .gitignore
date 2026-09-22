@@ -14,6 +14,9 @@ __pycache__/
 .idea/
 .DS_Store
 
+# Local authoring reference; never publish with the repository.
+github-math-rendering-guide.md
+
 # Local operational backups (e.g. pre-sync copies of macro templates)
 backup_pre_mac_sync_*/
 
