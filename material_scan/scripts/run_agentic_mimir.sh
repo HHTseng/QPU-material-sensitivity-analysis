@@ -24,6 +24,8 @@ context=${AGENTIC_CONTEXT:-65536}
 task_timeout=${AGENTIC_TASK_TIMEOUT_SECONDS:-0}
 expected_digest=${AGENTIC_MODEL_DIGEST:-}
 model_timeout=${AGENTIC_MODEL_TIMEOUT_SECONDS:-1800}
+agent_retries=${AGENTIC_AGENT_RETRIES:-2}
+max_attempts=${AGENTIC_MAX_ATTEMPTS:-}
 
 if [[ -z "$gpu_ids" ]]; then
   echo "AGENTIC_GPU_IDS must contain one to four explicit GPU UUIDs." >&2
@@ -143,18 +145,27 @@ if ! run_preflight; then
   fi
 fi
 
-conda run --no-capture-output -n G4CMP python -m material_scan search "$experiment" \
-  --catalog "$repository_root/material_scan/parameters.yaml" \
-  --initial-results "$initial_results" \
-  --method agentic \
-  --seed "$seed" \
-  --steps "$steps" \
-  --workers "$simulation_workers" \
-  --task-timeout "$task_timeout" \
-  --ollama-host "$endpoint" \
-  --ollama-model "$model" \
-  --ollama-model-digest "$expected_digest" \
-  --agent-timeout "$model_timeout" \
-  --agent-context "$context" \
-  --agent-temperature 0 \
+search_arguments=(
+  "$experiment"
+  --catalog "$repository_root/material_scan/parameters.yaml"
+  --initial-results "$initial_results"
+  --method agentic
+  --seed "$seed"
+  --steps "$steps"
+  --workers "$simulation_workers"
+  --task-timeout "$task_timeout"
+  --ollama-host "$endpoint"
+  --ollama-model "$model"
+  --ollama-model-digest "$expected_digest"
+  --agent-timeout "$model_timeout"
+  --agent-context "$context"
+  --agent-temperature 0
+  --agent-retries "$agent_retries"
   --output "$output"
+)
+if [[ -n "$max_attempts" ]]; then
+  search_arguments+=(--max-attempts "$max_attempts")
+fi
+
+conda run --no-capture-output -n G4CMP python -m material_scan search \
+  "${search_arguments[@]}"

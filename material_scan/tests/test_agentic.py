@@ -132,6 +132,23 @@ class AgenticTests(unittest.TestCase):
             "material-scan-agent-call-1", "material-scan-agent-selection-1"
         })
 
+    def test_pool_is_reused_and_reranked_after_observation(self):
+        space = _space()
+        client = MockOllamaClient([_response(space)])
+        optimizer = AgenticOptimizer(space, seed=7, client=client, **_options())
+        optimizer.tell(space.baseline_point(), Observation(0.004, 0.0002))
+        optimizer.tell(
+            space.from_unit([0.5] * space.n_cont), Observation(0.003, 0.0002)
+        )
+
+        first = optimizer.ask(1)[0]
+        optimizer.tell(first, Observation(0.0025, 0.0002))
+        second = optimizer.ask(1)[0]
+
+        self.assertNotEqual(optimizer._key(first), optimizer._key(second))
+        self.assertEqual(len(client.calls), 1)
+        self.assertEqual(optimizer.state()["agent_pool_remaining"], 0)
+
     def test_out_of_bounds_candidate_is_rejected_not_clipped(self):
         space = _space()
         optimizer = AgenticOptimizer(

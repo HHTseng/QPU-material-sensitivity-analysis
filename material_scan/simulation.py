@@ -564,6 +564,8 @@ def run_resolved(
                         )
                         for other in pending:
                             other.cancel()
+                        if isinstance(error, RunError):
+                            raise SimulationError(str(error)) from error
                         raise
                     store.finish_attempt(
                         lease, attempt, completeness="complete", validity="valid",

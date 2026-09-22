@@ -452,6 +452,7 @@ class AgenticOptimizer(GPBayesOpt):
         self.ollama_version: str | None = None
         self._model_record: Mapping[str, Any] | None = None
         self._last_agent_error: str | None = None
+        self._candidate_cache: list[Candidate] = []
 
     def _key(self, point: Mapping[str, Any]) -> tuple[float, ...]:
         """Key proposals in unit space so tiny log variables stay distinct."""
@@ -685,23 +686,56 @@ class AgenticOptimizer(GPBayesOpt):
             )
         return points
 
+    def _candidate_record(self, candidate: Candidate) -> Mapping[str, Any]:
+        return {
+            "values": _point_values(self.space, candidate.point),
+            "rationale": candidate.rationale,
+            "hypothesis": candidate.hypothesis,
+            "runtime_risk": candidate.runtime_risk,
+            "runtime_reason": candidate.runtime_reason,
+            "response_index": candidate.response_index,
+            "prompt_sha256": candidate.prompt_sha256,
+        }
+
+    def _restore_candidate_pool(
+        self, records: Sequence[Mapping[str, Any]]
+    ) -> list[Candidate]:
+        return [
+            Candidate(
+                point=self.space.complete(record["values"]),
+                rationale=str(record.get("rationale", "")),
+                hypothesis=str(record.get("hypothesis", "")),
+                runtime_risk=str(record.get("runtime_risk", "")),
+                runtime_reason=str(record.get("runtime_reason", "")),
+                response_index=int(record.get("response_index", 0)),
+                prompt_sha256=str(record.get("prompt_sha256", "")),
+            )
+            for record in records
+        ]
+
     def _ask(self, count: int) -> list[Mapping[str, Any]]:
-        requested = max(self.pool_size, count)
-        try:
-            candidates = self._agent_pool(requested)
-        except AgenticError as error:
-            self._last_agent_error = str(error)
-            if not self.allow_model_fallback:
-                raise
-            return self._fallback(count, str(error))
-        if len(candidates) < requested:
-            reason = f"model returned {len(candidates)}/{requested} usable pool candidates"
-            if self._last_agent_error:
-                reason += f": {self._last_agent_error}"
-            self._last_agent_error = reason
-            if not self.allow_model_fallback:
-                raise AgenticError(reason)
-            return self._fallback(count, reason)
+        if len(self._candidate_cache) < count:
+            requested = max(self.pool_size, count)
+            try:
+                candidates = self._agent_pool(requested)
+            except AgenticError as error:
+                self._last_agent_error = str(error)
+                if not self.allow_model_fallback:
+                    raise
+                return self._fallback(count, str(error))
+            if len(candidates) < requested:
+                reason = (
+                    f"model returned {len(candidates)}/{requested} usable pool candidates"
+                )
+                if self._last_agent_error:
+                    reason += f": {self._last_agent_error}"
+                self._last_agent_error = reason
+                if not self.allow_model_fallback:
+                    raise AgenticError(reason)
+                return self._fallback(count, reason)
+            self._candidate_cache = list(candidates)
+
+        candidates = list(self._candidate_cache)
 
         best, noise = self._prepare_gp()
         alive = list(candidates)
@@ -738,6 +772,10 @@ class AgenticOptimizer(GPBayesOpt):
             )
             selected.append(point)
             self.gp.add_fantasy(unit, float(mean[chosen_index]), noise)
+        self._candidate_cache = alive
+        remaining = [self._candidate_record(candidate) for candidate in alive]
+        for point in selected:
+            self._provenance[self._key(point)]["agent_pool_remaining"] = remaining
         selection_prompt_hash = _sha256_text("\n".join(sorted({
             candidate.prompt_sha256 for candidate in candidates
         })))
@@ -832,6 +870,10 @@ class AgenticOptimizer(GPBayesOpt):
                 self.gp.add_fantasy(unit, float(prediction[0]), noise)
                 if source.get("acquisition") is not None:
                     self.last_acquisition[self._key(point)] = float(source["acquisition"])
+            remaining = provenance[-1].get("agent_pool_remaining", [])
+            if not isinstance(remaining, list):
+                raise AgenticError("saved agent pool is not a list")
+            self._candidate_cache = self._restore_candidate_pool(remaining)
         else:
             raise AgenticError(f"cannot replay mixed or unknown agent sources: {sources}")
         for point, source in zip(points, provenance):
@@ -851,6 +893,7 @@ class AgenticOptimizer(GPBayesOpt):
             "knowledge_sha256": self.knowledge_sha256,
             "agent_selected": counts.get("agent_gp_ei", 0),
             "fallback_selected": counts.get("gp_fallback", 0),
+            "agent_pool_remaining": len(self._candidate_cache),
         })
         return state
 

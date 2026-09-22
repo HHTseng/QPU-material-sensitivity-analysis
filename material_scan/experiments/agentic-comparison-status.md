@@ -4,16 +4,21 @@ All methods began with the same 32 newly evaluated points. Each later candidate 
 
 The best common starting value was `5.062199e-04`.
 
+Runtime policies differ across retained records (per-task timeouts: 0, 600 seconds). Objective values and completed-evaluation curves are comparable; wall-time and failure efficiency are not equal-policy evidence.
+
 | Run | Method | Completed | Best | Source | Improvement | Best step | Failed proposals |
 |---|---|---:|---:|---|---:|---:|---:|
+| agentic-101 | agentic | 120/120 | 3.654020e-04 ± 5.36e-05 | optimizer | 27.8% | 118 | 1 |
+<!-- agentic-101: agent-selected=120, GP-fallback=0 -->
+| agentic-202 | agentic | 120/120 | 4.290081e-04 ± 6.26e-05 | optimizer | 15.3% | 107 | 0 |
+<!-- agentic-202: agent-selected=120, GP-fallback=0 -->
+| agentic-303 | agentic | 120/120 | 3.870108e-04 ± 6.00e-05 | optimizer | 23.5% | 108 | 2 |
+<!-- agentic-303: agent-selected=120, GP-fallback=0 -->
 | cma-101 | cmaes | 120/120 | 2.595938e-04 ± 5.57e-05 | optimizer | 48.7% | 87 | 0 |
 | cma-202 | cmaes | 120/120 | 2.537300e-04 ± 5.26e-05 | optimizer | 49.9% | 108 | 0 |
 | cma-303 | cmaes | 120/120 | 2.321996e-04 ± 4.30e-05 | optimizer | 54.1% | 72 | 0 |
-| sobol-101 | sobol | 49/64 | 5.062199e-04 ± 8.74e-05 | common-start | 0.0% | 0 | 0 |
 | random-101 | random | 64/64 | 5.062199e-04 ± 8.74e-05 | common-start | 0.0% | 0 | 0 |
-| agentic-pilot-101 | agentic | 1/1 | 5.062199e-04 ± 8.74e-05 | common-start | 0.0% | 0 | 0 |
-<!-- agentic-pilot-101: agent-selected=1, GP-fallback=0 -->
-| agentic-full | agentic | not run | — | — | — | — | — |
+| sobol-101 | sobol | 49/64 | 5.062199e-04 ± 8.74e-05 | common-start | 0.0% | 0 | 0 |
 
 Recorded incomplete/stalled attempts (these are runtime observations, not objective measurements):
 
@@ -24,7 +29,7 @@ Recorded incomplete/stalled attempts (these are runtime observations, not object
 
 Descriptive method summary over recorded runs (candidate budgets may differ):
 
-- agentic (deployment pilot; not equal-budget evidence): 1/1 requested runs complete; median best `5.062199e-04`; range `5.062199e-04` to `5.062199e-04`; median improvement 0.0%; optimizer-selected-only median `5.395803e-04`.
+- agentic: 3/3 requested runs complete; median best `3.870108e-04`; range `3.654020e-04` to `4.290081e-04`; median improvement 23.5%; optimizer-selected-only median `3.870108e-04`.
 - cmaes: 3/3 requested runs complete; median best `2.537300e-04`; range `2.321996e-04` to `2.595938e-04`; median improvement 49.9%; optimizer-selected-only median `2.537300e-04`.
 - random: 1/1 requested runs complete; median best `5.062199e-04`; range `5.062199e-04` to `5.062199e-04`; median improvement 0.0%; optimizer-selected-only median `7.252207e-04`.
 - sobol: 0/1 requested runs complete; median best `5.062199e-04`; range `5.062199e-04` to `5.062199e-04`; median improvement 0.0%; optimizer-selected-only median `7.566498e-04`.
@@ -33,6 +38,6 @@ Branch names identify source history, not a numerical comparison axis. Curves ar
 
 The agent prompt deliberately carries forward lessons from the recorded BO/Sobol stalls and aggregate CMA-ES behavior. This is a retrospective workflow comparison, not a blinded optimizer benchmark, even when source-phonon counts match.
 
-**Agentic conclusion: deployment pilot complete; full equal-budget campaign not run.** The best agent-selected pilot candidate was `5.395803e-04 ± 8.31e-05`, 6.6% higher than the common incumbent; the reported one-standard-error intervals overlap. This pilot validates the execution path but is not an equal-budget comparison or sample-efficiency evidence, so it establishes no resolved improvement.
+**Agentic conclusion: full screening campaign complete.** Across 3 equal-budget runs, the median best value was `3.870108e-04`, a 23.5% reduction from the common incumbent. The agentic median remained 52.5% higher than the CMA-ES median, so this benchmark does not show agentic superiority.
 
 ![Best-so-far search curves](../docs/figures/agentic-comparison-status.png)

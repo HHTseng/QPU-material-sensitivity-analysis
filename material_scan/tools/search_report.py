@@ -242,11 +242,9 @@ def build_report(
                 f"completed and incomplete point counts disagree for label {label!r}"
             )
 
-    timeout_policies = {item["task_timeout_s"] for item in run_reports.values()}
-    if len(timeout_policies) > 1:
-        raise ValueError(
-            f"runs use unequal task-timeout policies: {sorted(timeout_policies)}"
-        )
+    timeout_policies = sorted(
+        {item["task_timeout_s"] for item in run_reports.values()}
+    )
     agent_identities = set()
     for label, item in run_reports.items():
         if item["method"] != "agentic":
@@ -307,6 +305,8 @@ def build_report(
         "source_phonons_per_candidate": int(spec.event_counts["events_total"]),
         "initial_points": len(initial_items),
         "comparison_requested_steps": comparison_budget,
+        "task_timeout_policies_s": timeout_policies,
+        "equal_runtime_policy": len(timeout_policies) <= 1,
         "initial_best": {
             "name": initial_best_item["name"],
             "value": initial_best,
@@ -340,7 +340,11 @@ def plot(report: Mapping[str, Any], output: Path) -> None:
         ],
         "sobol": [("#009E73", "-", "D")],
         "random": [("#6B6B6B", ":", "s")],
-        "agentic": [("#E69F00", "-", "o")],
+        "agentic": [
+            ("#E69F00", "-", "o"),
+            ("#8C510A", "--", "^"),
+            ("#F4A582", "-.", "v"),
+        ],
     }
     method_counts: Counter[str] = Counter()
     run_styles: dict[str, tuple[str, str, str | None]] = {}
@@ -415,9 +419,21 @@ def markdown(report: Mapping[str, Any], figure: Path) -> str:
         "",
         f"The best common starting value was `{report['initial_best']['value']:.6e}`.",
         "",
+    ]
+    if not report.get("equal_runtime_policy", True):
+        policies = ", ".join(
+            f"{value:g}" for value in report.get("task_timeout_policies_s", [])
+        )
+        lines.extend([
+            "Runtime policies differ across retained records (per-task timeouts: "
+            f"{policies} seconds). Objective values and completed-evaluation curves are "
+            "comparable; wall-time and failure efficiency are not equal-policy evidence.",
+            "",
+        ])
+    lines.extend([
         "| Run | Method | Completed | Best | Source | Improvement | Best step | Failed proposals |",
         "|---|---|---:|---:|---|---:|---:|---:|",
-    ]
+    ])
     for label, item in report["runs"].items():
         lines.append(
             f"| {label} | {item['method']} | {item['steps']}/{item['requested_steps']} | "
@@ -533,6 +549,25 @@ def markdown(report: Mapping[str, Any], figure: Path) -> str:
             "**Agentic conclusion: not run.** The current evidence cannot show an improvement "
             "or a regression. The agentic marker in the legend has no result points.",
         ])
+    elif agentic_full_runs:
+        best_values = [item["best"] for item in agentic_full_runs]
+        agent_median = median(best_values)
+        initial = report["initial_best"]["value"]
+        improvement = 1.0 - agent_median / initial
+        lines.extend([
+            "",
+            "**Agentic conclusion: full screening campaign complete.** "
+            f"Across {len(agentic_full_runs)} equal-budget runs, the median best value was "
+            f"`{agent_median:.6e}`, a {100 * improvement:.1f}% reduction from the common "
+            "incumbent.",
+        ])
+        cma = report.get("methods", {}).get("cmaes")
+        if cma:
+            ratio = agent_median / cma["best_median"] - 1.0
+            lines[-1] += (
+                f" The agentic median remained {100 * ratio:.1f}% higher than the CMA-ES "
+                "median, so this benchmark does not show agentic superiority."
+            )
     lines.extend(["", f"![Best-so-far search curves]({figure.as_posix()})", ""])
     return "\n".join(lines)
 

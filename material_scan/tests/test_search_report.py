@@ -121,6 +121,49 @@ class SearchReportTests(unittest.TestCase):
         self.assertIn("establishes no resolved improvement", body)
         self.assertNotIn("Agentic conclusion: not run", body)
 
+    def test_full_agentic_conclusion_reports_gain_without_overclaim(self):
+        report = {
+            "initial_points": 32,
+            "source_phonons_per_candidate": 16_000_000,
+            "initial_best": {"value": 5.0e-4, "standard_error": 8.0e-5},
+            "comparison_requested_steps": 120,
+            "task_timeout_policies_s": [0.0, 600.0],
+            "equal_runtime_policy": False,
+            "runs": {
+                "agentic-101": {
+                    "method": "agentic", "steps": 120, "requested_steps": 120,
+                    "best": 4.0e-4, "best_standard_error": 6.0e-5,
+                    "best_source": "optimizer", "improvement_from_initial": 0.2,
+                    "best_step": 100, "failures": 1, "agent_selected": 120,
+                    "fallback_selected": 0, "best_optimizer_value": 4.0e-4,
+                    "best_optimizer_standard_error": 6.0e-5,
+                },
+            },
+            "pending": {}, "incomplete": {},
+            "methods": {
+                "agentic": {
+                    "complete_runs": 1, "seeds": 1, "best_median": 4.0e-4,
+                    "best_minimum": 4.0e-4, "best_maximum": 4.0e-4,
+                    "improvement_median": 0.2, "optimizer_only_median": 4.0e-4,
+                    "pilot_runs": 0, "equal_budget_runs": 1,
+                },
+                "cmaes": {
+                    "complete_runs": 3, "seeds": 3, "best_median": 2.5e-4,
+                    "best_minimum": 2.3e-4, "best_maximum": 2.6e-4,
+                    "improvement_median": 0.5, "optimizer_only_median": 2.5e-4,
+                    "pilot_runs": 0, "equal_budget_runs": 3,
+                },
+            },
+        }
+
+        body = markdown(report, Path("comparison.png"))
+
+        self.assertIn("full screening campaign complete", body)
+        self.assertIn("20.0% reduction", body)
+        self.assertIn("60.0% higher than the CMA-ES median", body)
+        self.assertIn("does not show agentic superiority", body)
+        self.assertIn("wall-time and failure efficiency are not equal-policy", body)
+
 
 if __name__ == "__main__":
     unittest.main()
