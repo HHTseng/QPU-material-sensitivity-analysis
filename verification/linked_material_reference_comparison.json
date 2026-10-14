@@ -1,0 +1,155 @@
+[
+  {
+    "materials": [
+      "Si",
+      "Nb",
+      "Cu"
+    ],
+    "derived_difference": {
+      "substrate_density_kg_m3": 0.0,
+      "vsound_m_s": 0.0,
+      "vtrans_m_s": 0.0,
+      "setTopAbs": 0.0,
+      "setTopFilmAbs": 0.0,
+      "setBotAbs": 0.0
+    },
+    "max_interface_diagnostic_difference": 0.0001269988715648651,
+    "film_field_mismatches": []
+  },
+  {
+    "materials": [
+      "Si",
+      "Ta",
+      "Cu"
+    ],
+    "derived_difference": {
+      "substrate_density_kg_m3": 0.0,
+      "vsound_m_s": 0.0,
+      "vtrans_m_s": 0.0,
+      "setTopAbs": 0.0,
+      "setTopFilmAbs": 0.0,
+      "setBotAbs": 0.0
+    },
+    "max_interface_diagnostic_difference": 0.0001269988715648651,
+    "film_field_mismatches": []
+  },
+  {
+    "materials": [
+      "Si",
+      "Ti",
+      "Au"
+    ],
+    "derived_difference": {
+      "substrate_density_kg_m3": 0.0,
+      "vsound_m_s": 0.0,
+      "vtrans_m_s": 0.0,
+      "setTopAbs": 0.0,
+      "setTopFilmAbs": 0.0,
+      "setBotAbs": 0.0
+    },
+    "max_interface_diagnostic_difference": 0.0001269988715648651,
+    "film_field_mismatches": []
+  },
+  {
+    "materials": [
+      "Ge",
+      "Nb",
+      "Cu"
+    ],
+    "derived_difference": {
+      "substrate_density_kg_m3": 0.0,
+      "vsound_m_s": 0.0,
+      "vtrans_m_s": 0.0,
+      "setTopAbs": 0.0,
+      "setTopFilmAbs": 0.0,
+      "setBotAbs": 0.0
+    },
+    "max_interface_diagnostic_difference": 0.0012833289802074432,
+    "film_field_mismatches": []
+  },
+  {
+    "materials": [
+      "Ge",
+      "Ta",
+      "Cu"
+    ],
+    "derived_difference": {
+      "substrate_density_kg_m3": 0.0,
+      "vsound_m_s": 0.0,
+      "vtrans_m_s": 0.0,
+      "setTopAbs": 0.0,
+      "setTopFilmAbs": 0.0,
+      "setBotAbs": 0.0
+    },
+    "max_interface_diagnostic_difference": 0.0012833289802074432,
+    "film_field_mismatches": []
+  },
+  {
+    "materials": [
+      "Ge",
+      "Ti",
+      "Au"
+    ],
+    "derived_difference": {
+      "substrate_density_kg_m3": 0.0,
+      "vsound_m_s": 0.0,
+      "vtrans_m_s": 0.0,
+      "setTopAbs": 0.0,
+      "setTopFilmAbs": 0.0,
+      "setBotAbs": 0.0
+    },
+    "max_interface_diagnostic_difference": 0.0012833289802074432,
+    "film_field_mismatches": []
+  },
+  {
+    "materials": [
+      "GaAs",
+      "Nb",
+      "Cu"
+    ],
+    "derived_difference": {
+      "substrate_density_kg_m3": 0.0,
+      "vsound_m_s": 0.0,
+      "vtrans_m_s": 0.0,
+      "setTopAbs": 0.0,
+      "setTopFilmAbs": 0.0,
+      "setBotAbs": 0.0
+    },
+    "max_interface_diagnostic_difference": 0.0007850006222724915,
+    "film_field_mismatches": []
+  },
+  {
+    "materials": [
+      "GaAs",
+      "Ta",
+      "Cu"
+    ],
+    "derived_difference": {
+      "substrate_density_kg_m3": 0.0,
+      "vsound_m_s": 0.0,
+      "vtrans_m_s": 0.0,
+      "setTopAbs": 0.0,
+      "setTopFilmAbs": 0.0,
+      "setBotAbs": 0.0
+    },
+    "max_interface_diagnostic_difference": 0.0007850006222724915,
+    "film_field_mismatches": []
+  },
+  {
+    "materials": [
+      "GaAs",
+      "Ti",
+      "Au"
+    ],
+    "derived_difference": {
+      "substrate_density_kg_m3": 0.0,
+      "vsound_m_s": 0.0,
+      "vtrans_m_s": 0.0,
+      "setTopAbs": 0.0,
+      "setTopFilmAbs": 0.0,
+      "setBotAbs": 0.0
+    },
+    "max_interface_diagnostic_difference": 0.0007850006222724915,
+    "film_field_mismatches": []
+  }
+]

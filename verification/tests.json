@@ -1,0 +1,23 @@
+{
+  "command": "python -m unittest test_physics test_workflow -v",
+  "environment": "G4CMP",
+  "python": "3.12.13",
+  "tests": 77,
+  "seconds": 19.326,
+  "result": "OK",
+  "source_sha256": {
+    "analysis.py": "3b4f2a93d25ed35a4f5a8fd8b0a3c0b46a937b761684f030a7a200c323731fb6",
+    "inputs.py": "90d918940d28719db24aec1690dae1f770dc2c9b3752488dc3456028e6f734db",
+    "physics.py": "50cac43907222d6913350f84e7767879fc834b21d0ca644a4ece3081be5e135c",
+    "plots.py": "96ba7eb345b336c2dd6bfdabc4ecdf56b746af0f0a2ce6e1f96f2ff1dd91926c",
+    "records.py": "9dcc128287ecb99e09a7176922a0494939a7e513d533370bb8ea9e7169f224fc",
+    "scan.py": "4c93fd35c0e3ab6bd0fcf3d5fc4c6f41a77a415ad1768130fc85ac7bc4e40d08",
+    "search.py": "d679823aada3b5d95b1853dd004c04893cf31d682f660a35350c33d725b1c2ea",
+    "simulate.py": "086f509500b2bef3b4ce68fa1bd27e32ed3997896b2932549a9782785dc8d9aa",
+    "test_physics.py": "5378d8c32c2d2632d99c13ddb216e23e15b5c9beb5f262f60f7b4bb63a1a34d4",
+    "test_workflow.py": "eccb9ea5462b7ad30d62cac621325f1a09f8f4de7bfccd7f3b4d0d5ac0816dcf"
+  },
+  "log_sha256": "f81351374eedd227bd23756b2695b6e8ed81314ebcb8b48877cd47ab9905d4e8",
+  "packaging": "Editable installation and material-scan check studies/reference-eight.yaml passed in an isolated temporary virtual environment.",
+  "retained_raw_data": "No tracked raw results, databases, snapshots, macros or numerical fixtures changed."
+}

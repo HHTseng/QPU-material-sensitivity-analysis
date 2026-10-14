@@ -1,0 +1,66 @@
+{
+  "old_total_qps": 702.0,
+  "new_total_qps": 712.0,
+  "events_per_implementation": 2000000,
+  "sites": 16,
+  "replicas": 4,
+  "objective": "total_qps_per_primary",
+  "units": "summed_junction_QPs_per_primary",
+  "old_realization_estimates": [
+    0.00033999999999999997,
+    0.000328,
+    0.00032800000000000006,
+    0.00040800000000000005
+  ],
+  "new_realization_estimates": [
+    0.00033999999999999997,
+    0.000348,
+    0.00032800000000000006,
+    0.00040800000000000005
+  ],
+  "paired_realization_student_t": {
+    "mean_new": 0.000356,
+    "mean_previous": 0.00035099999999999997,
+    "difference": 5.000000000000013e-06,
+    "standard_error": 5e-06,
+    "confidence": 0.95,
+    "confidence_interval": [
+      -1.0912231526418527e-05,
+      2.0912231526418553e-05
+    ],
+    "relative_difference": 0.014245014245014283,
+    "equivalence_margin": 1.755e-05,
+    "equivalent_within_margin": false,
+    "consistent_with_zero_difference": true,
+    "n_new": 4,
+    "n_previous": 4,
+    "paired": true,
+    "degrees_of_freedom": 3
+  },
+  "former_within_site_paired_variance": {
+    "value": 5e-06,
+    "standard_error": 5e-06,
+    "relative_to_b": 0.014245014245014247,
+    "z": 1.0,
+    "confidence_interval_95": [
+      -4.800000000000001e-06,
+      1.48e-05
+    ],
+    "n_sites": 16,
+    "sites_favouring_a": 0,
+    "units": "summed_junction_QPs_per_primary",
+    "uncertainty_method": "within-site paired replica variance"
+  },
+  "interpretation": "Matched input and seed comparison of stochastic simulations. Equivalence at the predeclared 5% margin requires the entire Student-t interval inside the margin.",
+  "physical_input_comparison": {
+    "tasks_checked": 64,
+    "macro_mismatches": [],
+    "lattice_mismatches": [],
+    "site_seed_event_mismatches": [],
+    "omitted_commands": [
+      "/g4cmp/HitsFile",
+      "/control/shell"
+    ],
+    "lattice_fields_per_task": 36
+  }
+}

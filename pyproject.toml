@@ -4,19 +4,24 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "material-scan"
-version = "0.1.0"
-description = "Reproducible G4CMP material-parameter experiments"
+version = "0.2.0"
+description = "Scientific G4CMP material-property studies"
 requires-python = ">=3.12"
 dependencies = [
   "matplotlib==3.10.9",
   "numpy==2.4.6",
-  "pandas==3.0.3",
   "PyYAML==6.0.3",
   "scipy==1.17.1",
 ]
 
 [project.scripts]
-material-scan = "material_scan.cli:main"
+material-scan = "scan:main"
 
-[tool.setuptools.packages.find]
-include = ["material_scan*"]
+[project.optional-dependencies]
+sensitivity = ["SALib==1.5.2"]
+presentation = ["python-pptx==1.0.2"]
+catalog = ["mp-api"]
+tpe = ["optuna"]
+
+[tool.setuptools]
+py-modules = ["scan", "inputs", "physics", "simulate", "analysis", "search", "records", "plots"]

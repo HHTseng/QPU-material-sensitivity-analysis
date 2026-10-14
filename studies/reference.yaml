@@ -1,0 +1,93 @@
+schema: material-scan-study-2
+id: reference-check
+kind: confirmation
+description: Fixed reference for software comparison; uniform sites are not a converged
+  device integral.
+parameters: {}
+fixed:
+  gun_energy_eV: 0.01
+  min_e_phonons_eV: 3.82e-05
+  gun_type: phonon_Caustic
+  setTopVSound: 3.582
+  setTopGap: 0.000191
+  setTopQPLim: 3
+  setTopPhLifetime: 0.242
+  setTopPhLifetimeSlope: 0.29
+  setTopThickness_um: 0.12
+  setSubWidth_mm: 10
+  setSubHeight_mm: 10
+  setSubThickness_um: 525
+  electrode_width_um: 10.0
+  electrode_height_um: 10.0
+  electrode_island_um: 200.0
+  electrode_island_spacing_um: 50.0
+  electrode_x_mm:
+  - -2.0
+  - 0.0
+  - 2.0
+  - -2.0
+  - 0.0
+  - 2.0
+  - -2.0
+  - 0.0
+  - 2.0
+  - 1.0
+  - -1.0
+  - 1.0
+  - -1.0
+  - -3.0
+  - 1.0
+  - -1.0
+  - 3.0
+  electrode_y_mm:
+  - -2.0
+  - -2.0
+  - -2.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 2.0
+  - 2.0
+  - 2.0
+  - -3.0
+  - -1.0
+  - 1.0
+  - 3.0
+  - -1.0
+  - -1.0
+  - 1.0
+  - 1.0
+  setWallAbs: 0.02
+  setTopPSpecProb: 0.8
+  setTopFilmPSpecProb: 0.8
+  setBotPSpecProb: 0.8
+  setWallPSpecProb: 0.0
+  chargeBounces: 1
+  phononBounces: 10000
+  clearance_mm: 1.0e-06
+  eTrappingMFP_mm: 0.3
+  hTrappingMFP_mm: 0.3
+  temperature_K: 0.0
+  position_seed: 20260727
+  position_half_span_mm: 4.0
+  explicit_seeds: true
+sampling:
+  kind: sobol
+  sites: 16
+  replicas: 4
+  seed_base: 20260728
+  seed_bank: 23
+  position_seed: 20260727
+  events_per_task: 31250
+analysis:
+  objective: total_qps_per_primary
+  bootstrap_draws: 1000
+execution:
+  workers: 8
+  timeout_s: 600
+  stall_timeout_s: 120
+  total_mem_gb: 8
+  per_task_mem_gb: 2
+candidates:
+- name: reference
+  values: {}

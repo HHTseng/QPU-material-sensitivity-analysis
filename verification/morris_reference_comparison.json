@@ -1,0 +1,14 @@
+{
+  "dimensions": 25,
+  "trajectories": 4,
+  "points": 104,
+  "sample_values_exact": true,
+  "max_abs_difference": 0.0,
+  "unique_transport_settings": 80,
+  "postprocess_reuses": 24,
+  "candidate_trajectories": 8,
+  "rejected_trajectories": 1,
+  "tolerance_transformed_coordinates_match": true,
+  "material_information_preserved": true,
+  "original_128_trajectory_prefix_exact": true
+}

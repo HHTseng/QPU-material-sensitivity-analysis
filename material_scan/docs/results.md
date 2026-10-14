@@ -2,6 +2,14 @@
 
 Last updated: 2026-09-14.
 
+These numerical results describe the earlier source revision. Later local
+reports record a 2,361-site converged comparison and full-spatial CMA-ES
+confirmations; their status and outstanding checks are summarized in
+[WORKFLOW_VERIFICATION.md](../../WORKFLOW_VERIFICATION.md). The source
+restructure preserves historical measurements and does not turn those reports
+into independently revalidated material predictions. Current commands use
+`python scan.py`; commands below name the historical implementation.
+
 ## What has been completed
 
 ### Linked real-material screen

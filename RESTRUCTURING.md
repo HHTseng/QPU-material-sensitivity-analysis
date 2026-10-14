@@ -1,5 +1,11 @@
 # Repository restructuring — 2026-09-14 / 15
 
+This is a historical record of the earlier branch. The 2026-10-14 implementation
+replaces its source layout with eight working scripts and two test scripts;
+see [WORKFLOW_VERIFICATION.md](WORKFLOW_VERIFICATION.md). Historical data and
+databases remain preserved. Commands naming removed source below describe the
+earlier revision `c8cdb996209711bef0e266c7315bfa518eda47e8`.
+
 Two phases. Phase 1 moved the code out; phase 2 renamed the evidence directory
 and made the ledger paths portable.
 

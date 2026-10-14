@@ -1,0 +1,23 @@
+schema: material-scan-study-2
+sampling:
+  kind: sobol
+  sites: 16
+  replicas: 4
+  events_per_task: 31250
+execution:
+  workers: 8
+analysis:
+  objective: device_junction_qps_per_eV
+id: elasticity-tolerance-example
+kind: tolerance
+parameters:
+  sub_c11:
+    mode: search
+  sub_c44:
+    mode: search
+tolerance:
+  sub_c11: 0.03
+  sub_c44: 0.03
+candidates:
+- name: reference
+  values: {}

@@ -1,0 +1,42 @@
+{
+  "live_reference_tasks": 128,
+  "cached_tasks_on_restart": 128,
+  "reanalyzed_response_exact": true,
+  "reanalyzed_standard_error_exact": true,
+  "archive_recovered_response_exact": true,
+  "historical_database_checksums_unchanged": {
+    "data/stage3_trials.sqlite": "45030b428376464a0625a18854652c3a7aaf20de010831bf1345ccc29a99e64c",
+    "data/stage3_trials_e7.sqlite": "981caacc02984f6bf792216f50275b4c2200972f0845dad1690a91b6581b5184",
+    "data/stage3_trials_e8.sqlite": "64d042d1b6ab8ab0951cc858fc1e0f726f922f97674cb11ae707e8d7a2c25085",
+    "data/stage4_trials.sqlite": "bdd55a7036e44f84ea6d9a5400ee793d3b009fe8a579395bc7e06ac75d1f48e9"
+  },
+  "figures": [
+    "summary",
+    "layout",
+    "hits"
+  ],
+  "archive": "/tmp/restructured-reference-eight-final.tar.gz",
+  "recovered_path": "/tmp/restructured-reference-eight-recovered-final",
+  "history_summary_keys": [
+    "path",
+    "read_only",
+    "integrity",
+    "foreign_key_violations",
+    "counts",
+    "status_counts",
+    "trials",
+    "automatic_reuse",
+    "validity_register",
+    "decisions",
+    "unavailable_optimizer_labels",
+    "validity_scope"
+  ],
+  "archive_verification_keys": [
+    "path",
+    "sha256",
+    "members",
+    "bytes",
+    "manifest"
+  ],
+  "restart_and_recovery_seconds": 4.606446505989879
+}

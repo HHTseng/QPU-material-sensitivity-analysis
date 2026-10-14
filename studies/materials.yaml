@@ -1,0 +1,29 @@
+schema: material-scan-study-2
+sampling:
+  kind: sobol
+  sites: 16
+  replicas: 4
+  events_per_task: 31250
+execution:
+  workers: 8
+analysis:
+  objective: device_junction_qps_per_eV
+id: linked-material-check
+kind: materials
+description: Small linked-material comparison; not a converged spatial integral.
+candidates:
+- name: Si/Nb/Cu
+  materials:
+  - Si
+  - Nb
+  - Cu
+- name: Ge/Nb/Cu
+  materials:
+  - Ge
+  - Nb
+  - Cu
+- name: GaAs/Nb/Cu
+  materials:
+  - GaAs
+  - Nb
+  - Cu

@@ -1,0 +1,42 @@
+[
+  {
+    "study": "studies/convergence.yaml",
+    "exit_code": 0,
+    "answer": "{\"checked_studies\":2,\"id\":\"nested-spatial-example\",\"kind\":\"convergence\"}"
+  },
+  {
+    "study": "studies/materials.yaml",
+    "exit_code": 0,
+    "answer": "{\"events_total\":2000000,\"id\":\"linked-material-check\",\"kind\":\"materials\",\"replicas\":4,\"search_parameters\":[],\"sites\":16}"
+  },
+  {
+    "study": "studies/reference-eight.yaml",
+    "exit_code": 0,
+    "answer": "{\"events_total\":4000000,\"id\":\"reference-check-eight-realizations\",\"kind\":\"confirmation\",\"replicas\":8,\"search_parameters\":[],\"sites\":16}"
+  },
+  {
+    "study": "studies/reference.yaml",
+    "exit_code": 0,
+    "answer": "{\"events_total\":2000000,\"id\":\"reference-check\",\"kind\":\"confirmation\",\"replicas\":4,\"search_parameters\":[],\"sites\":16}"
+  },
+  {
+    "study": "studies/search.yaml",
+    "exit_code": 0,
+    "answer": "{\"events_total\":2000000,\"id\":\"elasticity-search-example\",\"kind\":\"search\",\"replicas\":4,\"search_parameters\":[\"sub_c11\",\"sub_c44\"],\"sites\":16}"
+  },
+  {
+    "study": "studies/sensitivity.yaml",
+    "exit_code": 0,
+    "answer": "{\"events_total\":2000000,\"id\":\"morris-example\",\"kind\":\"sensitivity\",\"replicas\":4,\"search_parameters\":[],\"sites\":16}"
+  },
+  {
+    "study": "studies/sequence.yaml",
+    "exit_code": 0,
+    "answer": "{\"checked_studies\":2,\"id\":\"ordered-studies-example\",\"kind\":\"sequence\"}"
+  },
+  {
+    "study": "studies/tolerance.yaml",
+    "exit_code": 0,
+    "answer": "{\"events_total\":2000000,\"id\":\"elasticity-tolerance-example\",\"kind\":\"tolerance\",\"replicas\":4,\"search_parameters\":[\"sub_c11\",\"sub_c44\"],\"sites\":16}"
+  }
+]

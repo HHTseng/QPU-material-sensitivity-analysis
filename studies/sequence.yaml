@@ -1,0 +1,6 @@
+schema: material-scan-study-2
+id: ordered-studies-example
+kind: sequence
+steps:
+- materials.yaml
+- tolerance.yaml

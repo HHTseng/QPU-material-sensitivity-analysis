@@ -1,0 +1,100 @@
+{
+  "reference_revision": "c8cdb996209711bef0e266c7315bfa518eda47e8",
+  "definition": "Lines include blanks; functions include methods/nested definitions; tests excluded from runtime counts.",
+  "previous": {
+    "python_files": 54,
+    "python_lines": 22566,
+    "functions": 682,
+    "classes": 78,
+    "bash_files": 11,
+    "bash_lines": 1113,
+    "notebooks": 1,
+    "notebook_code_lines": 1139,
+    "test_files": 7,
+    "test_lines": 4157,
+    "total_source_files": 73
+  },
+  "current": {
+    "files": {
+      "scan.py": {
+        "lines": 693,
+        "functions": 11,
+        "classes": 0,
+        "comment_tokens": 0,
+        "docstring_lines": 3
+      },
+      "inputs.py": {
+        "lines": 704,
+        "functions": 14,
+        "classes": 0,
+        "comment_tokens": 0,
+        "docstring_lines": 2
+      },
+      "physics.py": {
+        "lines": 323,
+        "functions": 15,
+        "classes": 0,
+        "comment_tokens": 0,
+        "docstring_lines": 11
+      },
+      "simulate.py": {
+        "lines": 264,
+        "functions": 11,
+        "classes": 0,
+        "comment_tokens": 0,
+        "docstring_lines": 2
+      },
+      "analysis.py": {
+        "lines": 441,
+        "functions": 20,
+        "classes": 0,
+        "comment_tokens": 1,
+        "docstring_lines": 13
+      },
+      "search.py": {
+        "lines": 819,
+        "functions": 34,
+        "classes": 2,
+        "comment_tokens": 0,
+        "docstring_lines": 6
+      },
+      "records.py": {
+        "lines": 872,
+        "functions": 38,
+        "classes": 1,
+        "comment_tokens": 0,
+        "docstring_lines": 8
+      },
+      "plots.py": {
+        "lines": 275,
+        "functions": 7,
+        "classes": 0,
+        "comment_tokens": 0,
+        "docstring_lines": 2
+      },
+      "test_physics.py": {
+        "lines": 444,
+        "functions": 31,
+        "classes": 3,
+        "comment_tokens": 0,
+        "docstring_lines": 1
+      },
+      "test_workflow.py": {
+        "lines": 882,
+        "functions": 67,
+        "classes": 5,
+        "comment_tokens": 0,
+        "docstring_lines": 1
+      }
+    },
+    "runtime": {
+      "lines": 4391,
+      "functions": 150,
+      "classes": 3,
+      "comment_tokens": 1,
+      "docstring_lines": 47,
+      "files": 8
+    },
+    "source_files": 10
+  }
+}

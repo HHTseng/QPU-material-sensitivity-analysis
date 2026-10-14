@@ -5,6 +5,10 @@ figures cited directly by the current report belong in Git. Raw hit files, task
 logs, complete generated figure collections, SQLite result files, and
 compressed copies belong under a configured data root outside the source tree.
 
+Current commands use `python scan.py` from the repository root. Historical
+source is retained in Git at `c8cdb996209711bef0e266c7315bfa518eda47e8`;
+its removal from the current source tree does not remove experimental data.
+
 ## New directory names
 
 ```text
@@ -65,7 +69,7 @@ Known retained conditions are:
 
 ## Copy and recovery rules
 
-`python -m material_scan archive` creates a deterministic compressed copy and
+`python scan.py archive` creates a deterministic compressed copy and
 does not remove the source. Its inventory records every relative path, size,
 and SHA-256. Verification rejects missing, extra, duplicate, absolute,
 parent-traversal, symbolic-link, truncated, or checksum-mismatched entries.
@@ -73,3 +77,17 @@ parent-traversal, symbolic-link, truncated, or checksum-mismatched entries.
 Do not remove a source until two independently stored copies have both passed
 verification. Recover into a new empty destination; never unpack over an active
 experiment.
+
+```bash
+python scan.py archive material_scan_data/experiments/reference-eight \
+  --output /tmp/reference-eight.tar.gz
+python scan.py verify-archive /tmp/reference-eight.tar.gz
+python scan.py recover /tmp/reference-eight.tar.gz --output /tmp/recovered
+python scan.py analyse /tmp/recovered --output /tmp/reanalysis.json
+```
+
+Recovered analysis and figures bind recorded file paths to the recovered
+directory without modifying the original database. `history` reads an older
+SQLite file without schema changes; supply
+`--invalidations legacy/stage4_invalidations.yaml` for the invalidity register.
+`convert-copy` changes paths only in a stopped copy and keeps the source intact.

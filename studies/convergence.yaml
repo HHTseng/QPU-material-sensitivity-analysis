@@ -1,0 +1,23 @@
+schema: material-scan-study-2
+sampling:
+  kind: sobol
+  sites: 16
+  replicas: 4
+  events_per_task: 31250
+execution:
+  workers: 8
+analysis:
+  objective: device_junction_qps_per_eV
+id: nested-spatial-example
+kind: convergence
+description: Example refinement. A separate demonstration does not replace the existing
+  2361-site recorded design.
+levels:
+- sites: 16
+- sites: 32
+candidates:
+- name: reference
+  values: {}
+- name: elasticity-test
+  values:
+    sub_c44: 70.0

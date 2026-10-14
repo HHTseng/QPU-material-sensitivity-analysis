@@ -1,5 +1,11 @@
 # Morris sensitivity analysis
 
+Historical description. Its scripts are preserved at Git revision
+`c8cdb996209711bef0e266c7315bfa518eda47e8`. Current execution uses
+`python scan.py run studies/sensitivity.yaml`. The checked active parameter
+table has 25 dimensions; the 53-variable analysis below describes the older
+study rather than the present default.
+
 This is the earlier analysis of 50 parameter groups, expanded to 53 numerical
 variables. With 128 Morris trajectories and four levels, the complete design
 contains `128 × (53 + 1) = 6,912` samples.

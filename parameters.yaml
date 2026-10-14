@@ -1,0 +1,467 @@
+schema: material-scan-parameters-1
+meta:
+  purpose: Definitions and model destinations for the material-property scan.
+  note: Search bounds belong to each experiment, not to this catalog.
+parameters:
+  topfilm_vsound:
+    unit: km/s
+    type: float
+    target: macro:/main/detector_param/setTopFilmVSound
+    valid_range:
+    - 0.1
+    - 20.0
+    source: 'Longitudinal sound speed of the top ground film. Range covers the elemental
+      superconductors: Pb 2.16, Nb 2.444, Al 3.582, Ti 4.14, Ta 4.159 km/s.'
+    default: 2.444
+    search_range:
+    - 1.5
+    - 6.0
+    scale: linear
+    active: true
+  topfilm_gap:
+    unit: eV
+    type: float
+    target: macro:/main/detector_param/setTopFilmGap
+    valid_range:
+    - 1.0e-06
+    - 0.01
+    source: Single-QP gap Delta of the top film. Ti 0.061 meV .. Nb 1.5384 meV measured;
+      the ceiling reaches Nb3Sn/NbN-class gaps while keeping 2*Delta below E_gun =
+      10 meV so the ground-plane regime is constant.
+    default: 0.0015384
+    search_range:
+    - 5.0e-05
+    - 0.0035
+    scale: log
+    active: true
+  topfilm_ph_lifetime:
+    unit: ns
+    type: float
+    target: macro:/main/detector_param/setTopFilmPhLifetime
+    valid_range:
+    - 1.0e-06
+    - 1000000.0
+    source: Pair-breaking phonon lifetime in the top film. Nb 0.00417, Ta 0.0227,
+      Ti 0.414 ns; all three are supplied values with declared uncertainty, so the
+      box is deliberately wider.
+    default: 0.00417
+    search_range:
+    - 0.001
+    - 1.0
+    scale: log
+    active: true
+  topfilm_density:
+    unit: kg/m3
+    type: float
+    target: model:top-interface-density
+    valid_range:
+    - 1.0
+    - 100000.0
+    source: Top-film mass density. Reaches Geant4 nowhere -- it enters only the acoustic
+      impedance Z = rho*v in the interface model, and the projection metric. Ti 4540
+      .. Ta 16650 kg/m3.
+    default: 8570.0
+    search_range:
+    - 2000.0
+    - 20000.0
+    scale: linear
+    active: true
+  bot_vsound:
+    unit: km/s
+    type: float
+    target: macro:/main/detector_param/setBotVSound
+    valid_range:
+    - 0.1
+    - 20.0
+    source: Longitudinal sound speed of the bottom normal-metal film. Cu 2.608, Au
+      3.240 km/s.
+    default: 2.608
+    search_range:
+    - 1.5
+    - 6.0
+    scale: linear
+    active: true
+  bot_gap_thres:
+    unit: eV
+    type: float
+    target: macro:/main/detector_param/setBotGapThres
+    valid_range:
+    - 1.0e-12
+    - 0.01
+    source: Minimum 2*Delta a phonon must carry to break pairs after downconversion
+      in the normal film. Baseline 180 ueV; capped at 2*setTopGap = 382 ueV, above
+      which the bottom film would gate harder than the junction it feeds.
+    default: 0.00018
+    search_range:
+    - 5.0e-05
+    - 0.0004
+    scale: linear
+    active: true
+  bot_ph_lifetime:
+    unit: ns
+    type: float
+    target: macro:/main/detector_param/setBotPhLifetime
+    valid_range:
+    - 1.0e-06
+    - 1000000.0
+    source: Phonon lifetime in the bottom film. Cu 5.1, Au 16.0 ns (Au's is sourced
+      with a [10, 30] ns uncertainty).
+    default: 5.1
+    search_range:
+    - 0.5
+    - 50.0
+    scale: log
+    active: true
+  bot_density:
+    unit: kg/m3
+    type: float
+    target: model:bottom-interface-density
+    valid_range:
+    - 1.0
+    - 100000.0
+    source: Bottom-film mass density; interface model and projection only. Cu 8960,
+      Au 19300 kg/m3.
+    default: 8960.0
+    search_range:
+    - 2000.0
+    - 22000.0
+    scale: linear
+    active: true
+  sub_c11:
+    unit: GPa
+    type: float
+    target: config:stiffness 1 1
+    valid_range:
+    - -2000.0
+    - 2000.0
+    source: 'Cubic elastic constant. MP cubic snapshot: p5 16, p50 103, p95 342, max
+      570 GPa across 396 accepted materials.'
+    default: 165.6
+    search_range:
+    - 20.0
+    - 450.0
+    scale: linear
+    active: true
+  sub_c12:
+    unit: GPa
+    type: float
+    target: config:stiffness 1 2
+    valid_range:
+    - -2000.0
+    - 2000.0
+    source: MP snapshot p5 5, p50 31.5, p95 118, max 191 GPa. Born stability couples
+      this to C11 and is enforced as gate G1.
+    default: 63.9
+    search_range:
+    - 0.0
+    - 250.0
+    scale: linear
+    active: true
+  sub_c44:
+    unit: GPa
+    type: float
+    target: config:stiffness 4 4
+    valid_range:
+    - 1.0e-09
+    - 2000.0
+    source: MP snapshot p5 5, p50 33, p95 124, max 241 GPa. Note C11 > C44 is NOT
+      implied by the Born conditions; mode ordering is gate G3.
+    default: 79.5
+    search_range:
+    - 5.0
+    - 200.0
+    scale: linear
+    active: true
+  sub_scat:
+    unit: s3
+    type: float
+    target: config:scat
+    valid_range:
+    - 1.0e-50
+    - 1.0e-35
+    source: Isotope/mass-defect scattering constant, rate ~ scat*omega^4. Shipped
+      G4CMP records span Al2O3 0.025e-42 .. Ge 3.67e-41 s3, a factor 1470; the box
+      brackets that range.
+    default: 2.43e-42
+    search_range:
+    - 1.0e-44
+    - 5.0e-41
+    scale: log
+    active: true
+  sub_decay:
+    unit: s4
+    type: float
+    target: config:decay
+    valid_range:
+    - 1.0e-65
+    - 1.0e-45
+    source: Anharmonic (three-phonon) decay constant, rate ~ decay*omega^5. Shipped
+      records span Si 7.41e-56 .. Ge 1.6456e-54 s4.
+    default: 7.41e-56
+    search_range:
+    - 5.0e-57
+    - 5.0e-54
+    scale: log
+    active: true
+  sub_decayTT:
+    unit: '1'
+    type: float
+    target: config:decayTT
+    valid_range:
+    - 0.0
+    - 1.0
+    source: Fraction of anharmonic decays going L -> T+T rather than L -> L+T. Shipped
+      records span LiF 0.68 .. GaAs 0.778; parameter_set.txt allows up to 1.
+    default: 0.74
+    search_range:
+    - 0.5
+    - 1.0
+    scale: linear
+    active: true
+  sub_lattice_a:
+    unit: Angstrom
+    type: float
+    target: config:cubic
+    valid_range:
+    - 0.1
+    - 100.0
+    source: Conventional cubic lattice constant. Sets fBasis, which for a cubic cell
+      affects only the Miller DIRECTION (scale-invariant) and G4CMPChargeCloud (charge
+      carriers). MP snapshot spans 2.84 .. 10.7 Ang. Inactive by default -- see MODULE
+      NOTES.
+    default: 5.431
+    search_range:
+    - 3.0
+    - 10.0
+    scale: linear
+    active: false
+  temperature:
+    unit: K
+    type: float
+    target: macro:/g4cmp/temperature
+    valid_range:
+    - 0.0
+    - 10.0
+    source: Lattice temperature. parameter_set.txt bounds. Suspected inert for a monoenergetic
+      athermal phonon gun -- tested by A/B, not assumed.
+    default: 0.0
+    search_range:
+    - 0.0
+    - 0.1
+    scale: linear
+    active: true
+  lattice_deg:
+    unit: deg
+    type: float
+    target: macro:/main/detector_param/setLatticeDeg
+    valid_range:
+    - 0.0
+    - 360.0
+    source: Rotation of the crystal about the Miller axis. 90 deg is the cubic period
+      about a <001> axis.
+    default: 45.0
+    search_range:
+    - 0.0
+    - 90.0
+    scale: linear
+    active: true
+  orientation_polar_cos:
+    unit: '1'
+    type: float
+    target: model:continuous_crystal_normal
+    valid_range:
+    - -1.0
+    - 1.0
+    source: Cosine of the polar angle of the crystal normal. Uniform draws in this
+      coordinate and azimuth are uniform on the sphere.
+    default: 1.0
+    search_range:
+    - -1.0
+    - 1.0
+    scale: linear
+    active: true
+  orientation_azimuth_turns:
+    unit: turn
+    type: float
+    target: model:continuous_crystal_normal
+    valid_range:
+    - 0.0
+    - 1.0
+    source: Azimuth of the crystal normal in turns. Zero and one are the same direction;
+      the Bayesian kernel uses a periodic sphere embedding.
+    default: 0.0
+    search_range:
+    - 0.0
+    - 1.0
+    scale: linear
+    active: true
+morris:
+  electrode_params:
+  - - '/main/electrode_param/setHeight '
+    - 10
+    - - 5.0
+      - 15.0
+  - - '/main/electrode_param/setWidth '
+    - 10
+    - - 5.0
+      - 15.0
+  - - '/main/electrode_param/setIsland '
+    - 200
+    - - 100.0
+      - 300.0
+    - ' um'
+  - - '/main/electrode_param/setIslandSpacing '
+    - 50
+    - - 25.0
+      - 75.0
+    - ' um'
+  detector_params:
+  - - '/main/detector_param/setLatticeDeg '
+    - 45
+    - - 22.5
+      - 67.5
+  - - '/main/detector_param/setTopFilmVSound '
+    - 2.444
+    - - 1.222
+      - 3.666
+  - - '/main/detector_param/setTopFilmGap '
+    - 0.0015384
+    - - 0.0007692
+      - 0.0023076
+  - - '/main/detector_param/setTopFilmPhLifetime '
+    - 0.00417
+    - - 0.002085
+      - 0.006255
+  - - '/main/detector_param/setBotVSound '
+    - 2.608
+    - - 1.304
+      - 3.912
+  - - '/main/detector_param/setBotGapThres '
+    - 0.00018
+    - - 9.0e-05
+      - 0.00027
+  - - '/main/detector_param/setBotPhLifetime '
+    - 5.1
+    - - 2.55
+      - 7.6499999999999995
+  G4CMP_params:
+  - - '/g4cmp/temperature '
+    - 0.0
+    - - 0.0
+      - 0.1
+    - ' K'
+  config_params:
+  - - 'cubic '
+    - 5.431
+    - - 2.7155
+      - 8.1465
+    - ' Ang'
+  - - 'stiffness 1 1 '
+    - 165.6
+    - - 82.8
+      - 248.39999999999998
+    - ' GPa'
+  - - 'stiffness 1 2 '
+    - 63.9
+    - - 31.95
+      - 95.85
+    - ' GPa'
+  - - 'stiffness 4 4 '
+    - 79.5
+    - - 39.75
+      - 119.25
+    - ' GPa'
+  - - 'scat '
+    - 2.43e-42
+    - - 1.215
+      - 3.6450000000000005
+    - e-42 s3
+  - - 'decay '
+    - 7.41e-56
+    - - 3.705
+      - 11.115
+    - e-56 s4
+  - - 'decayTT '
+    - 0.74
+    - - 0.37
+      - 1
+  QPDE_params:
+  - - f_01
+    - 4300000000.0
+    - - 2150000000.0
+      - 6450000000.0
+  - - r
+    - 2.5e-05
+    - - 1.25e-05
+      - 3.7500000000000003e-05
+  - - s
+    - 0.05
+    - - 0.01
+      - 0.1
+  - - I_ph
+    - 1491646.8
+    - - 745823.4
+      - 2237470.2
+  - - pt
+    - 150
+    - - 75.0
+      - 225.0
+  - - n_cooper
+    - 4000000.0
+    - - 2000000.0
+      - 6000000.0
+  FIXED_MACRO_COMMANDS:
+  - - '/main/gun/setEnergy '
+    - /main/gun/setEnergy 10.0e-3 eV
+  - - '/main/detector_param/setTopThickness '
+    - /main/detector_param/setTopThickness 0.12 um
+  - - '/main/detector_param/setTopFilmThickness '
+    - /main/detector_param/setTopFilmThickness 0.075 um
+  - - '/main/detector_param/setBotThickness '
+    - /main/detector_param/setBotThickness 1 um
+  - - '/main/detector_param/setTopVSound '
+    - /main/detector_param/setTopVSound 3.582
+  - - '/main/detector_param/setTopGap '
+    - /main/detector_param/setTopGap 191.0e-6
+  - - '/main/detector_param/setTopQPLim '
+    - /main/detector_param/setTopQPLim 3
+  - - '/main/detector_param/setTopPhLifetime '
+    - /main/detector_param/setTopPhLifetime 0.242
+  - - '/main/detector_param/setTopPhLifetimeSlope '
+    - /main/detector_param/setTopPhLifetimeSlope 0.29
+  - - '/main/detector_param/setTopFilmPSpecProb '
+    - /main/detector_param/setTopFilmPSpecProb 0.8
+  - - '/main/detector_param/setTopPSpecProb '
+    - /main/detector_param/setTopPSpecProb 0.8
+  - - '/main/detector_param/setWallPSpecProb '
+    - /main/detector_param/setWallPSpecProb 0
+  - - '/main/detector_param/setBotPSpecProb '
+    - /main/detector_param/setBotPSpecProb 0.8
+  - - '/main/detector_param/setTopFilmQPLim '
+    - /main/detector_param/setTopFilmQPLim 3
+  - - '/main/detector_param/setBotQPLim '
+    - /main/detector_param/setBotQPLim 3
+  - - '/main/detector_param/setWallAbs '
+    - /main/detector_param/setWallAbs 0.02
+  - - '/main/detector_param/setTopFilmPhLifetimeSlope '
+    - /main/detector_param/setTopFilmPhLifetimeSlope 0.29
+  - - '/main/detector_param/setBotGap '
+    - /main/detector_param/setBotGap 0.0
+  - - '/g4cmp/chargeBounces '
+    - /g4cmp/chargeBounces 1
+  - - '/g4cmp/phononBounces '
+    - /g4cmp/phononBounces 10000
+  - - '/g4cmp/minEPhonons '
+    - /g4cmp/minEPhonons 0.0000382 eV
+  - - '/g4cmp/clearance '
+    - /g4cmp/clearance 1e-6 mm
+  - - '/g4cmp/eTrappingMFP '
+    - /g4cmp/eTrappingMFP 0.3 mm
+  - - '/g4cmp/hTrappingMFP '
+    - /g4cmp/hTrappingMFP 0.3 mm
+  FIXED_CONFIG_COMMANDS:
+  - - 'dyn '
+    - dyn -42.9 -94.5 52.4 68.0 GPa
+  - - 'Debye '
+    - Debye 15 THz
+  SUBSTRATE_DENSITY_KG_M3: 2329.0

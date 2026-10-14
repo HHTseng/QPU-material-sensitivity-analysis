@@ -1,0 +1,24 @@
+schema: material-scan-study-2
+sampling:
+  kind: sobol
+  sites: 16
+  replicas: 4
+  events_per_task: 31250
+execution:
+  workers: 8
+analysis:
+  objective: integrated_density
+id: morris-example
+kind: sensitivity
+description: Three complete Morris trajectories; uncertainty needs additional independent
+  trajectories.
+morris:
+  parameters:
+  - stiffness 1 1
+  - stiffness 4 4
+  - f_01
+  - r
+  - s
+  trajectories: 3
+  levels: 4
+  seed: 41
