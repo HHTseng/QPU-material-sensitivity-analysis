@@ -1,16 +1,22 @@
-# Experiments and current conclusions
+# Historical experiments and interpretation
 
-Last updated: 2026-09-14.
+Historical measurements through 2026-09-14; source and interpretation notes
+updated 2026-10-14.
 
-These numerical results describe the earlier source revision. Later local
-reports record a 2,361-site converged comparison and full-spatial CMA-ES
-confirmations; their status and outstanding checks are summarized in
-[WORKFLOW_VERIFICATION.md](../../WORKFLOW_VERIFICATION.md). The source
-restructure preserves historical measurements and does not turn those reports
-into independently revalidated material predictions. Current commands use
-`python scan.py`; commands below name the historical implementation.
+The measurements below describe the earlier source revision. A later inherited
+2,361-site comparison and CMA-ES confirmations are distinguished below. The
+earlier measurements are archived outside the working tree. They are not
+responses from the fresh queue. The source rewrite does not rerun them or
+independently validate their material predictions. Current commands use
+`python scan.py`. [Numerical verification](../../verification/round2_results.json)
+describes the software comparison separately.
 
-## What has been completed
+The 16-site tables use summed junction QPs per primary. The spatial-integration
+tables use equal-junction-weighted QPs per injected eV. Their values cannot be
+compared directly. The substrate is 10 × 10 mm², but the recorded injection
+region is 8 × 8 mm²; references to spatial convergence apply to that region.
+
+## Earlier completed studies
 
 ### Linked real-material screen
 
@@ -50,7 +56,8 @@ well below their roughly 5% statistical error. No run-time drift was detected.
 The unconstrained winners are not useful material designs. They sit on many
 search limits and lower the upper-film gap to a modeled critical temperature
 near 0.33 K. A direct gap requirement of `1.5384e-3 eV` keeps 69 of 402 measured
-points. The best surviving point has `J = 6.55e-5 ± 1.24e-5`, only 24% above
+points. The best surviving point has `6.55e-5 ± 1.24e-5` summed junction QPs
+per primary, only 24% above
 the unconstrained value, but five coordinates still lie on search limits. It
 is a useful starting point, not an optimum or a real material.
 
@@ -83,9 +90,10 @@ executable identity.
 
 ### Spatial integration study
 
-Uniform whole-chip Sobol sites did not converge because isolated sites landed
-very near or on electrodes. One of 16 sites supplied about half the reference
-yield; dropping it changed the SiC reduction from -53.3% to -26.2%.
+Uniform Sobol injection over the declared 8 × 8 mm² region did not converge
+because isolated sites landed very near or on junctions. One of 16 sites
+supplied about half the reference yield; dropping it changed the SiC reduction
+from -53.3% to -26.2%. These sites did not sample the outer 36 mm² of the chip.
 
 Two earlier proximity studies used 0.2 mm discs around electrode centres as
 their innermost region. That disc has about 1,254 times the area of the actual
@@ -94,8 +102,9 @@ convergence. Their site data remains useful: it was reassigned to the corrected
 rectangle-distance regions when estimating the allocation below.
 
 The corrected study samples five geometry-derived regions separately and
-weights them by true area. It ran 128, 256, and 512 nested sites with 31,250
-primaries for every site-replica task. Current values are:
+weights them by their fraction of the 64 mm² injection area. It ran 128, 256,
+and 512 nested sites with 31,250 primaries for every site-replica task.
+Historical values below are weighted junction QPs per injected eV:
 
 | Candidate | 128 sites | 256 sites | 512 sites |
 |---|---:|---:|---:|
@@ -111,8 +120,8 @@ not assigned a 512-site value and is not needed under the direct gap rule.
 Overall reference, ideal-target, and niobium-gap-compatible values are stable
 from 256 to 512 within the stated checks. SiC moves 6.3%, exceeding the 5%
 condition, and the regions within 0.05 mm, 0.20–0.50 mm, and the remaining
-device area still fail their separate convergence checks. The objective is
-therefore not yet declared spatially converged.
+injection area still fail their separate convergence checks. At this 512-site
+level, the objective was therefore not declared spatially converged.
 
 ### Hit-file checks
 
@@ -123,17 +132,13 @@ so there is no sign of a general output or missing-hit failure.
 
 Sparse far-from-electrode files limit upper-tail precision before they threaten
 the weighted mean. Raw row counts are not independent primary-event counts and
-cannot alone establish precision. The most useful plots are:
-
-- [all-study overview](figures/hit-overview.png)
-- [128-site study](figures/hit-spatial-128.png)
-- [256-site study](figures/hit-spatial-256.png)
-- [512-site study](figures/hit-spatial-512.png)
-- [512-site reference](figures/hit-reference-512.png)
-- [512-site SiC](figures/hit-sic-512.png)
-
-Regenerate these figures with
-`conda run -n G4CMP python -m material_scan.tools.plot_hits`.
+cannot alone establish precision. Historical diagnostics included an all-study
+overview, 128/256/512-site studies, and reference/SiC comparisons. These images
+belong to the historical archive and earlier Git revisions; they are not
+figures from the fresh queue.
+For a current recorded run, `python scan.py plot RUN --kind hits --output FIGURE`
+plots its measured hit counts; it does not reconstruct the historical combined
+figures from unrecorded inputs.
 
 ### Continuous crystal-direction pilot
 
@@ -142,6 +147,8 @@ uniform sphere points. Every candidate kept the reference material values,
 16 injection sites, seed set 41, and 4,000,000 total primaries. All 29 unique
 simulations and 3,712 site-replica tasks completed; `[001]` and the named
 reference were the same input and correctly shared one result.
+
+The following responses are summed junction QPs per primary.
 
 | Direction set | Minimum | Median | Maximum |
 |---|---:|---:|---:|
@@ -155,13 +162,30 @@ near zero. No directional improvement is resolved. Keep the continuous
 coordinates because they represent the intended space and work correctly in
 the Bayesian covariance function, but do not spend a separate high-event
 direction study unless a later optimized material shows strong direction
-sensitivity. See the [comparison plot](../experiments/orientation-pilot/comparison.png)
-the [tested directions](../experiments/orientation-pilot/points.json), and the
-[checked numerical summary](../experiments/orientation-pilot/summary.json).
-The complete local JSON and SQLite files are retained beside that summary; its
-checksums identify them without rewriting their original field names.
+sensitivity. The comparison plot, direction inputs and numerical summary are
+in the historical archive. Their recorded checksums identify the original
+JSON and SQLite files; these files are excluded from the fresh results.
 
-## Current defensible conclusions
+## Later inherited spatial results
+
+Archived reports originally under `material_scan_data/experiments/spatial-refinement-2361/`
+state that refinement from 1,617 to 2,361 sites passed the declared overall and
+region-level checks for the reference, SiC-elasticity, and Nb-gap-compatible
+anchors. Their retained manifests all identify spatial design
+`8d6f9b224ce5f834`, eight realizations, 31,250 primaries per task, and
+`half_span_mm = 4`. This is convergence for the declared 8 × 8 mm² injection
+region, not the full 10 × 10 mm² substrate or a different source distribution.
+The manifests use the same area fractions as the earlier 512-site design.
+
+Later CMA-ES confirmations used 2,361 sites and unused random streams. The
+leaders from optimizer seeds 101 and 303 remain statistically unresolved;
+the finalists reach the `C44 = 5 GPa` lower search limit. These local reports
+are inherited evidence, not experiments repeated by the rewrite. Check their
+source identities, recorded inputs, and raw-task completeness before reusing
+them for a new study. Neither a boundary minimum nor convergence under one
+source model establishes a fabricable material optimum.
+
+## Conclusions from the earlier experiments
 
 1. Cu is more favorable than Au in every matched linked-material comparison
    under this model.
@@ -172,17 +196,36 @@ checksums identify them without rewriting their original field names.
    modeled niobium gap should be a direct lower bound.
 4. Corrected SiC elastic properties remain promising, but its old 16-site
    percentage is not a device-average claim.
-5. Geometry-aware weighting fixed the known electrode-centre and equal-site
-   biases. Spatial refinement is still needed for SiC and three regions.
+5. Geometry-aware weighting fixed the known junction-centre and equal-site
+   biases. The 512-site study needed refinement; the later inherited report
+   states convergence at 2,361 sites within the declared injection region.
+   Whole-chip injection remains a separate untested spatial assumption.
 6. The reported upper-tail quantity is diagnostic only until its site-level
    interval and an external engineering limit are available.
 7. No fabrication optimum or logical-error reduction has been established.
 
-## Recommended order of new work
+## Fresh queue started on 2026-10-14
 
-1. Add nested sites only in the three spatial regions that failed. Keep 31,250
-   primaries per task and the same paired seeds. Recheck SiC and the three
-   stable anchor points.
+The [full-scale definition](../../studies/full_scale/queue.yaml) replaces reuse
+of historical optimizer outputs with fresh measurements. It uses 20 mK, a
+matched 0 K reference, a direct Nb-compatible gap limit, a $C_{44}$ boundary
+scan, primary-count and spatial checks, transport and density Morris studies,
+eighteen linked-material cases, three seeds each for GP and CMA-ES with 120
+successful measurements, unused-stream confirmation, physical tolerances, and
+assumed SiC rate and interface ranges. Final results remain pending; see the
+[main README](../../README.md) for the live queue and completed pilot.
+
+The SiC literature check did not establish the required measured 20 mK acoustic
+coefficients. The new ranges therefore remain explicit assumptions. MP
+elasticity and density are DFT calculations; verified native phonon fields and
+curated film fields are kept separate when comparing property targets.
+
+## Earlier recommended order of new work
+
+1. Verify the retained definitions and task completeness of the 2,361-site
+   result before reusing its converged design. If the physical source should
+   cover the whole chip, construct new region weights and sites for that area
+   and check convergence again.
 2. Obtain SiC scattering, total decay, and transverse-transverse decay values
    from literature or first-principles calculation.
 3. Fix operating temperature and impose the direct niobium gap bound. Then

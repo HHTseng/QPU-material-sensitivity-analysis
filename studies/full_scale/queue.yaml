@@ -1,0 +1,190 @@
+schema: material-scan-full-scale-queue-1
+id: fresh-full-scale-20261014
+description: Fresh transport outputs; previous simulations are not reused.
+
+defaults:
+  temperature_K: 0.020
+  gun_energy_eV: 0.010
+  junction_gap_eV: 1.91e-4
+  cutoff_eV: 3.82e-5
+  nb_gap_min_eV: 1.5384e-3
+  source_half_span_mm: 4.0
+  source_law: uniform_surface
+  objective: device_junction_qps_per_eV
+  seed_base: 20261015
+  bootstrap_draws: 2000
+  design_counts: [128, 512, 2361, 4096]
+  position_seed: 20261015
+  area_seed: 0
+  area_samples: 8000000
+  design_note: Generate fresh nested source sites; previous geometry illustrations retain their own recorded input definitions.
+  source_note: The chip is 10x10 mm2; the declared injection region is 8x8 mm2.
+
+execution:
+  max_cpu_fraction: 0.5
+  max_memory_fraction: 0.5
+  workers: 94
+  total_mem_gb: 64.0
+  reserved_mem_gb: 16.0
+  minimum_free_disk_gb: 20.0
+  per_task_mem_gb: 2.0
+  blas_threads: 1
+  timeout_s: 21600
+  stall_timeout_s: 7200
+  failed_response: missing
+  timeout_note: A task exceeding six hours is right-censored; it never supplies a zero response.
+  queue_order: sequential_studies
+
+search_bounds:
+  topfilm_vsound: [1.5, 6.0]
+  topfilm_gap: [1.5384e-3, 3.5e-3]
+  topfilm_ph_lifetime: [1.0e-3, 1.0]
+  topfilm_density: [2000.0, 20000.0]
+  bot_vsound: [1.5, 6.0]
+  bot_gap_thres: [5.0e-5, 3.82e-4]
+  bot_ph_lifetime: [0.5, 50.0]
+  bot_density: [2000.0, 22000.0]
+  sub_c11: [20.0, 1100.0]
+  sub_c12: [0.0, 400.0]
+  sub_c44: [1.0, 600.0]
+  sub_scat: [1.0e-45, 5.0e-41]
+  sub_decay: [2.0e-57, 5.0e-54]
+  sub_decayTT: [0.5, 1.0]
+  lattice_deg: [0.0, 90.0]
+  orientation_polar_cos: [-1.0, 1.0]
+  orientation_azimuth_turns: [0.0, 1.0]
+search_note: These are independent model coordinates, not measured properties of one compound.
+
+sic:
+  id: sic-elasticity-and-derived-rates
+  status: derived_assumptions_not_measured
+  polytype: 3C
+  source_record: mp-8062
+  realization: {mode: pseudo_si_base, substrate_carrier: G4_CALCIUM_FLUORIDE, base_lattice_map: Si, lattice_map: PseudoCubic, material_density_kg_m3: 3226.6291385651007}
+  values: {sub_c11: 384.0, sub_c12: 127.0, sub_c44: 241.0, sub_scat: 4.78e-43, sub_decay: 3.93e-57, sub_decayTT: 0.789}
+  rates: {isotope: B*nu^4, anharmonic: A*nu^5, frequency: nu=E/h_Hz}
+  density_note: The carrier supplies 3180 kg/m3, 1.45% below the requested DFT density; this is a density surrogate.
+  lattice_note: Si dyn/DOS fields remain borrowed; this is not a complete native SiC lattice.
+  coefficients_source: ../../material_scan/sic_phonon_constants.yaml
+  unknown_measured_coefficients: [sub_scat, sub_decay, sub_decayTT]
+  isotope_factors: [0.1, 0.3, 1.0, 3.0, 10.0]
+  decay_values_s4: [2.11e-57, 3.93e-57, 6.33e-57, 7.41e-56, 1.11e-55]
+  tt_values: [0.68, 0.74, 0.789, 0.80]
+  robustness_design: One variable at a time plus all eight combinations of extreme values.
+  previous_range_note: The old rate bracket did not contain the derived SiC coefficients.
+
+projection:
+  substrate_file: ../../legacy/catalog/substrates_raw.json
+  film_file: ../../legacy/catalog/films_raw.json
+  native_file: ../../legacy/material_catalog.yaml
+  phonon_file: ../../legacy/stage4_material_pool.yaml
+  records_key: accepted
+  expected_substrate_records: 396
+  expected_film_records: 9
+  substrate_map: {sub_c11: c11_GPa, sub_c12: c12_GPa, sub_c44: c44_GPa, substrate_density_kg_m3: mp_density_kg_m3}
+  native_phonon_map: {sub_scat: scat_s3, sub_decay: decay_s4, sub_decayTT: decayTT}
+  native_phonon_records_key: g4cmp_substrates
+  top_film_map: {topfilm_vsound: vsound_km_s, topfilm_gap: gap_eV, topfilm_ph_lifetime: ph_lifetime_ns, topfilm_density: density_kg_m3}
+  bottom_film_map: {bot_vsound: vsound_km_s, bot_gap_thres: gap_threshold_eV, bot_ph_lifetime: ph_lifetime_ns, bot_density: density_kg_m3}
+  feature_scales: {sub_c11: linear, sub_c12: linear, sub_c44: linear, substrate_density_kg_m3: log, sub_scat: log, sub_decay: log, sub_decayTT: linear}
+  order: coverage_then_distance
+  top: 10
+  confirmed_native_substrates: [Si, Ge, GaAs]
+  bulk_data_note: The compounds were experimentally observed; MP density and elasticity are DFT calculations, not new measurements.
+  film_data_note: Join curated film fields by formula; MP does not supply gap, sound-speed convention, or phonon lifetime.
+  missing_data: Report missing rates and native lattice fields; never impute them or label SiC native.
+
+studies:
+  - id: temperature-reference
+    kind: temperature_comparison
+    temperatures_K: [0.0, 0.020]
+    sampling: {design: 2361, replicas: 8, events_per_task: 62500, seed_bank: 101}
+  - id: source-convergence
+    kind: convergence
+    candidates: [reference, c44-1gpa, sic]
+    sites: [512, 2361]
+    sampling: {replicas: 8, events_per_task: 62500, seed_bank: 102}
+    check: {relative_limit: 0.05, sigma_limit: 2.0, leverage_limit: 0.10}
+    refine_if_failed: {sites: 4096, retain_existing_sites: true}
+  - id: c44-boundary
+    kind: explicit_parameters
+    values_GPa: [0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 40.0, 79.5, 120.0, 200.0, 300.0, 600.0]
+    parameter: sub_c44
+    sampling: {design: 2361, replicas: 8, events_per_task: 62500, seed_bank: 103}
+    note: Soft-boundary values are model checks; no matching compound is asserted.
+  - id: material-transport-morris
+    kind: morris
+    dimensions: 12
+    parameters: [/main/detector_param/setLatticeDeg, /main/detector_param/setTopFilmVSound, /main/detector_param/setTopFilmPhLifetime, /main/detector_param/setBotVSound, /main/detector_param/setBotGapThres, /main/detector_param/setBotPhLifetime, stiffness 1 1, stiffness 1 2, stiffness 4 4, scat, decay, decayTT]
+    trajectories: 32
+    levels: 4
+    seed: 41
+    objective: device_junction_qps_per_eV
+    sampling: {design: 128, replicas: 8, events_per_task: 62500, seed_bank: 104}
+  - id: density-morris
+    kind: morris
+    dimensions: 6
+    parameters: [f_01, r, s, I_ph, pt, n_cooper]
+    trajectories: 32
+    levels: 4
+    seed: 42
+    objective: integrated_density
+    sampling: {kind: sobol, sites: 512, replicas: 8, events_per_task: 62500, position_seed: 20261015, seed_bank: 105}
+    note: Equal-site pooled ODE under uniform 8x8 mm2 injection; this is not area-weighted stratified density evolution.
+  - id: linked-materials
+    kind: materials
+    substrates: [Si, Ge, GaAs]
+    top_films: [Nb, Ta, Ti]
+    bottom_films: [Cu, Au]
+    nb_gap_min_eV: null
+    sampling: {design: 2361, replicas: 8, events_per_task: 62500, seed_bank: 106}
+    note: All 18 linked cases are compared; Ta/Ti do not satisfy the selected Nb-gap search restriction.
+  - id: gp-cma-comparison
+    kind: search_comparison
+    dimensions: 17
+    methods: [bo_gp, cmaes]
+    seeds: [101, 202, 303]
+    measured_evaluations: 120
+    maximum_attempts: 360
+    cma_population: 12
+    gp_initial_points: 36
+    sampling: {design: 512, replicas: 8, events_per_task: 31250, first_seed_bank: 201}
+    matching: Same physical limits, sites, random-stream banks and successful measurement count for each method pair.
+    starts: GP uses 36 Sobol points; CMA uses its Gaussian initial population of 12. The initial observations differ by algorithm.
+  - id: unused-stream-confirmation
+    kind: confirmation
+    finalist_records: 6
+    anchors: [reference, native-Si-Nb-Cu, sic]
+    sampling: {design: 2361, replicas: 16, events_per_task: 62500, seed_bank: 901}
+    refine_if_failed: {sites: 4096, retain_existing_sites: true}
+    selection: Use fresh complete search responses; ties remain unresolved and missing outputs cannot win.
+  - id: physical-tolerance
+    kind: explicit_tolerance
+    candidate_limit: 2
+    parameters: [sub_c44, sub_c11, sub_c12, topfilm_gap, topfilm_ph_lifetime, bot_ph_lifetime]
+    physical_fraction: [0.03, 0.10]
+    candidates: confirmed_finalists
+    sampling: {design: 2361, replicas: 16, events_per_task: 62500, seed_bank: 902}
+    note: Use x*(1-f) and x*(1+f); these fractions are not fractions of search-coordinate intervals.
+  - id: sic-rates-and-interfaces
+    kind: model_ranges
+    candidates: [reference, sic, confirmed_best]
+    film_lifetime_factors: [0.5, 1.0, 2.0]
+    interface_absorption_factors: [0.8, 1.0, 1.2]
+    sampling: {design: 2361, replicas: 16, events_per_task: 62500, seed_bank: 903}
+    note: Vary each lifetime/interface separately; probability clipping and every assumed range must be reported. This tests model uncertainty, not an independently validated interface theory.
+  - id: event-count-convergence
+    kind: event_count_convergence
+    candidates: [reference, c44-1gpa]
+    events_per_task: [31250, 125000, 500000]
+    sampling: {design: 512, replicas: 8, first_seed_bank: 107}
+    check: {relative_limit: 0.05, relative_standard_error_limit: 0.02}
+    streams: Use independent seed banks for different primary counts; no event-wise pairing is claimed.
+    note: Common sites retain spatial covariance. If error remains dominated by spatial variation, add sites rather than claiming more primaries resolve it.
+
+literature:
+  - {url: 'https://doi.org/10.1103/PhysRevB.27.858', use: 'Isotope-scattering theory; Ge, not measured SiC coefficients.'}
+  - {url: 'https://doi.org/10.1103/PhysRevD.103.075002', use: 'Calculated SiC lifetimes and interface model; its angular-frequency thermal-conductance expression is not the G4CMP nu^5 coefficient.'}
+  - {url: 'https://www.nature.com/articles/s41467-022-34943-w', use: 'Measured 3C-SiC thermal conductivity and impurity dependence near room temperature; no direct 20mK acoustic coefficients.'}
+  - {url: 'https://arxiv.org/html/2501.11008v2', use: 'Calculated 3C-SiC lifetimes at 300/600/900K; does not measure the required low-temperature coefficients.'}
+  - {url: 'https://doi.org/10.1002/(SICI)1521-3951(199901)211:1<293::AID-PSSB293>3.0.CO;2-O', use: 'Measured 3C-SiC optical Raman linewidths; not low-energy acoustic downconversion.'}

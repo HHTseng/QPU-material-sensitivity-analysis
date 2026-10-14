@@ -37,3 +37,9 @@ data/hit_diagnostics_*/
 # Local pre-migration ledger safety copies (the tracked .bak-* files remain).
 data/premigration_backup_*/
 parameter_optimization/runs/stage4_property_v1_orientation_pilot/
+
+# Private local restructuring notes.
+/RESTRUCTURE_PLAN.md
+/RESTRUCTURING.md
+/WORKFLOW_VERIFICATION.md
+/verification/second_round_audit.json

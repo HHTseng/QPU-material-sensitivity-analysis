@@ -1,0 +1,75 @@
+{
+  "software": {
+    "matplotlib": "3.10.9",
+    "numpy": "2.4.6",
+    "font": "DejaVu Sans"
+  },
+  "source_sha256": {
+    "studies/reference.yaml": "ae1b0df29dc05dc06730eee8c6fb9fc763e3d7f1122e06a6c2fe7fb277170d21",
+    "legacy/material_catalog.yaml": "876cbff1e58bf868a08ccff3cccac7ad78a71d782e423661d1055c4e00f0bf3e",
+    "legacy/macros/sensitivity_template_beamOn1e6.mac": "a587ecbcd3142250111ed80de78bd42a9fa9b8272256b62e8aa0f9b9995b227a",
+    "studies/designs/stratified_512.json": "2e953e8c9207eb71331d5b263a661cd0c67c045e6aa63fc61e9c60106e02e413"
+  },
+  "device_stack": {
+    "meaning": "boundary schematic, not to scale; arrows are illustrative, not simulated tracks",
+    "baseline": [
+      "Si substrate",
+      "Nb nonjunction upper film",
+      "Cu normal-metal bottom film",
+      "Al junction collection regions"
+    ],
+    "thicknesses": {
+      "substrate_um": 525,
+      "Al_junction_nm": 120,
+      "Nb_upper_nm": 75,
+      "Cu_bottom_um": 1
+    },
+    "collection_regions": 17,
+    "collection_rectangle_um": [
+      10,
+      10
+    ],
+    "source_energy_eV": 0.01,
+    "model_role_check": "Geant4 Main/src/PhononDetectorConstruction.cc film material-property tables; PhononSensitivity.cc Junction hit selection"
+  },
+  "spatial_sampling": {
+    "source": "studies/designs/stratified_512.json",
+    "design_hash": "fa659c7d860acdee",
+    "site_count": 512,
+    "stratum_weights": {
+      "S0_junction": 2.6562500000000002e-05,
+      "S1_le_0.05": 0.0026366310973713744,
+      "S2_le_0.20": 0.03286157599441309,
+      "S3_le_0.50": 0.17848066274749622,
+      "S4_bulk": 0.7859945676607194
+    },
+    "stratum_counts": {
+      "S0_junction": 27,
+      "S1_le_0.05": 94,
+      "S2_le_0.20": 126,
+      "S3_le_0.50": 93,
+      "S4_bulk": 172
+    },
+    "substrate_extent_mm": [
+      -5,
+      5,
+      -5,
+      5
+    ],
+    "injection_extent_mm": [
+      -4,
+      4,
+      -4,
+      4
+    ],
+    "meaning": "recorded site coordinates; marker size enlarged for visibility; no simulated response data",
+    "input_extraction": {
+      "historical_source": "data/results/stage4_strat_512.json",
+      "historical_source_sha256": "0731eb70fab47b2e598574a416138a5635b1de6cde82aba84163f585c6567dfd",
+      "same_recorded_sites_labels_weights_and_hash": true
+    }
+  },
+  "workflow": {
+    "meaning": "scientific calculation and study relationships; no timing or result claims"
+  }
+}

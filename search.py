@@ -10,7 +10,7 @@ from scipy.linalg import cho_solve, solve_triangular
 from scipy.optimize import minimize
 from scipy.stats import norm, qmc
 
-from inputs import from_unit, to_unit, validate_values
+from physics import from_unit, to_unit, validate_values
 
 
 class GaussianProcess:
@@ -283,13 +283,19 @@ def new_state(method, seed=0, options=None):
     return {'method': method, 'seed': int(seed), 'options': dict(options or {}),
             'rng': np.random.default_rng(seed), 'iteration': 0, 'U': [], 'Y': [],
             'SIG': [], 'points': [], 'values': [], 'se': [], 'pending': [],
+            'pending_ids': [], 'observation_ids': [], 'proposal_units': [], 'next_proposal_id': 0,
             'rejected': [], 'proposals': {}, 'used': {}, 'sobol_draws': 0,
             'design_cursor': 0, 'gp_fits': 0}
 
 
-def point_key(point, space):
-    return json.dumps([round(float(point[name]), 12) for name in space['names']],
-                      separators=(',', ':'))
+def pending_id(state, point, space=None):
+    """Find one pending proposal by its exact normalized coordinates."""
+    u = to_unit(point, space or state['space'])
+    matches = [identifier for identifier in state['pending_ids']
+               if np.array_equal(state['proposal_units'][identifier], u)]
+    if len(matches) != 1:
+        raise ValueError('pending proposal is missing or ambiguous; supply its integer proposal_id')
+    return matches[0]
 
 
 def _feasible(point, space):
@@ -309,56 +315,51 @@ def _duplicate(point, state, space, extra=()):
                for p in [*state['pending'], *extra])
 
 
-def _random_points(state, space, count, extra=()):
-    out = []
-    for _ in range(int(state['options'].get('max_resample', 500)) * max(1, count)):
-        point = from_unit(state['rng'].random(len(space['names'])), space)
-        if _feasible(point, space) and not _duplicate(point, state, space, [*extra, *out]):
-            out.append(point)
-            if len(out) == count:
-                return out
-    raise RuntimeError(f'could not draw {count} distinct feasible points')
-
-
-def _tag(state, space, point, source, **details):
-    state['proposals'][point_key(point, space)] = {
-        'proposal_source': source, 'optimizer': state['method'],
-        'iteration': state['iteration'], **details}
-    return point
-
-
-def _sobol_points(state, space, count):
-    if '_sobol' not in state:
+def _draw_points(state, space, count, extra=(), *, sobol=False):
+    if sobol and '_sobol' not in state:
         state['_sobol'] = qmc.Sobol(d=len(space['names']), scramble=True, seed=state['seed'])
         if state['sobol_draws']:
             state['_sobol'].fast_forward(state['sobol_draws'])
     out = []
-    for _ in range(64 * max(1, count)):
-        u = state['_sobol'].random(1)[0]
-        state['sobol_draws'] += 1
+    attempts = 64 if sobol else int(state['options'].get('max_resample', 500))
+    for _ in range(attempts * max(1, count)):
+        u = state['_sobol'].random(1)[0] if sobol else state['rng'].random(len(space['names']))
+        if sobol:
+            state['sobol_draws'] += 1
         point = from_unit(u, space)
-        if _feasible(point, space) and not _duplicate(point, state, space, out):
-            out.append(_tag(state, space, point, 'sobol_init',
-                            design_index=state['design_cursor']))
-            state['design_cursor'] += 1
+        if _feasible(point, space) and not _duplicate(point, state, space, [*extra, *out]):
+            if sobol:
+                _tag(state, space, point, 'sobol_init', design_index=state['design_cursor'])
+                state['design_cursor'] += 1
+            out.append(point)
             if len(out) == count:
                 return out
-    for point in _random_points(state, space, count - len(out), out):
+    if not sobol:
+        raise RuntimeError(f'could not draw {count} distinct feasible points')
+    for point in _draw_points(state, space, count - len(out), [*extra, *out]):
         out.append(_tag(state, space, point, 'random_filler', reason='Sobol points failed the gates'))
     return out
 
 
-def _fit_gp(state, space):
-    names = space['names']
-    polar, azimuth = 'orientation_polar_cos', 'orientation_azimuth_turns'
-    sphere = (names.index(polar), names.index(azimuth)) if polar in names and azimuth in names else None
-    state['_gp'] = GaussianProcess(sphere_columns=sphere).fit(
-        np.array(state['U']), np.array(state['Y']),
-        noise_var=np.array(state['SIG'], dtype=float) ** 2, rng=state['rng'],
-        n_restarts=int(state['options'].get('n_restarts', 3)))
-    state['gp_fits'] += 1
-    state['gp_fit_observations'] = len(state['Y'])
-    return state['_gp']
+def _tag(state, space, point, source, **details):
+    dispatched = state['_dispatch']
+    if id(point) in dispatched:
+        identifier = dispatched[id(point)][0]
+    else:
+        identifier = state['next_proposal_id']
+        state['next_proposal_id'] += 1
+        state['proposal_units'].append(to_unit(point, space))
+        dispatched[id(point)] = (identifier, point)
+    metadata = {
+        'proposal_id': identifier,
+        'proposal_source': source, 'optimizer': state['method'],
+        'iteration': state['iteration'], **details}
+    for original, rationale in state.get('_llm_rationales', []):
+        if np.array_equal(to_unit(original, space), state['proposal_units'][identifier]):
+            metadata['rationale'] = rationale
+            break
+    state['proposals'][str(identifier)] = metadata
+    return point
 
 
 def _gp_points(state, space, count, pool=None):
@@ -366,23 +367,32 @@ def _gp_points(state, space, count, pool=None):
     n_init = int(options.get('n_init', 24))
     n_observed = len(state['Y'])
     dispatched = n_observed + sum(
-        state['proposals'][point_key(p, space)]['proposal_source'].endswith('_init')
-        for p in state['pending'])
+        state['proposals'][str(identifier)]['proposal_source'].endswith('_init')
+        for identifier in state['pending_ids'])
     if dispatched < n_init:
         take = min(count, n_init - dispatched)
-        out = _sobol_points(state, space, take)
+        out = _draw_points(state, space, take, sobol=True)
         for i, point in enumerate(out):
             _tag(state, space, point, 'sobol_init', design_index=dispatched + i)
         if take < count:
             out += [_tag(state, space, p, 'random_filler', reason='initial design finished')
-                    for p in _random_points(state, space, count - take, out)]
+                    for p in _draw_points(state, space, count - take, out)]
         return out
     if n_observed < min(n_init, int(options.get('n_min_fit', n_init))):
         return []
     refit_every = max(1, int(options.get('refit_every', 5)))
     if ('_gp' not in state or (n_observed % refit_every == 0
                               and state.get('gp_fit_observations') != n_observed)):
-        gp = _fit_gp(state, space)
+        names = space['names']
+        polar, azimuth = 'orientation_polar_cos', 'orientation_azimuth_turns'
+        sphere = (names.index(polar), names.index(azimuth)) if polar in names and azimuth in names else None
+        gp = GaussianProcess(sphere_columns=sphere).fit(
+            np.array(state['U']), np.array(state['Y']),
+            noise_var=np.array(state['SIG'], dtype=float) ** 2, rng=state['rng'],
+            n_restarts=int(options.get('n_restarts', 3)))
+        state['_gp'] = gp
+        state['gp_fits'] += 1
+        state['gp_fit_observations'] = n_observed
     else:
         gp = state['_gp'].reset_data(np.array(state['U']), np.array(state['Y']),
                                      np.array(state['SIG'], dtype=float) ** 2)
@@ -440,7 +450,7 @@ def _gp_points(state, space, count, pool=None):
                 chosen = score, u, point
                 break
         if chosen is None:
-            point = _random_points(state, space, 1, out)[0]
+            point = _draw_points(state, space, 1, out)[0]
             chosen = 0.0, to_unit(point, space), point
             _tag(state, space, point, 'random_filler', reason='no distinct acquisition maximum')
         else:
@@ -465,7 +475,7 @@ def _cma_points(state, space, count):
         if len(cma.points) >= cma.lam:
             if options.get('synchronous', True):
                 break
-            for point in _random_points(state, space, 1, out):
+            for point in _draw_points(state, space, 1, out):
                 out.append(_tag(state, space, point, 'random_filler',
                                 reason='generation awaits results', optimizer_generation=cma.generation))
             continue
@@ -489,13 +499,13 @@ def _cma_points(state, space, count):
                     point = trial
                     break
             if point is None:
-                point = _random_points(state, space, 1, out)[0]
+                point = _draw_points(state, space, 1, out)[0]
                 u = to_unit(point, space)
             source = 'cma_generation'
         _tag(state, space, point, source, optimizer_generation=cma.generation,
              population_index=len(cma.points), popsize=cma.lam,
              sigma=float(cma.sigma), restarts=cma.restarts)
-        cma.points.append((point_key(point, space), to_unit(point, space)))
+        cma.points.append((state['_dispatch'][id(point)][0], to_unit(point, space)))
         out.append(point)
     return out
 
@@ -517,15 +527,15 @@ def _tpe_points(state, space, count):
         point = from_unit(np.array([trial.suggest_float(name, 0, 1)
                                     for name in space['names']]), space)
         if _feasible(point, space) and not _duplicate(point, state, space, out):
-            state['tpe_trials'][point_key(point, space)] = trial.number
             out.append(_tag(state, space, point, 'tpe_optuna', trial_number=trial.number))
+            state['tpe_trials'][str(state['_dispatch'][id(point)][0])] = trial.number
             if len(out) == count:
                 break
         else:
             study.tell(trial, state=optuna.trial.TrialState.PRUNED)
     if len(out) < count:
         out += [_tag(state, space, p, 'random_filler', reason='TPE points failed the gates')
-                for p in _random_points(state, space, count - len(out), out)]
+                for p in _draw_points(state, space, count - len(out), out)]
     return out
 
 
@@ -611,7 +621,7 @@ def ollama_proposals(state, space, count, options=None):
                 errors.append('physical gate rejected ' + json.dumps(values))
             elif not _duplicate(point, state, space, out):
                 out.append(point)
-                state.setdefault('rationales', {})[point_key(point, space)] = str(item.get('rationale', ''))[:200]
+                state.setdefault('_llm_rationales', []).append((point, str(item.get('rationale', ''))[:200]))
                 if len(out) == count:
                     break
         if len(out) == count:
@@ -633,15 +643,17 @@ def propose(method, state, space, count=1, options=None):
         for name in ('names', 'low', 'high', 'scales', 'baseline', 'constraints',
                      'density_kg_m3', 'junction_gap_eV', 'gun_energy_eV', 'cutoff_eV',
                      'ground_plane_active_absorber'):
-            if (json.dumps(_encode(old.get(name)), sort_keys=True)
-                    != json.dumps(_encode(space.get(name)), sort_keys=True)):
+            if (json.dumps(old.get(name), sort_keys=True, default=lambda x: np.asarray(x).tolist())
+                    != json.dumps(space.get(name), sort_keys=True, default=lambda x: np.asarray(x).tolist())):
                 raise ValueError(f'search parameter space changed: {name}')
     state['space'] = copy.deepcopy(space)
     state['iteration'] += 1
+    state['_dispatch'] = {}
+    state.pop('_llm_rationales', None)
     if method == 'random':
-        points = [_tag(state, space, p, 'random_baseline') for p in _random_points(state, space, count)]
+        points = [_tag(state, space, p, 'random_baseline') for p in _draw_points(state, space, count)]
     elif method == 'sobol':
-        points = _sobol_points(state, space, count)
+        points = _draw_points(state, space, count, sobol=True)
     elif method == 'bo_gp':
         points = _gp_points(state, space, count)
     elif method == 'cmaes':
@@ -660,17 +672,24 @@ def propose(method, state, space, count=1, options=None):
             state['incomplete_proposal'] = f'Ollama returned {len(points)}/{count} valid distinct proposals'
     else:
         raise ValueError(f'unknown search method {method!r}')
+    state['pending_ids'].extend(state['_dispatch'][id(point)][0] for point in points)
     state['pending'].extend(points)
+    state.pop('_dispatch')
+    state.pop('_llm_rationales', None)
     return points
 
 
-def update(method, state, point, value, se=None, rejected_reason=None):
+def update(method, state, point, value, se=None, rejected_reason=None, proposal_id=None):
     if method != state['method']:
         raise ValueError('search state belongs to another method')
     space = state['space']
-    key = point_key(point, space)
-    if not any(point_key(p, space) == key for p in state['pending']):
-        raise ValueError('observation must correspond to a pending proposal')
+    identifier = pending_id(state, point, space) if proposal_id is None else proposal_id
+    if (not isinstance(identifier, int) or isinstance(identifier, bool)
+            or identifier not in state['pending_ids']):
+        raise ValueError('observation must name a pending integer proposal_id')
+    if not np.array_equal(to_unit(point, space), state['proposal_units'][identifier]):
+        raise ValueError('observation values differ from the named pending proposal')
+    key = str(identifier)
     if rejected_reason is None:
         if value is None or not math.isfinite(float(value)) or float(value) < 0:
             raise ValueError('yield must be finite and nonnegative; use rejected_reason for an unmeasured trial')
@@ -692,23 +711,26 @@ def update(method, state, point, value, se=None, rejected_reason=None):
         state['points'].append(dict(point))
         state['values'].append(float(value))
         state['se'].append(float(se) if se is not None else None)
+        state['observation_ids'].append(identifier)
         state['used'][key] = method in ('bo_gp', 'llm_bo', 'tpe_optuna')
         if method == 'cmaes':
-            state['_cma'].results[key] = y
+            state['_cma'].results[identifier] = y
     else:
-        state['rejected'].append({'point': dict(point), 'reason': str(rejected_reason),
+        state['rejected'].append({'proposal_id': identifier, 'point': dict(point), 'reason': str(rejected_reason),
                                   'iteration': state['iteration']})
         state['used'][key] = False
         if method == 'cmaes':
             cma = state['_cma']
-            cma.points = [p for p in cma.points if p[0] != key]
-            cma.results.pop(key, None)
-    state['pending'] = [p for p in state['pending'] if point_key(p, space) != key]
+            cma.points = [p for p in cma.points if p[0] != identifier]
+            cma.results.pop(identifier, None)
+    pending_index = state['pending_ids'].index(identifier)
+    state['pending_ids'].pop(pending_index)
+    state['pending'].pop(pending_index)
     if method == 'cmaes':
         cma = state['_cma']
         used = cma.update()
         for used_key in used:
-            state['used'][used_key] = True
+            state['used'][str(used_key)] = True
         if used and state['Y']:
             best = min(state['Y'])
             if cma.best_at_restart is None or best < cma.best_at_restart - 1e-9:
@@ -730,80 +752,34 @@ def update(method, state, point, value, se=None, rejected_reason=None):
             state['_study'].tell(number, state=optuna.trial.TrialState.PRUNED)
 
 
-def _encode(value):
-    if isinstance(value, dict):
-        return {str(key): _encode(item) for key, item in value.items() if key != '_sobol'}
-    if isinstance(value, (list, tuple)):
-        return {'type': 'tuple', 'data': [_encode(item) for item in value]} if isinstance(value, tuple) else [_encode(item) for item in value]
-    if isinstance(value, np.ndarray):
-        return {'type': 'array', 'dtype': str(value.dtype), 'data': value.tolist()}
-    if isinstance(value, np.random.Generator):
-        return {'type': 'rng', 'data': _encode(value.bit_generator.state)}
-    if isinstance(value, (GaussianProcess, CMAES)):
-        return {'type': type(value).__name__, 'data': _encode(vars(value))}
-    if type(value).__module__.startswith('optuna'):
-        import optuna
-        trials = [{'state': trial.state.name, 'params': trial.params, 'values': trial.values,
-                   'distributions': {name: optuna.distributions.distribution_to_json(dist)
-                                     for name, dist in trial.distributions.items()}}
-                  for trial in value.trials]
-        return {'type': 'tpe', 'trials': trials,
-                'rng': _encode(value.sampler._rng.rng.get_state()),
-                'random_rng': _encode(value.sampler._random_sampler._rng.rng.get_state())}
-    if isinstance(value, np.generic):
-        return value.item()
-    if isinstance(value, float) and not math.isfinite(value):
-        raise ValueError('saved search state contains a nonfinite number')
-    return value
-
-
-def _decode(value):
-    if isinstance(value, list):
-        return [_decode(item) for item in value]
-    if not isinstance(value, dict):
-        return value
-    kind = value.get('type')
-    if kind == 'array':
-        return np.asarray(value['data'], dtype=value['dtype'])
-    if kind == 'tuple':
-        return tuple(_decode(item) for item in value['data'])
-    if kind == 'rng':
-        data = _decode(value['data'])
-        generator = np.random.Generator(getattr(np.random, data['bit_generator'])())
-        generator.bit_generator.state = data
-        return generator
-    if kind in ('GaussianProcess', 'CMAES'):
-        cls = GaussianProcess if kind == 'GaussianProcess' else CMAES
-        numerical = cls.__new__(cls)
-        numerical.__dict__.update(_decode(value['data']))
-        return numerical
-    if kind == 'tpe':
-        import optuna
-        optuna.logging.set_verbosity(optuna.logging.WARNING)
-        study = optuna.create_study(direction='minimize', sampler=optuna.samplers.TPESampler(multivariate=True))
-        for trial in value['trials']:
-            study.add_trial(optuna.trial.create_trial(
-                state=getattr(optuna.trial.TrialState, trial['state']),
-                params=trial['params'], values=trial['values'],
-                distributions={name: optuna.distributions.json_to_distribution(dist)
-                               for name, dist in trial['distributions'].items()}))
-        study.sampler._rng.rng.set_state(_decode(value['rng']))
-        study.sampler._random_sampler._rng.rng.set_state(_decode(value['random_rng']))
-        return study
-    return {key: _decode(item) for key, item in value.items()}
-
-
 def save_state(state, path=None):
     """Save fitted arrays, evolution paths, pending points, and random state."""
-    record = {'schema': 'material-search-1', 'state': _encode(state)}
-    raw = json.dumps(record, sort_keys=True, allow_nan=False, separators=(',', ':'))
+    numerical = ('rng', '_gp', '_cma', '_sobol', '_study')
+    record = {'schema': 'material-search-2',
+              'state': {key: value for key, value in state.items() if key not in numerical},
+              'rng': state['rng'].bit_generator.state}
+    for name in ('_gp', '_cma'):
+        if name in state:
+            record[name] = vars(state[name])
+    if '_study' in state:
+        import optuna
+        study = state['_study']
+        record['tpe'] = {
+            'trials': [{'state': trial.state.name, 'params': trial.params, 'values': trial.values,
+                        'distributions': {name: optuna.distributions.distribution_to_json(dist)
+                                          for name, dist in trial.distributions.items()}}
+                       for trial in study.trials],
+            'rng': study.sampler._rng.rng.get_state(),
+            'random_rng': study.sampler._random_sampler._rng.rng.get_state()}
+    raw = json.dumps(record, sort_keys=True, allow_nan=False, separators=(',', ':'),
+                     default=lambda value: np.asarray(value).tolist())
     if path is not None:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_name(path.name + '.tmp')
         temporary.write_text(raw + '\n')
         temporary.replace(path)
-    return record
+    return json.loads(raw)
 
 
 def load_state(record_or_path):
@@ -811,9 +787,54 @@ def load_state(record_or_path):
         record = json.loads(Path(record_or_path).read_text())
     else:
         record = record_or_path
-    if record.get('schema') != 'material-search-1':
+    if record.get('schema') == 'material-search-1':
+        raise ValueError('old search checkpoint uses rounded physical keys; restart with integer proposal IDs')
+    if record.get('schema') != 'material-search-2':
         raise ValueError('unsupported saved search state')
-    state = _decode(record['state'])
+    state = copy.deepcopy(record['state'])
+    generator = np.random.Generator(getattr(np.random, record['rng']['bit_generator'])())
+    generator.bit_generator.state = record['rng']
+    state['rng'] = generator
+    for name, cls, arrays in (
+            ('_gp', GaussianProcess, ('theta', 'X', 'y', 'noise', 'L', 'alpha')),
+            ('_cma', CMAES, ('w', 'mean', 'pc', 'ps', 'Cov'))):
+        if name not in record:
+            continue
+        numerical = cls.__new__(cls)
+        numerical.__dict__.update(copy.deepcopy(record[name]))
+        for field in arrays:
+            if getattr(numerical, field, None) is not None:
+                setattr(numerical, field, np.asarray(getattr(numerical, field), dtype=float))
+        if name == '_gp' and numerical.sphere_columns is not None:
+            numerical.sphere_columns = tuple(numerical.sphere_columns)
+        if name == '_cma':
+            numerical.points = [(int(key), np.asarray(u)) for key, u in numerical.points]
+            numerical.results = {int(key): value for key, value in numerical.results.items()}
+        state[name] = numerical
+    if 'tpe' in record:
+        import optuna
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+        study = optuna.create_study(direction='minimize', sampler=optuna.samplers.TPESampler(multivariate=True))
+        for trial in record['tpe']['trials']:
+            study.add_trial(optuna.trial.create_trial(
+                state=getattr(optuna.trial.TrialState, trial['state']), params=trial['params'],
+                values=trial['values'], distributions={name: optuna.distributions.json_to_distribution(dist)
+                                                      for name, dist in trial['distributions'].items()}))
+        for field, sampler in (('rng', study.sampler), ('random_rng', study.sampler._random_sampler)):
+            rng = record['tpe'][field]
+            sampler._rng.rng.set_state((rng[0], np.asarray(rng[1], dtype=np.uint32), *rng[2:]))
+        state['_study'] = study
     if state['method'] not in ('random', 'sobol', 'bo_gp', 'cmaes', 'tpe_optuna', 'llm_agent', 'llm_bo'):
         raise ValueError('unknown saved search method')
+    if (len(state['pending_ids']) != len(state['pending'])
+            or len(set(state['pending_ids'])) != len(state['pending_ids'])
+            or state['next_proposal_id'] != len(state['proposal_units'])
+            or len(state['observation_ids']) != len(state['Y'])):
+        raise ValueError('saved search proposal IDs are inconsistent')
+    for identifier, point in zip(state['pending_ids'], state['pending']):
+        if (not isinstance(identifier, int) or isinstance(identifier, bool)
+                or not 0 <= identifier < state['next_proposal_id']
+                or str(identifier) not in state['proposals']
+                or not np.array_equal(to_unit(point, state['space']), state['proposal_units'][identifier])):
+            raise ValueError('saved pending proposal is inconsistent')
     return state

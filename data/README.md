@@ -6,10 +6,10 @@ on 2026-09-15. The 2026-10-14 code restructure does not alter these measurements
 The earlier presentation generator and simulation source are available at
 Git revision `c8cdb996209711bef0e266c7315bfa518eda47e8`.
 
-Current execution uses the eight Python scripts at the repository root.
+Current execution uses the five Python scripts at the repository root.
 New output belongs under `material_scan_data/`. See
 [recovery instructions](../material_scan/docs/data.md) and
-[verification](../WORKFLOW_VERIFICATION.md).
+[numerical verification](../verification/round2_results.json).
 
 | Path | Contents |
 |---|---|

@@ -1,27 +1,27 @@
 schema: material-scan-issues-1
-updated: 2026-09-14
+updated: 2026-10-14
 
 earlier_result_validity:
   path: ../../legacy/stage4_invalidations.yaml
   policy: preserve read-only and inspect without schema changes
 
 open:
-  - id: second-independent-copy
-    severity: must-be-resolved-before-deletion
-    statement: A second independent storage filesystem has not been selected.
-    consequence: Do not untrack, move, or delete historical raw artifacts.
-
   - id: earlier-build-record
     severity: prevents-automatic-result-reuse
     statement: Many historical rows do not identify all loaded libraries and external data.
     consequence: Read and rescore them, but do not return them as new simulations.
 
-  - id: direct-simulation-readiness
-    severity: prevents-new-simulation-launch
-    statement: The new path has not yet completed a disposable live Geant4 check and full data recovery check.
-    consequence: Do not begin a new property search until both checks pass.
-
 resolved:
+  - id: second-independent-copy
+    resolved_at: 2026-10-14
+    statement: Two byte-identical historical archives on the home and root filesystems passed full original-content comparison before cleanup.
+    evidence: material_scan_data/backups/old-runs-verified.json
+
+  - id: direct-simulation-readiness
+    resolved_at: 2026-10-14
+    statement: The revised and previous implementations each completed four million reference primaries; paired equivalence passed the predefined five percent margin. Archive recovery and numerical reanalysis pass the test suite.
+    evidence: verification/round2_results.json
+
   - id: absolute-artifact-paths
     resolved_at: 2026-09-15
     statement: >

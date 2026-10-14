@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "material-scan"
-version = "0.2.0"
+version = "0.3.0"
 description = "Scientific G4CMP material-property studies"
 requires-python = ">=3.12"
 dependencies = [
@@ -24,4 +24,4 @@ catalog = ["mp-api"]
 tpe = ["optuna"]
 
 [tool.setuptools]
-py-modules = ["scan", "inputs", "physics", "simulate", "analysis", "search", "records", "plots"]
+py-modules = ["scan", "physics", "analysis", "search", "records"]

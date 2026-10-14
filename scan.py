@@ -1,13 +1,18 @@
-"""Material studies: prepare, simulate, count quasiparticles, compare and record."""
+"""Prepare physical studies, execute Geant4 and record complete measurements."""
 
 import argparse
 import copy
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
-import json
+import hashlib
 import inspect
 import itertools
+import json
 import os
 from pathlib import Path
+import re
+import shlex
+import signal
+import subprocess
 import sys
 import threading
 import time
@@ -15,86 +20,63 @@ import time
 import numpy as np
 
 import analysis
-import inputs
 import physics
 import records
 import search
-import simulate
 
-
-def analysis_design(study):
-    design=study['design']; sampling=study['sampling']
-    return {'position_strata':design['stratum'],'stratum_weights':design['stratum_weights'],
-            'replica_ids':list(range(sampling['replicas'])),'events_per_task':sampling['events_per_task'],
-            'gun_energy_eV':study['fixed']['gun_energy_eV'],'electrode_weights':design['electrode_weights'],
-            'design_hash':design['design_hash'],'injection_law':design.get('injection_law','uniform_surface')}
-
-
-def score_output(result, prepared, task, *, time_resolved=False):
-    fixed=prepared['fixed']; totals=np.zeros(len(fixed['electrode_x_mm'])); n_hits=0; matrix=None
-    surface=fixed['setSubThickness_um']*1e-6/2
-    gap=fixed['setTopGap']
-    for energy,x,y,z,arrival in records.read_hits(result['output']):
-        count=physics.qp_counts(energy,x,y,z,arrival,gap,fixed['electrode_x_mm'],fixed['electrode_y_mm'],surface,time_resolved=time_resolved)
-        if time_resolved:
-            times,qps=count
-            matrix=qps if matrix is None else matrix+qps
-            totals+=qps.sum(axis=1)
-        else: totals+=count
-        n_hits+=len(energy)
-    block={'position':task['position'],'replica':task['replica'],'events':task['events'],'total_qps':float(totals.sum()),
-           'per_electrode_qps':totals.tolist(),'n_hits':n_hits}
-    if time_resolved:
-        if matrix is None:
-            times=np.linspace(0,300000,1001); matrix=np.zeros((len(totals),1001))
-        destination=Path(result['output']).with_name('qps.npz')
-        np.savez_compressed(destination,time_ns=times,qps=matrix)
-        block['time_data']=str(destination)
-        block['time_data_sha256']=records.sha256_file(destination)
-    block['score_hash']=records.content_hash({'physics':records.sha256_file(physics.__file__),
-                                              'calculation':inspect.getsource(score_output)})
-    return {**result,**block}
-
-
-def evaluate(study, candidate, results, context):
-    return evaluate_points(study,[candidate],results,context)[0]
+ROOT = Path(__file__).resolve().parent
+RUNTIME_FIELDS = ('material_catalog', 'lattices', 'parameter_table')
 
 
 def evaluate_points(study, candidates, results, context):
     started=time.perf_counter(); prepared_jobs=[]; futures={}; rows=[]
-    design=analysis_design(study)
-    needs_time=study['analysis'].get('time_resolved',False) or study['kind']=='sensitivity' or study['analysis']['objective']=='integrated_density'
+    stop_event=threading.Event()
+    design=analysis.analysis_design(study)
+    if 'score_hash' not in context: context['score_hash']=analysis.scoring_identity()
+    if 'analysis_sha256' not in context: context['analysis_sha256']=records.sha256_file(analysis.__file__)
+    verified=context.setdefault('verified',{})
+    needs_time=study['analysis'].get('time_resolved',False) or study['analysis']['objective']=='integrated_density'
     pool=ThreadPoolExecutor(max_workers=study['execution']['workers'])
     try:
         for candidate in candidates:
-            prepared=inputs.prepare_values(study,candidate)
+            prepared=physics.prepare_values(study,candidate)
             prepared.update({key:candidate[key] for key in ('macro','config','ode','trajectory') if key in candidate})
-            tasks=inputs.task_plan(study,prepared,context['build'])
+            prepared['input_text']=input_text(prepared,context.get('installation',study['installation']))
+            tasks=task_plan(study,prepared,context['build'])
             identifier=records.content_hash({'tasks':[row['task_id'] for row in tasks],'ode':prepared.get('ode',{})})
             declared={'experiment_id':study['id'],
                       'simulation_hash':records.content_hash({'fixed':study['fixed'],'sampling':study['sampling'],'realization':study.get('realization'),'build':context['build']}),
                       'analysis_hash':records.content_hash({'options':study['analysis'],'design':design}),
                       'search_hash':records.content_hash(study.get('search',{}))}
-            results.plan(declared,identifier,prepared,tasks)
-            old=results.tasks(identifier)
+            results.plan(declared,identifier,{k:v for k,v in prepared.items() if k not in ('source_text','input_text')},tasks)
+            old=results.tasks(identifier); changed=False
             for row in old:
                 if row['status']=='complete' and row.get('result',{}).get('output'):
-                    if not Path(row['result']['output']).is_file() or records.sha256_file(row['result']['output'])!=row['result'].get('sha256'):
-                        results.invalidate(row['task_id'],'saved output differs from its recorded checksum')
+                    path=Path(row['result']['output']).resolve()
+                    before=path.stat() if path.is_file() else None
+                    if before is None or records.sha256_file(path)!=row['result'].get('sha256'):
+                        results.revise(row['task_id'],reason='saved output differs from its recorded checksum')
+                        changed=True
                     else:
-                        score_hash=records.content_hash({'physics':records.sha256_file(physics.__file__),
-                                                        'calculation':inspect.getsource(score_output)})
+                        stat=path.stat()
+                        signature=(stat.st_dev,stat.st_ino,stat.st_size,stat.st_mtime_ns,stat.st_ctime_ns)
+                        if signature!=(before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_ctime_ns):
+                            raise ValueError('saved output changed during checksum verification')
+                        verified[(str(path),row['result']['sha256'])]=signature
                         time_file=row['result'].get('time_data')
                         invalid_time=needs_time and (not time_file or not Path(time_file).is_file() or records.sha256_file(time_file)!=row['result'].get('time_data_sha256'))
-                        if row['result'].get('score_hash')!=score_hash or invalid_time:
-                            updated=score_output(row['result'],prepared,row['input'],time_resolved=needs_time)
-                            results.rescore(row['task_id'],updated)
-            complete={row['task_id'] for row in results.tasks(identifier) if row['status']=='complete'}
-            prepared_jobs.append({'candidate':candidate,'prepared':prepared,'tasks':tasks,'candidate_id':identifier,'cached':len(complete)})
+                        if row['result'].get('score_hash')!=context['score_hash'] or invalid_time:
+                            updated=analysis.score_output(row['result'],prepared,row['input'],time_resolved=needs_time,score_hash=context['score_hash'])
+                            results.revise(row['task_id'],result=updated); changed=True
+            if changed: old=results.tasks(identifier)
+            complete={row['task_id'] for row in old if row['status']=='complete'}
+            prepared_jobs.append({'candidate':candidate,'prepared':prepared,'tasks':tasks,'candidate_id':identifier,'cached':len(complete),'task_rows':old,'ran':False})
         todo=[]
         for job in prepared_jobs:
-            completed={row['task_id'] for row in results.tasks(job['candidate_id']) if row['status']=='complete'}
+            completed={row['task_id'] for row in job['task_rows'] if row['status']=='complete'}
             todo.append([task for task in job['tasks'] if task['task_id'] not in completed])
+        if context.get('transport_read_only') and any(todo):
+            raise ValueError('earlier source comparison permits cached analysis only; use a new output directory for transport')
         shared=set(); exhausted=False
         queue=((job,task) for group in itertools.zip_longest(*todo) for job,task in zip(prepared_jobs,group) if task is not None)
         while futures or not exhausted:
@@ -103,21 +85,21 @@ def evaluate_points(study, candidates, results, context):
                 except StopIteration:
                     exhausted=True; break
                 if task['task_id'] in shared: continue
-                shared.add(task['task_id']); token=results.start(task['task_id'])
+                shared.add(task['task_id']); token=results.start(task['task_id']); job['ran']=True
                 path=context['output']/'tasks'/task['task_id']/(token+'.partial')
-                future=pool.submit(simulate.run_task,task,job['prepared'],study['installation'],context['environment'],path,context['active'],context['lock'])
+                future=pool.submit(run_task,task,job['prepared'],context.get('installation',study['installation']),context['environment'],path,context['active'],context['lock'],stop_event)
                 futures[future]=(job,task,token)
             if not futures: break
             done,_=wait(futures,timeout=.25,return_when=FIRST_COMPLETED)
-            simulate.monitor_processes(context['active'],context['lock'],study['execution'])
+            monitor_processes(context['active'],context['lock'],study['execution'],stop_event)
             for future in done:
                 job,task,token=futures.pop(future)
                 try:
                     result=future.result()
                     if result['status']=='complete':
-                        result=score_output(result,job['prepared'],task,time_resolved=needs_time)
+                        result=analysis.score_output(result,job['prepared'],task,time_resolved=needs_time,score_hash=context['score_hash'])
                         temporary=Path(result['paths']['directory']); published=temporary.with_suffix('')
-                        records.publish_directory(temporary,published)
+                        records.publish(temporary,published)
                         for key,value in result['paths'].items():
                             if isinstance(value,str) and value.startswith(str(temporary)):
                                 result['paths'][key]=str(published)+value[len(str(temporary)):]
@@ -128,432 +110,194 @@ def evaluate_points(study, candidates, results, context):
                 except (OSError,ValueError,RuntimeError) as exc:
                     results.finish(task['task_id'],token,'invalid',{'reason':str(exc)})
         for job in prepared_jobs:
-            task_rows=results.tasks(job['candidate_id'])
+            task_rows=results.tasks(job['candidate_id']) if shared.intersection(row['task_id'] for row in job['task_rows']) else job['task_rows']
             row={'name':job['candidate'].get('name',job['candidate_id'][:12]),'candidate_id':job['candidate_id'],
                  'parameters':job['prepared']['values'],'cached_tasks':job['cached'],'tasks':len(task_rows),
                  'completed_tasks':sum(r['status']=='complete' for r in task_rows)}
             row.update({key:job['candidate'][key] for key in ('inputs','trajectory','design_index','tolerance') if key in job['candidate']})
-            if not results.completed(job['candidate_id']):
+            if not results.completed(job['candidate_id'],tasks=task_rows,verified=verified):
                 row.update(status='incomplete',value=None,standard_error=None,
                            reasons=[{'task_id':r['task_id'],'state':r['status'],'reason':(r.get('result') or {}).get('reason')} for r in task_rows if r['status']!='complete'])
             else:
                 blocks=[r['result'] for r in task_rows]; row['blocks']=blocks
-                options=study['analysis']; count=int(options.get('bootstrap_draws',1000))
-                estimate=analysis.estimate(blocks,design,bootstrap_draws=count,tail_bootstrap_draws=int(options.get('tail_bootstrap_draws',500)))
-                historical=analysis.historical_summary(blocks,design)
-                objective=options.get('objective','device_junction_qps_per_eV')
-                if objective in ('total_qps_per_primary','total_QPs_per_primary','junction_qps_per_primary'):
-                    value=historical['total_qps_per_primary']; se=historical.get('standard_error_per_primary',historical.get('standard_error'))
-                    if se is None and historical.get('replica_standard_error') is not None:
-                        se=historical['replica_standard_error']/(len(design['position_strata'])*design['events_per_task'])
-                    units='summed_junction_QPs_per_primary'
-                elif objective in ('device_junction_qps_per_eV','device_weighted_junction_qps_per_energy'):
-                    value,se,units=estimate['value'],estimate['standard_error'],estimate['units']
-                elif objective=='integrated_density':
-                    value,se,units=historical['value'],None,'MHz us'
-                else: raise ValueError(f'unsupported objective {objective}')
-                row.update(status='complete',value=float(value),standard_error=se,units=units,estimate=estimate,historical=historical)
+                options=study['analysis']; objective=options['objective']; data=analysis.prepare_counts(blocks,design)
+                diagnostics=bool(options.get('diagnostics',study['kind']!='search'))
+                estimate=analysis.summarize(data,bootstrap_draws=int(options.get('bootstrap_draws',1000)),
+                    tail_bootstrap_draws=int(options.get('tail_bootstrap_draws',500)),diagnostics=diagnostics,
+                    uncertainty=objective in ('device_junction_qps_per_eV','device_weighted_junction_qps_per_energy') or diagnostics)
+                historical=analysis.summarize(data,objective='total_qps_per_primary',diagnostics=diagnostics)
+                selected=estimate if objective in ('device_junction_qps_per_eV','device_weighted_junction_qps_per_energy') else historical
+                row.update(status='complete',blocks=blocks,value=selected['value'],standard_error=selected['standard_error'],
+                           units=selected['units'],estimate=estimate,historical=historical)
                 if needs_time:
-                    row.update(density_response(blocks,job['prepared']))
+                    defaults={entry[0]:entry[1] for entry in study['parameter_table']['morris']['QPDE_params']}
+                    row.update(analysis.density_response(blocks,job['prepared'],defaults,context.setdefault('time_sums',{})))
                     if objective=='integrated_density':
                         row.update(value=row['integrated_density'],standard_error=None,units='MHz us',
                                    uncertainty_note='Replica responses are supplied; pooled nonlinear ODE uncertainty is not estimated.')
                 results.observation(job['candidate_id'],{k:v for k,v in row.items() if k not in ('name','cached_tasks','blocks')},
-                                    analysis={'options':options,'design':design,'code':records.sha256_file(analysis.__file__)},
-                                    kind='physical_zero' if row['value']==0 else 'measured')
+                                    analysis={'options':options,'design':design,'code':context['analysis_sha256']},
+                                    kind='physical_zero' if row['value']==0 else 'measured',tasks=task_rows,verified=verified)
             rows.append(row)
     finally:
-        with context['lock']:
-            for active in list(context['active'].values()): simulate.stop_process(active['process'])
-        pool.shutdown(wait=True,cancel_futures=True)
+        close_workers(pool,futures,context['active'],context['lock'],stop_event)
     context['timing']['evaluation_s']=context['timing'].get('evaluation_s',0)+time.perf_counter()-started
     return rows
 
 
-def density_response(blocks, prepared):
-    """Retained pooled QP-density calculation; individual realizations are diagnostics."""
-    table=inputs.load_document(inputs.ROOT/'parameters.yaml')['morris']['QPDE_params']
-    ode={row[0]:row[1] for row in table}; ode.update(prepared.get('ode',{}))
-    fixed=prepared['fixed']; arrays=[]
-    for block in blocks:
-        with np.load(block['time_data']) as data: arrays.append(np.array(data['qps']))
-    nsites=len({row['position'] for row in blocks}); replicas=sorted({row['replica'] for row in blocks})
-    outcomes=[]
-    for group in [list(range(len(blocks)))]+[[i for i,row in enumerate(blocks) if row['replica']==r] for r in replicas]:
-        qps=sum((arrays[i] for i in group),np.zeros_like(arrays[0])); events=sum(blocks[i]['events'] for i in group)
-        t,dg=physics.calculate_xqps(np.linspace(0,300000,1001),qps,fixed['setTopGap']/4.135667696e-15,
-                                   ode['f_01'],ode['r'],ode['s'],ode['I_ph'],ode['pt'],ode['n_cooper'],
-                                   fixed['electrode_height_um'],fixed['electrode_width_um'],fixed['setTopThickness_um'],events)
-        outcomes.append(float(np.trapezoid(dg,t,axis=1).sum()))
-    return {'integrated_density':outcomes[0],'integrated_density_by_replica':outcomes[1:],
-            'density_parameters':ode,'density_sites':nsites}
-
-
-def analyse_results(study, rows):
-    complete=[row for row in rows if row['status']=='complete']
-    objective=study['analysis']['objective']; design=analysis_design(study); comparisons=[]
-    reference=rows[0] if rows and rows[0]['status']=='complete' else None
-    if reference is not None and study['kind']!='sensitivity':
-        for candidate in complete:
-            if candidate is reference: continue
-            if objective=='integrated_density':
-                delta=candidate['value']-reference['value']
-                paired={'value':delta,'standard_error':None,'relative_to_b':delta/reference['value'] if reference['value'] else None,
-                        'z':None,'units':candidate.get('units'),'uncertainty_status':'aggregate nonlinear density evolution has no measured paired uncertainty'}
-            else:
-                paired=analysis.paired_difference(candidate['blocks'],reference['blocks'],design,objective=objective,
-                                                   bootstrap_draws=int(study['analysis'].get('bootstrap_draws',1000)))
-            comparisons.append({'candidate':candidate['name'],'reference':reference['name'],**paired})
-    geometry={key:value for key,value in study['fixed'].items() if key.startswith(('electrode_','setSub'))}
-    report={'id':study['id'],'kind':study['kind'],'objective':objective,'events_total_per_candidate':study['events_total'],
-            'sites':len(study['design']['sites_mm']),'replicas':study['sampling']['replicas'],
-            'events_per_task':study['sampling']['events_per_task'],'design':design,'results':rows,'comparisons':comparisons,
-            'geometry':geometry,'sites_mm':study['design']['sites_mm'],
-            'streams':{k:study['sampling'][k] for k in ('seed_base','seed_bank','position_seed')},
-            'complete':bool(rows) and len(complete)==len(rows),'limitations':['Calibrated interface model.','Property targets need measured-material validation.',
-                                                            'QP yield is not a logical-error probability.']}
-    if study['kind']=='sensitivity':
-        recorded=study.get('morris_design') and all(all(key in row for key in ('inputs','trajectory','design_index')) for row in rows)
-        candidates=sorted(rows,key=lambda row:row['design_index']) if recorded else inputs.candidate_table(study)
-        lookup={row['name']:row for row in rows}
-        morris=study['morris_design']; problem=morris['problem']; names=problem['names']
-        grouped={}
-        for candidate in candidates: grouped.setdefault(candidate['trajectory'],[]).append(candidate)
-        missing=[trajectory for trajectory,points in grouped.items()
-                 if len(points)!=len(names)+1 or any(lookup.get(p['name'],{}).get('status')!='complete' for p in points)]
-        if missing:
-            report['sensitivity']={'status':'incomplete','missing_trajectories':missing,'declared_trajectories':len(grouped),
-                                   'reason':'missing outcomes cannot be removed from Morris trajectories'}
-        else:
-            matrix=[[candidate['inputs'][name] for name in names] for candidate in candidates]
-            response=[lookup[candidate['name']]['integrated_density'] if objective=='integrated_density' else lookup[candidate['name']]['value'] for candidate in candidates]
-            method=study['analysis'].get('sensitivity_method','morris')
-            result=analysis.sensitivity(matrix,response,names,problem=problem,method=method,
-                                        log_outcome=study['analysis'].get('log_outcome',method=='pearson'),
-                                        seed=morris['seed'],num_levels=morris['levels'])
-            report['sensitivity']={**result,'status':'complete','response':objective,'morris_design':morris}
-    if study['kind']=='tolerance':
-        if reference is None:
-            report['tolerance']={'locally_converged':False,'reason':'reference measurement is incomplete'}
-        else:
-            moves={}; paired={}; compared={row['candidate']:row for row in comparisons}
-            for row in rows[1:]:
-                name,side=row['name'].rsplit('_',1)
-                label=name+(':minus' if side=='-1' else ':plus')
-                moves[label]={'value':row.get('value')}
-                if row['name'] in compared: paired[label]=compared[row['name']]
-            for name in study.get('tolerance',{}):
-                moves.setdefault(name+':minus',{'value':None}); moves.setdefault(name+':plus',{'value':None})
-            varied={label.rsplit(':',1)[0] for label in moves}
-            coordinates=inputs.to_unit(reference['parameters'],study['space']) if varied<=set(study['space']['names']) else None
-            report['tolerance']=analysis.tolerance_summary(reference,moves,paired=paired,coordinates=coordinates,names=study['space']['names'])
-            report['tolerance']['untested_moves']=study.get('tolerance_skipped',[])
-    return report
+def close_workers(pool, futures, active, lock, stop_event):
+    """Close the launch gate, cancel waiting work and reap every started child."""
+    previous={}
+    if threading.current_thread() is threading.main_thread():
+        for kind in (signal.SIGTERM,signal.SIGHUP,signal.SIGINT):
+            previous[kind]=signal.signal(kind,signal.SIG_IGN)
+    try:
+        with lock:
+            stop_event.set()
+            for future in futures: future.cancel()
+            for row in list(active.values()): stop_process(row['process'])
+        pool.shutdown(wait=True,cancel_futures=True)
+    finally:
+        for kind,handler in previous.items(): signal.signal(kind,handler)
 
 
 def run_study(study_or_path, output, *, execute=True):
-    start=time.perf_counter(); declared=inputs.load_document(study_or_path)
+    start=time.perf_counter(); declared=records.load_document(study_or_path)
     if declared.get('kind')=='convergence' or declared.get('steps'):
         return run_series(study_or_path,output,execute=execute)
-    study=inputs.load_study(study_or_path)
+    study=load_study(study_or_path)
+    if study['kind']=='search' and not study['analysis'].get('store_search_blocks',True) and study['analysis'].get('diagnostics',False):
+        raise ValueError('search diagnostics require stored blocks; use diagnostics false for compact search history')
     if study.get('build',{}).get('mode')=='historical-unresolved':
         raise ValueError('historical reconstruction is read-only; use a new explicit study for simulation')
     output=Path(output).resolve(); output.mkdir(parents=True,exist_ok=True)
-    candidates=inputs.candidate_table(study) if study['kind']!='search' else None
-    study.pop('resolved_hash',None); study['resolved_hash']=records.content_hash(study)
-    records.write_json(output/'resolved.json',study)
+    if (output/'summary.json').is_file() and records.load_document(output/'summary.json').get('raw_files_present') is False:
+        raise ValueError('recover the recorded archive or use a new output directory before simulation')
+    candidates=candidate_table(study) if study['kind']!='search' else None
+    study.pop('resolved_hash',None)
+    frozen={key:value for key,value in study.items() if key not in RUNTIME_FIELDS}
+    study['resolved_hash']=records.content_hash(frozen); frozen['resolved_hash']=study['resolved_hash']
+    records.write_json(output/'resolved.json',frozen)
     if not execute:
         for candidate in candidates if candidates is not None else [{'values':study['space']['baseline']}]:
-            inputs.prepare_values(study,candidate)
+            physics.prepare_values(study,candidate)
         return {'id':study['id'],'events_total':study['events_total'],'sites':len(study['design']['sites_mm']),
                 'replicas':study['sampling']['replicas'],'candidates':candidates,'executed':False}
-    env,build=simulate.prepare_environment(study['installation'])
+    env,build=prepare_environment(study['installation'])
+    current_build=build
+    build=verify_previous_inputs(study,candidates,output,build)
     records.write_json(output/'build.json',build)
-    context={'environment':env,'build':build,'active':{},'lock':threading.Lock(),'output':output,'timing':{'preparation_s':time.perf_counter()-start}}
+    context={'installation':{**study['installation'],'template_text':Path(study['installation']['macro_template']).read_text()},'environment':env,'build':build,'transport_read_only':build['renderer_sha256']!=current_build['renderer_sha256'],'active':{},'lock':threading.Lock(),'output':output,'timing':{'preparation_s':time.perf_counter()-start}}
     rows=[]
     with records.Results(output/'results.sqlite') as results:
         results.save_state('output_root',str(output))
         if study['kind']=='search':
             options=study.get('search',{}); method=options.get('method','bo_gp'); target=int(options.get('evaluations',96))
             if target<1 or not study['space']['names']: raise ValueError('search needs positive evaluations and varied properties')
+            measured_target=options.get('measured_evaluations',False)
+            max_attempts=options.get('max_attempts',2*target if measured_target else target)
+            if not isinstance(measured_target,bool) or isinstance(max_attempts,bool) or not isinstance(max_attempts,int) or max_attempts<target:
+                raise ValueError('search measured_evaluations must be boolean and max_attempts an integer at least evaluations')
             opt={**options.get('options',{}),'floor':.5/study['events_total']}
-            progress=results.state('search_progress')
-            saved=progress['optimizer'] if progress is not None else results.state('optimizer')
+            progress=results.read('state','search_progress')
+            saved=progress['optimizer'] if progress is not None else results.read('state','optimizer')
             state=search.load_state(saved) if saved else search.new_state(method,seed=int(options.get('seed',41)),options=opt)
-            rows=progress['rows'] if progress is not None else results.state('search_rows',[])
+            rows=progress['rows'] if progress is not None else results.read('state','search_rows',[])
             if len(state['Y'])+len(state['rejected'])!=len(rows):
                 raise RuntimeError('saved optimizer and measured search rows are inconsistent')
-            attempts=0
-            while len(rows)<target:
-                remaining=target-len(rows)
+            while (len(state['Y']) if measured_target else len(rows))<target and len(rows)<max_attempts:
+                remaining=min(target-(len(state['Y']) if measured_target else len(rows)),max_attempts-len(rows))
                 count=min(remaining,int(opt.get('popsize',12))) if method=='cmaes' else min(remaining,int(options.get('parallel_candidates',1)))
                 points=list(state.get('pending',[])) or search.propose(method,state,study['space'],count=count,options=opt)
+                proposal_ids=list(state['pending_ids'])
                 if not points: raise RuntimeError('optimizer has no proposal while no simulations are pending')
                 results.save_state('search_progress',{'optimizer':search.save_state(state),'rows':rows})
                 batch=evaluate_points(study,[{'name':f'{method}_{len(rows)+i:04d}','values':point} for i,point in enumerate(points)],results,context)
-                for point,row in zip(points,batch):
-                    source=state.get('proposals',{}).get(search.point_key(point,study['space']),{})
-                    row['proposal']=source
-                    search.update(method,state,point,row['value'],se=row.get('standard_error'),
+                for number,point,row in zip(proposal_ids,points,batch):
+                    row['proposal_id']=number
+                    row['proposal']=state['proposals'][str(number)]
+                    search.update(method,state,point,row['value'],se=row.get('standard_error'),proposal_id=number,
                                   rejected_reason=None if row['status']=='complete' else str(row.get('reasons')))
+                    if not study['analysis'].get('store_search_blocks',True): row.pop('blocks',None)
                     rows.append(row)
                 for previous in rows:
-                    key=search.point_key(previous['parameters'],study['space'])
+                    key=str(previous['proposal_id'])
                     previous['proposal']['used_in_optimizer_update']=bool(state['used'].get(key,False))
                 results.save_state('search_progress',{'optimizer':search.save_state(state),'rows':rows})
-                attempts+=1
-                if attempts>target*10: raise RuntimeError('search could not complete its declared evaluations')
         else:
             rows=evaluate_points(study,candidates,results,context)
-        report=analyse_results(study,rows)
+        report=analysis.analyse_results(study,rows)
+        if study['kind']!='search' and study['analysis'].get('store_blocks',True) is False:
+            for row in report['results']: row.pop('blocks',None)
+        if study['kind']=='search':
+            reached=(len(state['Y']) if measured_target else len(rows))>=target
+            report['search_counts']={'measured':len(state['Y']),'target':target,'attempts':len(rows),
+                                     'max_attempts':max_attempts,'measured_evaluations':measured_target,'target_reached':reached}
+            if measured_target:
+                report.update(complete=reached,status='complete' if reached else 'incomplete')
+                if not reached: report['incomplete_reason']='maximum attempts reached before the measured target'
         report.update(build=build,timing={**context['timing'],'total_s':time.perf_counter()-start})
         records.write_json(output/'summary.json',report,overwrite=True)
         results.save_state('summary',report)
     return report
 
 
-def read_analysis(path, output=None, settings=None):
-    root=Path(path)
-    study=inputs.load_study(root/'resolved.json')
-    if settings:
-        study['analysis'].update(inputs.load_document(settings))
-    with records.Results(root/'results.sqlite',create=False) as result:
-        saved=result.state('summary')
-        if saved is None: raise ValueError('result has no recorded summary')
-        old_root=result.state('output_root')
-        declarations={row['candidate_id']:row['input'] for row in result.candidates()}
-        for row in saved['results']:
-            if row['status']!='complete': continue
-            blocks=[]
-            for stored in row['blocks']:
-                block=copy.deepcopy(stored)
-                origin=Path(old_root) if old_root else Path(str(block['output']).split('/tasks/',1)[0])
-                for field in ('output','time_data'):
-                    if field in block:
-                        block[field]=str(root/Path(block[field]).relative_to(origin))
-                if not Path(block['output']).is_file() or records.sha256_file(block['output'])!=block['sha256']:
-                    raise ValueError('saved measurements no longer match their raw files')
-                scored=score_output(block,declarations[row['candidate_id']],block)
-                blocks.append(scored)
-            row['blocks']=blocks; design=analysis_design(study)
-            row['estimate']=analysis.estimate(blocks,design,bootstrap_draws=int(study['analysis'].get('bootstrap_draws',1000)))
-            row['historical']=analysis.historical_summary(blocks,design)
-            objective=study['analysis']['objective']
-            if objective in ('device_junction_qps_per_eV','device_weighted_junction_qps_per_energy'):
-                row.update(value=row['estimate']['value'],standard_error=row['estimate']['standard_error'],units=row['estimate']['units'])
-            elif objective=='integrated_density':
-                if any(not Path(block.get('time_data','')).is_file() or records.sha256_file(block['time_data'])!=block.get('time_data_sha256') for block in blocks):
-                    raise ValueError('time data need regeneration from raw hits before density analysis')
-                row.update(density_response(blocks,declarations[row['candidate_id']]))
-                row.update(value=row['integrated_density'],standard_error=None,units='MHz us')
-            else:
-                row.update(value=row['historical']['value'],standard_error=row['historical']['standard_error'],units='summed_junction_QPs_per_primary')
-        report=analyse_results(study,saved['results'])
-    if output: records.write_json(output,report)
-    return report
-
-
-def compare_runs(first, second, output=None, margin=.05):
-    a=json.loads((Path(first)/'summary.json').read_text()); b=json.loads((Path(second)/'summary.json').read_text())
-    if a['objective']!=b['objective'] or a['design']!=b['design']:
-        raise ValueError('comparison requires the same objective and site/realization design')
-    for key in ('geometry','sites_mm'):
-        if key in a or key in b:
-            if a.get(key)!=b.get(key): raise ValueError(f'comparison differs in physical {key}')
-    if not np.isfinite(margin) or margin<=0: raise ValueError('relative equivalence margin must be positive and finite')
-    rows=[]
-    by_name={row['name']:row for row in b['results']}
-    if set(by_name)!={row['name'] for row in a['results']}: raise ValueError('comparison requires matching candidate sets')
-    for row in a['results']:
-        other=by_name.get(row['name'])
-        if row['status']!='complete' or not other or other['status']!='complete':
-            raise ValueError('comparison requires complete matched candidates')
-        if row['parameters']!=other['parameters']:
-            raise ValueError('comparison material properties differ')
-        if a['objective']=='integrated_density':
-            rows.append({'name':row['name'],'difference':row['value']-other['value'],
-                         'equivalent_within_margin':False,'uncertainty_status':'per-realization density evolution is required to measure uncertainty'})
-            continue
-        paired=analysis.paired_difference(row['blocks'],other['blocks'],a['design'],objective=a['objective'])
-        ra=analysis.realization_estimates(row['blocks'],a['design'],a['objective'])
-        rb=analysis.realization_estimates(other['blocks'],b['design'],b['objective'])
-        matched=analysis.compare_repeated(ra,rb,relative_margin=margin,paired=True) if min(len(ra),len(rb))>=2 else {'status':'fewer than two realizations','equivalent_within_margin':False}
-        repeated=analysis.compare_repeated(ra,rb,relative_margin=margin) if min(len(ra),len(rb))>=2 else {'status':'fewer than two realizations'}
-        repeated['interpretation']='Welch interval ignores pairing; a diagnostic check, not a strict independent-sample experiment when random streams are shared.'
-        rows.append({'name':row['name'],'paired':paired,'paired_realization_check':matched,'realization_check':repeated,
-                     'equivalent_within_margin':matched['equivalent_within_margin']})
-    report={'comparison':'selected response with matched sites and realizations','relative_equivalence_margin':margin,
-            'objective':a['objective'],'same_random_streams':a.get('streams')==b.get('streams'),'results':rows}
-    if output: records.write_json(output,report)
-    return report
-
-
 def run_series(study_or_path, output, execute=True):
-    """Run declared studies in order; refine sites without changing earlier streams."""
-    from scipy.stats import qmc
-
-    source = Path(study_or_path).resolve() if not isinstance(study_or_path, dict) else inputs.ROOT / 'study.yaml'
-    raw = inputs.load_document(study_or_path)
-    explicit_temperature = 'temperature_K' in raw.get('fixed', {})
-    if 'resolved_hash' in raw:
-        temperature = raw.get('parameters', {}).get('temperature')
-        explicit_temperature = isinstance(temperature, (int, float)) or isinstance(temperature, dict) and temperature.get('mode') == 'fixed'
-        raw = inputs.load_study(raw)
-    internal = ('space', 'design', 'events_total', 'resolved_hash', 'morris_design', 'tolerance_skipped')
-    raw = {key: copy.deepcopy(value) for key, value in raw.items() if key not in internal}
-    output = Path(output).resolve(); output.mkdir(parents=True, exist_ok=True)
-    identifier = raw.get('id', source.stem)
-    steps = raw.get('steps')
-    levels = raw.get('levels')
-    if steps and levels:
-        raise ValueError('choose explicit study steps or refinement levels')
-    if not steps and not levels:
-        raise ValueError('a study series needs nonempty steps or levels')
-    jobs, signatures, reports = [], [], []
+    """Run complete child studies in order, retaining earlier sites and streams."""
+    source=Path(study_or_path).resolve() if not isinstance(study_or_path,dict) else ROOT/'study.yaml'
+    raw=records.load_document(study_or_path)
+    output=Path(output).resolve(); output.mkdir(parents=True,exist_ok=True)
+    identifier=raw.get('id',source.stem); steps=raw.get('steps'); levels=raw.get('levels')
+    if bool(steps)==bool(levels): raise ValueError('choose nonempty study steps or refinement levels')
+    jobs=[]; signatures=[]; reports=[]
     if steps:
-        if not isinstance(steps, list):
-            raise ValueError('study steps must be a list')
-        for index, step in enumerate(steps):
-            if isinstance(step, str):
-                path = (source.parent / step).resolve()
-                if path == source:
-                    raise ValueError('a study cannot include itself as a step')
-                document = inputs.load_document(path)
-                child = inputs.load_study(path)
-            elif isinstance(step, dict):
-                document = copy.deepcopy(step)
-                for key in ('materials_file',):
-                    if key in document:
-                        document[key] = str((source.parent / Path(document[key]).expanduser()).resolve())
-                install = document.get('installation', {})
-                for key in ('executable', 'lattice_data', 'macro_template', 'library_dir'):
-                    if key in install:
-                        install[key] = str((source.parent / Path(install[key]).expanduser()).resolve())
-                if 'environment_scripts' in install:
-                    install['environment_scripts'] = [str((source.parent / Path(p).expanduser()).resolve())
-                                                      for p in install['environment_scripts']]
-                if 'design_file' in document.get('sampling', {}):
-                    document['sampling']['design_file'] = str((source.parent / Path(document['sampling']['design_file']).expanduser()).resolve())
-                child = inputs.load_study(document)
-            else:
-                raise ValueError('each step must be a study path or mapping')
-            fixed_temperature = 'temperature_K' in document.get('fixed', {})
-            if 'resolved_hash' in document:
-                temperature = document.get('parameters', {}).get('temperature')
-                fixed_temperature = isinstance(temperature, (int, float)) or isinstance(temperature, dict) and temperature.get('mode') == 'fixed'
-            child = {key: copy.deepcopy(value) for key, value in child.items() if key not in internal}
-            if not fixed_temperature:
-                child['fixed'].pop('temperature_K', None)
-            child['id'] = f"{identifier}-step-{index + 1:03d}-{child.get('id', 'study')}"
+        if not isinstance(steps,list): raise ValueError('study steps must be a list')
+        for index,step in enumerate(steps):
+            path=(source.parent/step).resolve() if isinstance(step,str) else step
+            if path==source: raise ValueError('a study cannot include itself as a step')
+            if not isinstance(path,(Path,dict)): raise ValueError('each step must be a study path or mapping')
+            child=load_study(path,directory=source.parent)
+            child['id']=f"{identifier}-step-{index+1:03d}-{child['id']}"
             jobs.append(child)
     else:
-        if raw.get('kind') != 'convergence' or not isinstance(levels, list):
+        if raw.get('kind')!='convergence' or not isinstance(levels,list):
             raise ValueError('refinement levels require kind convergence and a list')
-        template = copy.deepcopy(raw); template.pop('levels', None); template.pop('steps', None)
-        template['kind'] = 'confirmation'
-        if not explicit_temperature:
-            template.get('fixed', {}).pop('temperature_K', None)
-        for key in ('materials_file',):
-            if key in template:
-                template[key] = str((source.parent / Path(template[key]).expanduser()).resolve())
-        installation = template.get('installation', {})
-        for key in ('executable', 'lattice_data', 'macro_template', 'library_dir'):
-            if key in installation:
-                installation[key] = str((source.parent / Path(installation[key]).expanduser()).resolve())
-        if 'environment_scripts' in installation:
-            installation['environment_scripts'] = [str((source.parent / Path(p).expanduser()).resolve())
-                                                     for p in installation['environment_scripts']]
-        sampling = template.setdefault('sampling', {})
-        if 'design_file' in sampling:
-            sampling['design_file'] = str((source.parent / Path(sampling['design_file']).expanduser()).resolve())
-        previous = {'sites': sampling.get('sites', 16), 'replicas': sampling.get('replicas', 4),
-                    'events_per_task': template.get('event_counts', {}).get('events_per_task', sampling.get('events_per_task', 31250))}
-        normalized = []
+        template={key:value for key,value in raw.items() if key not in ('levels','resolved_hash')}
+        template['kind']='confirmation'
+        previous={'sites':template.get('sampling',{}).get('sites',16),
+                  'replicas':template.get('sampling',{}).get('replicas',4),
+                  'events_per_task':template.get('event_counts',{}).get('events_per_task',template.get('sampling',{}).get('events_per_task',31250))}
+        normalized=[]
         for level in levels:
-            if not isinstance(level, dict) or set(level) - set(previous):
-                raise ValueError('each level may specify sites, replicas and events_per_task')
-            current = {**previous, **level}
-            if any(isinstance(value, bool) or not isinstance(value, int) or value < 1 for value in current.values()):
+            if not isinstance(level,dict) or set(level)-set(previous): raise ValueError('unknown refinement count')
+            current={**previous,**level}
+            if any(isinstance(v,bool) or not isinstance(v,int) or v<1 for v in current.values()):
                 raise ValueError('refinement counts must be positive integers')
-            if normalized and (current['sites'] < previous['sites'] or current['replicas'] < previous['replicas']):
-                raise ValueError('site and replica refinement must retain earlier positions and realizations')
-            normalized.append(current); previous = current
-        sampling.update(normalized[0])
+            if normalized and any(current[k]<previous[k] for k in ('sites','replicas')):
+                raise ValueError('refinement must retain earlier positions and realizations')
+            normalized.append(current); previous=current
+        template.setdefault('sampling',{}).update(normalized[0])
         if 'event_counts' in template:
-            template['event_counts'].pop('events_total', None)
-            template['event_counts']['events_per_task'] = normalized[0]['events_per_task']
-        initial = inputs.load_study(template)
-        design = copy.deepcopy(initial['design'])
-        if len(design['sites_mm']) != normalized[0]['sites']:
+            template['event_counts'].pop('events_total',None)
+            template['event_counts']['events_per_task']=normalized[0]['events_per_task']
+        initial=load_study(template,directory=source.parent); design=initial['design']
+        if len(design['sites_mm'])!=normalized[0]['sites']:
             raise ValueError('the first level must retain every site in its recorded design')
-        weights = dict(design['stratum_weights']); labels = list(design['stratum'])
-        ordered = [list(point) for point in design['sites_mm']]
-        seen = {tuple(point) for point in ordered}
-        if len(seen) != len(ordered):
-            raise ValueError('the initial design contains repeated sites')
-        regions = list(weights)
-        counts = {name: labels.count(name) for name in regions}
-        if any(counts[name] == 0 for name in regions):
-            raise ValueError('every weighted physical region must contain sites')
-        if set(regions) != {'surface'} and set(regions) != set(inputs.REGIONS):
-            raise ValueError('refinement needs the recorded surface or five physical region definitions')
-        fixed = initial['fixed']; seed = initial['sampling']['position_seed']
-        span = float(fixed.get('position_half_span_mm', 4.)); z = float(initial['sampling'].get('z_mm', ordered[0][2]))
-        streams, buffers, cursors = {}, {name: [] for name in regions}, {name: 0 for name in regions}
-        for name in regions:
-            if name == 'S0_junction':
-                streams[name] = np.random.default_rng((seed * 1000003) % (2**31 - 1))
-            else:
-                region_seed = seed if name == 'surface' else (seed * 1000003 + inputs.REGIONS.index(name)) % (2**31 - 1)
-                streams[name] = qmc.Sobol(d=2, scramble=True, seed=region_seed)
-        sigma = initial['sampling'].get('region_sd', {})
-        allocation = np.array([weights[name] * float(sigma.get(name, 1.)) for name in regions])
-        if not np.isfinite(allocation).all() or np.any(allocation < 0) or allocation.sum() <= 0:
-            raise ValueError('region sampling spreads must be finite and nonnegative')
-        allocation /= allocation.sum()
-        template = {key: copy.deepcopy(value) for key, value in initial.items() if key not in internal}
-        if not explicit_temperature:
-            template['fixed'].pop('temperature_K', None)
-        for index, level in enumerate(normalized):
-            while len(ordered) < level['sites']:
-                deficit = level['sites'] * allocation - np.array([counts[name] for name in regions])
-                name = regions[int(np.argmax(deficit))]
-                point = None
-                for _ in range(100000):
-                    if not buffers[name]:
-                        if name == 'S0_junction':
-                            e = cursors[name] % len(fixed['electrode_x_mm']); cursors[name] += 1
-                            x = fixed['electrode_x_mm'][e] + streams[name].uniform(-fixed['electrode_width_um'] / 2000, fixed['electrode_width_um'] / 2000)
-                            y = fixed['electrode_y_mm'][e] + streams[name].uniform(-fixed['electrode_height_um'] / 2000, fixed['electrode_height_um'] / 2000)
-                            buffers[name] = [[round(float(x), 6), round(float(y), 6)]]
-                        else:
-                            xy = np.round(streams[name].random(8192) * 2 * span - span, 6)
-                            if name != 'surface':
-                                xy = xy[inputs.region_distances(xy, fixed) == inputs.REGIONS.index(name)]
-                            buffers[name] = xy.tolist()[::-1]
-                    if not buffers[name]:
-                        continue
-                    candidate = [*buffers[name].pop(), z]
-                    if tuple(candidate) not in seen:
-                        point = candidate
-                        break
-                if point is None:
-                    raise ValueError(f'could not append a distinct site in {name}')
-                ordered.append(point); labels.append(name); seen.add(tuple(point)); counts[name] += 1
-            child_design = {key: copy.deepcopy(value) for key, value in design.items()
-                            if key not in ('sites_mm', 'stratum', 'position_strata', 'stratum_counts', 'design_hash')}
-            child_design.update(sites_mm=copy.deepcopy(ordered), stratum=list(labels),
-                                stratum_counts=dict(counts), stratum_weights=dict(weights))
-            child_design['design_hash'] = records.content_hash(child_design)
-            design_path = output / f'design-{index + 1:03d}.json'
-            records.write_json(design_path, child_design)
-            child = copy.deepcopy(template)
-            child['id'] = f'{identifier}-level-{index + 1:03d}'
-            child['sampling'].update(level, kind='recorded-stratified', design_file=str(design_path))
+        for index,level in enumerate(normalized):
+            sampling={**initial['sampling'],**level}
+            if index:
+                design=physics.build_design(initial['fixed'],sampling,previous=design)
+                design['design_hash']=records.content_hash(design)
+            design_path=output/f'design-{index+1:03d}.json'; records.write_json(design_path,design)
+            child={**initial,'id':f'{identifier}-level-{index+1:03d}',
+                   'sampling':{**sampling,'kind':'recorded-stratified','design_file':str(design_path)},
+                   'design':copy.deepcopy(design),'events_total':level['sites']*level['replicas']*level['events_per_task']}
             if 'event_counts' in child:
-                child['event_counts'].pop('events_total', None)
-                child['event_counts']['events_per_task'] = level['events_per_task']
+                child['event_counts']={**child['event_counts'],'events_per_task':level['events_per_task'],'events_total':child['events_total']}
             jobs.append(child)
+    for child in jobs:
+        child.pop('resolved_hash',None)
+        child['resolved_hash']=records.content_hash({key:value for key,value in child.items() if key not in RUNTIME_FIELDS})
     for child in jobs:
         signature = {key: child.get(key) for key in ('fixed', 'parameters', 'constraints', 'realization', 'candidates', 'installation')}
         signature['objective'] = child.get('analysis', {}).get('objective')
@@ -641,11 +385,15 @@ def main(argv=None):
     command=commands.add_parser('convert-copy'); command.add_argument('path'); command.add_argument('--output',required=True); command.add_argument('--old-root'); command.add_argument('--new-root')
     command=commands.add_parser('catalog'); command.add_argument('--output',required=True); command.add_argument('--ids',nargs='+'); command.add_argument('--max-results',type=int,default=50)
     command=commands.add_parser('project'); command.add_argument('target'); command.add_argument('--catalog',required=True); command.add_argument('--features',required=True); command.add_argument('--output',required=True); command.add_argument('--top',type=int,default=10)
-    command=commands.add_parser('probe-density'); command.add_argument('material'); command.add_argument('--study',default=str(inputs.ROOT/'studies/reference.yaml')); command.add_argument('--output',required=True)
+    command=commands.add_parser('probe-density'); command.add_argument('material'); command.add_argument('--study',default=str(ROOT/'studies/reference.yaml')); command.add_argument('--output',required=True)
     args=parser.parse_args(argv)
+    previous_signals={}
+    if args.command in ('run','probe-density') and threading.current_thread() is threading.main_thread():
+        for kind in (signal.SIGINT,signal.SIGTERM,signal.SIGHUP):
+            previous_signals[kind]=signal.signal(kind,signal.default_int_handler)
     try:
         if args.command=='check':
-            declared=inputs.load_document(args.study)
+            declared=records.load_document(args.study)
             if declared.get('kind')=='convergence' or declared.get('steps'):
                 import tempfile
                 with tempfile.TemporaryDirectory(prefix='material-study-check-') as temporary:
@@ -655,31 +403,30 @@ def main(argv=None):
                     raise ValueError(failure)
                 answer={'id':checked['id'],'kind':checked['kind'],'checked_studies':checked['declared_studies']}
             else:
-                study=inputs.load_study(args.study)
-                for candidate in inputs.candidate_table(study): inputs.prepare_values(study,candidate)
+                study=load_study(args.study)
+                for candidate in candidate_table(study): physics.prepare_values(study,candidate)
                 answer={'id':study['id'],'kind':study['kind'],'sites':len(study['design']['sites_mm']),'replicas':study['sampling']['replicas'],
                         'events_total':study['events_total'],'search_parameters':study['space']['names']}
         elif args.command=='run':
-            output=args.output or inputs.ROOT/'material_scan_data/experiments'/Path(args.study).stem
+            output=args.output or ROOT/'material_scan_data/experiments'/Path(args.study).stem
             answer=run_study(args.study,output,execute=not args.prepare_only)
-        elif args.command=='analyse': answer=read_analysis(args.path,args.output,args.settings)
-        elif args.command=='compare': answer=compare_runs(args.first,args.second,args.output,args.margin)
+        elif args.command=='analyse': answer=analysis.read_analysis(args.path,args.output,args.settings)
+        elif args.command=='compare': answer=analysis.compare_runs(args.first,args.second,args.output,args.margin)
         elif args.command=='plot':
-            import plots
-            answer={'plot':str(plots.plot_result(args.path,args.output,args.kind))}
+                answer={'plot':str(analysis.plot_result(args.path,args.output,args.kind))}
         elif args.command=='inventory': answer=records.git_inventory(args.path,args.git_repository,args.revision) if args.git_repository else records.inventory(args.path)
         elif args.command=='history': answer=records.history_summary(args.path,args.invalidations)
-        elif args.command=='archive': answer=records.create_archive(args.path,args.member,args.output)
-        elif args.command=='verify-archive': answer=records.verify_archive(args.path)
+        elif args.command=='archive': answer=records.create_archive(args.path,args.member,args.output,include_manifest=False)
+        elif args.command=='verify-archive': answer=records.verify_archive(args.path,include_manifest=False)
         elif args.command=='recover': answer={'path':str(records.recover_archive(args.path,args.output))}
-        elif args.command=='catalog': answer=inputs.fetch_catalog(args.output,args.ids,args.max_results)
+        elif args.command=='catalog': answer=records.fetch_catalog(args.output,args.ids,args.max_results)
         elif args.command=='project':
-            target=inputs.load_document(args.target); catalog=inputs.load_document(args.catalog); feature_spec=inputs.load_document(args.features)
+            target=records.load_document(args.target); catalog=records.load_document(args.catalog); feature_spec=records.load_document(args.features)
             answer={'target':target,'projection':analysis.project_materials(target.get('features',target),catalog['candidates'],feature_spec,top=args.top),
                     'interpretation':'Distances use only measured fields; missing fields are reported. Simulate shortlisted complete material records before a material conclusion.'}
             records.write_json(args.output,answer)
         elif args.command=='probe-density':
-            answer=simulate.probe_density(args.material,inputs.load_study(args.study),args.output)
+            answer=probe_density(args.material,load_study(args.study),args.output)
         else: answer={'path':str(records.convert_copy(args.path,args.output,args.old_root,args.new_root))}
         if getattr(args,'output',None) and args.command in ('check','inventory','history','verify-archive'):
             records.write_json(args.output,answer)
@@ -687,7 +434,592 @@ def main(argv=None):
         print(records.canonical_json(display)); return 0 if answer.get('complete',True) else 1
     except (OSError,ValueError,RuntimeError) as error:
         print(f'error: {error}',file=sys.stderr); return 2
+    except KeyboardInterrupt:
+        print('interrupted: pending inputs and completed tasks remain available for restart',file=sys.stderr)
+        return 130
+    finally:
+        for kind,handler in previous_signals.items(): signal.signal(kind,handler)
 
 
-if __name__=='__main__':
+def load_study(path, *, directory=None):
+    source=Path(path).resolve() if not isinstance(path,dict) else Path(directory or ROOT)/'study.yaml'
+    raw=records.load_document(path)
+    cached={name:raw.pop(name) for name in RUNTIME_FIELDS if name in raw}
+    parameter_table=cached.get('parameter_table') or records.load_document(ROOT/'parameters.yaml')
+    if 'resolved_hash' in raw:
+        expected=raw.pop('resolved_hash')
+        if records.content_hash(raw)!=expected: raise ValueError('resolved study was changed after recording')
+        if raw['events_total']!=len(raw['design']['sites_mm'])*raw['sampling']['replicas']*raw['sampling']['events_per_task']:
+            raise ValueError('resolved task event counts disagree')
+        study={**raw,'resolved_hash':expected}
+    else:
+        allowed={'schema','id','kind','description','purpose','parameters','fixed','sampling','analysis','execution','candidates','search','constraints',
+                 'installation','realization','materials_file','output','steps','event_counts','physics','build','provenance','tolerance','levels','morris'}
+        if set(raw)-allowed:
+            raise ValueError(f'unknown study fields: {sorted(set(raw)-allowed)}')
+        if raw.get('schema') not in ('material-scan-study-2','material-scan-experiment-1'):
+            raise ValueError('unsupported study schema')
+        if raw.get('kind','confirmation') not in ('confirmation','materials','search','sensitivity','tolerance','convergence','sequence'):
+            raise ValueError('unknown scientific study kind')
+        reference = records.load_document(ROOT/'studies/reference.yaml')
+        fixed = dict(reference['fixed']); fixed.update(raw.get('fixed',{}))
+        if set(raw.get('fixed',{}))-set(reference['fixed']):
+            raise ValueError('unknown fixed physical fields')
+        phys = raw.get('physics',{})
+        for name in ('electrode_x_mm','electrode_y_mm'):
+            if name in phys: fixed[name]=phys[name]
+        fixed['setTopGap']=phys.get('junction_gap_eV',fixed['setTopGap'])
+        install={'executable':str(Path.home()/'geant4_workdir/bin/Linux-g++/Main'),
+                 'lattice_data':str(Path.home()/'src/G4CMP_htseng/CrystalMaps'),
+                 'environment_scripts':['/home/software/Geant4/Geant4-Install/share/Geant4-10.7.4/geant4make/geant4make.sh',str(Path.home()/'src/G4CMP_htseng/g4cmp_env.sh')],
+                 'library_dir':str(Path.home()/'geant4_workdir/lib/Linux-g++'),
+                 'macro_template':str(ROOT/'legacy/macros/sensitivity_template_beamOn1e6.mac')}
+        install.update(raw.get('installation',{}))
+        for name in ('executable','lattice_data','macro_template','library_dir'):
+            value=Path(install[name]).expanduser()
+            install[name]=str(value if value.is_absolute() else source.parent/value)
+        install['environment_scripts']=[str((source.parent/Path(p).expanduser()).resolve()) if not Path(p).expanduser().is_absolute() else str(Path(p).expanduser()) for p in install.get('environment_scripts',[])]
+        sampling=dict(reference['sampling']); sampling.update(raw.get('sampling',{}))
+        if 'seed' in sampling:
+            sampling['seed_base']=sampling['seed']['base']; sampling['seed_bank']=sampling['seed']['bank_id']
+        sampling['events_per_task']=raw.get('event_counts',{}).get('events_per_task',sampling['events_per_task'])
+        fixed['gun_energy_eV']=raw.get('event_counts',{}).get('gun_energy_eV',fixed['gun_energy_eV'])
+        if 'design_file' in sampling:
+            sampling['design_file']=str((source.parent/sampling['design_file']).resolve())
+        for name in ('replicas','events_per_task','seed_base','seed_bank','position_seed'):
+            value=sampling[name]
+            if isinstance(value,bool) or not isinstance(value,int) or value < (1 if name in ('replicas','events_per_task') else 0):
+                raise ValueError(f'{name}: invalid integer')
+        execution=dict(reference['execution']); execution.update(raw.get('execution',{}))
+        if isinstance(execution['workers'],bool) or not isinstance(execution['workers'],int):
+            raise ValueError('workers must be a positive integer')
+        if execution['workers']<1: raise ValueError('workers must be positive')
+        for name in ('timeout_s','stall_timeout_s','per_task_mem_gb','total_mem_gb','system_mem_reserve_gb'):
+            if name not in execution: continue
+            value=execution[name]
+            zero_allowed=name.endswith('_s')
+            if isinstance(value,bool) or not isinstance(value,(int,float)) or not np.isfinite(value) or value<0 or (value==0 and not zero_allowed):
+                raise ValueError(f'{name}: expected a finite positive memory limit or nonnegative time limit')
+        parameters=copy.deepcopy(raw.get('parameters',{}))
+        if 'temperature_K' in raw.get('fixed',{}) and 'temperature' not in parameters:
+            parameters['temperature']={'mode':'fixed','value':fixed['temperature_K']}
+        space=physics.search_space(parameters,kind=raw.get('kind','confirmation'),constraints=raw.get('constraints'),table=parameter_table['parameters'])
+        if 'temperature' not in raw.get('parameters',{}):
+            space['baseline']['temperature']=fixed['temperature_K']
+        elif 'temperature_K' in raw.get('fixed',{}):
+            if 'temperature' in space['names'] or space['baseline']['temperature']!=fixed['temperature_K']:
+                raise ValueError('fixed temperature and parameter temperature disagree')
+        space.update(junction_gap_eV=fixed['setTopGap'],gun_energy_eV=fixed['gun_energy_eV'],cutoff_eV=fixed['min_e_phonons_eV'])
+        study={**raw,'id':raw.get('id',source.stem),'kind':raw.get('kind','confirmation'),'parameters':parameters,'fixed':fixed,'space':space,'installation':install,
+               'sampling':sampling,'execution':execution,'analysis':{**reference['analysis'],**raw.get('analysis',{})}}
+        if study['kind']=='sensitivity' and 'objective' not in raw.get('analysis',{}):
+            study['analysis']['objective']='integrated_density'
+        if study['analysis']['objective'] not in ('total_qps_per_primary','total_QPs_per_primary','junction_qps_per_primary',
+                                                 'device_junction_qps_per_eV','device_weighted_junction_qps_per_energy','integrated_density'):
+            raise ValueError('unknown physical objective')
+        study['realization']=raw.get('realization',phys.get('realization',{}))
+        if 'materials_file' in raw:
+            study['materials_file']=str((source.parent/raw['materials_file']).resolve())
+        recorded=records.load_document(sampling['design_file']) if sampling['kind']=='recorded-stratified' else None
+        study['design']=physics.build_design(fixed,sampling,recorded=recorded)
+        study['design'].setdefault('design_hash',records.content_hash(study['design']))
+        count=len(study['design']['sites_mm'])*sampling['replicas']*sampling['events_per_task']
+        if raw.get('event_counts',{}).get('events_total',count)!=count:
+            raise ValueError('declared total primary count differs from task grid')
+        study['events_total']=count
+        study['resolved_hash']=records.content_hash(study)
+
+    catalog=cached.get('material_catalog') or records.load_document(study.get('materials_file',ROOT/'legacy/material_catalog.yaml'))
+    names={'Si'}
+    candidates=study.get('candidates') or [{}]
+    if study['kind']=='materials' and not study.get('candidates'):
+        names.update(row['lattice_map'] for row in catalog['substrates'].values() if row.get('enabled'))
+    for candidate in candidates:
+        realization={**study.get('realization',{}),**candidate.get('realization',{})}
+        linked=candidate.get('materials')
+        material=linked[0] if isinstance(linked,list) else linked.split('/')[0] if linked else realization.get('material')
+        if material in catalog['substrates']: names.add(catalog['substrates'][material]['lattice_map'])
+        elif realization.get('mode')=='custom_material': names.add(realization.get('lattice_map','Si'))
+        else: names.add(realization.get('base_lattice_map','Si'))
+    lattices=cached.get('lattices')
+    if lattices is None or not names<=set(lattices):
+        lattices=records.material_inputs(catalog,study['installation']['lattice_data'],names)['lattices']
+    study.update(material_catalog=catalog,lattices=lattices,parameter_table=parameter_table)
+    return study
+
+
+def task_plan(study, prepared, build_identity):
+    sampling=study['sampling']; tasks=[]
+    excluded=('ode','trajectory','design_index','transport_group','problem','parameter_specs','source_text','input_text','proposal_id')
+    transport={key:value for key,value in prepared.items() if key not in excluded}
+    encoded=records.canonical_json({'build':build_identity,'physics':transport})[:-1]+',"task":'
+    prefix=hashlib.sha256(encoded.encode())
+    for r in range(sampling['replicas']):
+        for i,site in enumerate(study['design']['sites_mm']):
+            seed=(sampling['seed_base']+sampling['seed_bank']*7919003+prepared.get('trajectory',0)*1000003+r*10007+i*101)%900000000+1
+            raw={'position':i,'replica':r,'site_mm':site,'seeds':[seed,seed+1],'events':sampling['events_per_task'],
+                 'stratum':study['design']['stratum'][i]}
+            digest=prefix.copy(); digest.update((records.canonical_json(raw)+'}').encode())
+            raw['task_id']=digest.hexdigest(); tasks.append(raw)
+    return tasks
+
+
+def candidate_table(study):
+    kind = study['kind']; specified = study.get('candidates')
+    if kind == 'materials' and not specified:
+        catalog = study['material_catalog']
+        names = [[k for k, v in catalog[section].items() if v.get('enabled')]
+                 for section in ('substrates', 'top_films', 'bottom_films')]
+        specified = [{'name': '/'.join(row), 'materials': list(row)} for row in itertools.product(*names)]
+    if kind == 'tolerance':
+        specified = specified or [{'name': 'reference', 'values': {}}]
+        base = copy.deepcopy(specified[0])
+        point = {**study['space']['baseline'], **base.get('values', {})}
+        specified = [base]
+        table = study['parameter_table']['parameters']
+        skipped = []
+        for name, fraction in study.get('tolerance', {}).items():
+            if name not in table or name not in point or not 0 < float(fraction) < 1:
+                raise ValueError('tolerance needs known parameters and fractions in (0,1)')
+            spec = study.get('parameters', {}).get(name, {})
+            spec = spec if isinstance(spec, dict) else {}
+            lo, hi = map(float, spec.get('bounds', spec.get('range', table[name]['search_range'])))
+            scale = spec.get('scale', table[name].get('scale', 'linear'))
+            interval = {'names': [name], 'low': [lo], 'high': [hi], 'scales': [scale],
+                        'baseline': point, 'constraints': study['space'].get('constraints', {})}
+            centre = float(physics.to_unit(point, interval)[0])
+            for sign in (-1, 1):
+                u = float(np.clip(centre + sign * float(fraction), 0., 1.))
+                label = f'{name}_{sign:+d}'
+                if abs(u - centre) < 1e-9:
+                    skipped.append({'name': label, 'reason': 'already at this search bound'})
+                    continue
+                moved = physics.from_unit([u], interval)
+                try:
+                    physics.validate_values(moved, study['space'], exact=False)
+                except ValueError as exc:
+                    skipped.append({'name': label, 'reason': str(exc)})
+                    continue
+                specified.append({**copy.deepcopy(base), 'name': label, 'values': moved,
+                                  'tolerance': {'variable': name, 'sign': sign,
+                                                'fraction': float(fraction), 'unit_delta': u - centre}})
+        study['tolerance_skipped'] = skipped
+    if kind == 'sensitivity':
+        from SALib.sample.morris import sample
+        table = study['parameter_table']
+        rows, options = table['morris'], study.get('morris', {})
+        entries = [row for section in ('electrode_params', 'detector_params', 'G4CMP_params',
+                                      'config_params', 'QPDE_params') for row in rows[section]]
+        requested = options.get('parameters')
+        if requested:
+            requested = {name.strip() for name in requested}
+            unknown = requested - {row[0].strip() for row in entries}
+            if unknown:
+                raise ValueError(f'unknown Morris parameters: {sorted(unknown)}')
+            entries = [row for row in entries if row[0].strip() in requested]
+        if not entries:
+            raise ValueError('no sensitivity parameters selected')
+        names = [row[0].strip() for row in entries]
+        problem = {'num_vars': len(names), 'names': names, 'bounds': [row[2] for row in entries]}
+        trajectories = int(options.get('trajectories', 4)); levels = int(options.get('levels', 4))
+        seed = int(options.get('seed', 41))
+        if trajectories < 1 or levels < 2 or levels % 2:
+            raise ValueError('positive trajectory count and an even number of Morris levels required')
+        length = len(names) + 1
+        candidate_count = 2 * trajectories
+        baseline = study['space']['baseline']
+        while True:
+            raw = np.round(sample(problem, candidate_count, num_levels=levels, seed=seed), 6)
+            paths = raw.reshape(candidate_count, length, len(names))
+            stiffness = []
+            for command, canonical in (('stiffness 1 1', 'sub_c11'), ('stiffness 1 2', 'sub_c12'),
+                                       ('stiffness 4 4', 'sub_c44')):
+                stiffness.append(paths[:, :, names.index(command)] if command in names
+                                 else np.full(paths.shape[:2], baseline[canonical]))
+            c11, c12, c44 = stiffness
+            valid = np.all((c11 > c12) & (c11 + 2 * c12 > 0) & (c44 > 0), axis=1)
+            if int(valid.sum()) >= trajectories:
+                samples = paths[valid][:trajectories].reshape(trajectories * length, len(names))
+                break
+            candidate_count *= 2
+            if candidate_count > int(options.get('max_candidate_trajectories', 1048576)):
+                raise ValueError('too few complete Born-stable Morris trajectories within the requested box')
+        destinations = {row['target']: name for name, row in table['parameters'].items()}
+        fixed_names = {'/main/electrode_param/setHeight': 'electrode_height_um',
+                       '/main/electrode_param/setWidth': 'electrode_width_um',
+                       '/main/electrode_param/setIsland': 'electrode_island_um',
+                       '/main/electrode_param/setIslandSpacing': 'electrode_island_spacing_um'}
+        specs = [{'name': name, 'bounds': list(row[2]), 'unit': row[3].strip() if len(row) > 3 else '',
+                  'destination': 'postprocess' if name in ('f_01', 'r', 's', 'I_ph', 'pt', 'n_cooper')
+                                 else 'macro' if name.startswith('/') else 'lattice'}
+                 for name, row in zip(names, entries)]
+        study['morris_design'] = {'problem': problem, 'parameter_specs': specs, 'seed': seed,
+                                  'levels': levels, 'trajectories': trajectories,
+                                  'candidate_trajectories': candidate_count,
+                                  'rejected_trajectories': candidate_count - int(valid.sum())}
+        specified = []
+        for i, sample_row in enumerate(samples):
+            values, macro, config, ode, fixed = {}, {}, {}, {}, {}
+            for name, entry, value in zip(names, entries, sample_row):
+                value = float(value)
+                unit = entry[3].strip() if len(entry) > 3 else ''
+                if name in ('f_01', 'r', 's', 'I_ph', 'pt', 'n_cooper'):
+                    ode[name] = value
+                    continue
+                if name.startswith('/'):
+                    macro[name] = f'{value:.12g}' + (f' {unit}' if unit else '')
+                    target = 'macro:' + name
+                    if name in fixed_names:
+                        fixed[fixed_names[name]] = value
+                else:
+                    if unit.startswith('e-'):
+                        exponent, unit = unit.split(' ', 1)
+                        value *= float('1' + exponent)
+                    config[name] = [value, unit]
+                    target = 'config:' + name
+                if target in destinations:
+                    values[destinations[target]] = value
+            transport = {'values': values, 'macro': macro, 'config': config, 'fixed': fixed,
+                         'trajectory': i // length}
+            specified.append({'name': f'morris_{i:04d}', **transport, 'ode': ode,
+                              'inputs': dict(zip(names, map(float, sample_row))),
+                              'design_index': i, 'transport_group': records.content_hash(transport)})
+    specified = specified or [{'name': 'reference', 'values': {}}]
+    if len({point.get('name') for point in specified}) != len(specified):
+        raise ValueError('candidate names must be unique')
+    return specified
+
+
+def prepare_environment(installation):
+    scripts=[str(Path(p).expanduser().resolve()) for p in installation.get('environment_scripts',[])]
+    if any(not Path(p).is_file() for p in scripts):
+        raise ValueError('an installation environment script is missing')
+    if scripts:
+        command='set -e; set +u; for source_file in "$@"; do source "$source_file" >&2; done; env -0'
+        completed=subprocess.run(['bash','--noprofile','--norc','-c',command,'scan-env',*scripts],capture_output=True,check=True)
+        env=dict(item.split('=',1) for item in completed.stdout.decode().split('\0') if '=' in item)
+    else:
+        env=dict(os.environ)
+    for key,value in installation.get('data_paths',{}).items():
+        path=Path(value).resolve()
+        if not key.startswith('G4') or 'DATA' not in key or not path.is_dir():
+            raise ValueError('simulator data overrides require existing G4 data directories')
+        env[key]=str(path)
+    library=installation.get('library_dir')
+    if library:
+        env['LD_LIBRARY_PATH']=str(library)+(':'+env['LD_LIBRARY_PATH'] if env.get('LD_LIBRARY_PATH') else '')
+    for key in ('OMP_NUM_THREADS','MKL_NUM_THREADS','OPENBLAS_NUM_THREADS','NUMEXPR_NUM_THREADS'):
+        env[key]='1'
+    executable=Path(installation['executable'])
+    if not executable.is_file() or not os.access(executable,os.X_OK):
+        raise ValueError(f'executable unavailable: {executable}')
+    libraries={}
+    if os.name=='posix':
+        output=subprocess.run(['ldd',str(executable)],env=env,capture_output=True,text=True,check=False).stdout
+        if 'not found' in output:
+            raise ValueError('a simulator shared library is unavailable')
+        for path in re.findall(r'(/\S+)\s+\(',output):
+            if Path(path).is_file(): libraries[path]=records.sha256_file(path)
+    identity={'executable':str(executable.resolve()),'executable_sha256':records.sha256_file(executable),
+              'libraries':libraries,'scripts':{p:records.sha256_file(p) for p in scripts},
+              'template_sha256':records.sha256_file(installation['macro_template']),
+              'data_paths':{k:v for k,v in env.items() if k.startswith('G4') and ('DATA' in k or 'LIB' in k)},
+              'renderer_sha256':records.sha256_file(__file__)}
+    return env,identity
+
+
+def verify_previous_inputs(study, candidates, output, build):
+    """Retain an earlier transport identity only after exact input comparison."""
+    path=output/'build.json'
+    if not path.exists(): return build
+    previous=records.load_document(path)
+    if previous==build: return build
+    changed={key for key in previous.keys()|build.keys() if previous.get(key)!=build.get(key)}
+    if changed!={'renderer_sha256'} or candidates is None:
+        raise ValueError('simulator/build changed; use a new output directory')
+    checked=[]
+    with records.Results(output/'results.sqlite',create=False) as results:
+        saved={row['task_id']:row for row in results.tasks()}
+        for candidate in candidates:
+            prepared=physics.prepare_values(study,candidate)
+            prepared.update({key:candidate[key] for key in ('macro','config','ode','trajectory') if key in candidate})
+            lattice,base=input_text(prepared,study['installation'])
+            for task in task_plan(study,prepared,previous):
+                old=saved.get(task['task_id'])
+                if old is None or old['input']!=task or old['status']!='complete' or not old.get('result',{}).get('paths'):
+                    raise ValueError('earlier task inputs are unavailable for source comparison; use a new output directory')
+                paths=old['result']['paths']
+                if not old['result'].get('sha256') or not Path(old['result'].get('output','')).is_file() or not Path(paths['witness']).is_file():
+                    raise ValueError('earlier measured output or completion marker is unavailable')
+                config=Path(paths['lattice_root'])/prepared['derived']['lattice_map_name']/'config.txt'
+                macro=Path(paths['macro'])
+                for kind,source in (('macro',macro),('lattice',config)):
+                    if not source.is_file() or records.sha256_file(source)!=paths['input_sha256'][kind]:
+                        raise ValueError(f'earlier {kind} input differs from its recorded checksum')
+                recorded=macro.read_text()
+                output_command=next(row.split(None,1)[1] for row in recorded.splitlines() if row.startswith('/g4cmp/HitsFile '))
+                completion=next(row.split(None,1)[1] for row in recorded.splitlines() if row.startswith('/control/shell '))
+                if len(shlex.split(completion))!=2 or shlex.split(completion)[0]!='touch':
+                    raise ValueError('earlier completion command is not a single touch')
+                text=replace_commands(base,{'/g4cmp/HitsFile':output_command,
+                    '/main/gun/setPosition':' '.join(map(str,task['site_mm']))+' mm','/run/beamOn':str(task['events'])})
+                block=f"/random/setSeeds {task['seeds'][0]} {task['seeds'][1]}\n/run/beamOn {task['events']}\n/control/shell {completion}"
+                text=text.replace('/run/beamOn '+str(task['events']),block)
+                if recorded!=text or config.read_text()!=lattice:
+                    raise ValueError('rendered physical inputs differ; use a new output directory')
+                checked.append({'task_id':task['task_id'],'input_sha256':paths['input_sha256']})
+    if not checked: raise ValueError('no earlier physical inputs are available for source comparison')
+    provenance={'previous_build':previous,'current_source_build':build,'checked_tasks':checked,
+                'agreement':'identical executable, libraries, template, data paths, lattice and macro bytes; identical sites, seeds and primary counts'}
+    records.write_json(output/('source-comparison-'+build['renderer_sha256']+'.json'),provenance)
+    return previous
+
+
+def replace_commands(text, settings, *, require=True):
+    lines=text.splitlines()
+    for command,value in settings.items():
+        matches=[i for i,line in enumerate(lines) if line.strip().split(' ',1)[0]==command]
+        if not matches:
+            matches=[i for i,line in enumerate(lines) if line.strip().lstrip('#').strip().split(' ',1)[0]==command]
+        if not matches:
+            if require: raise ValueError(f'missing required command {command}')
+            lines.append(f'{command} {value}')
+        else:
+            lines[matches[0]]=f'{command} {value}'
+            for i in matches[1:]: lines[i]='# '+lines[i]
+    return '\n'.join(lines)+'\n'
+
+
+def validate_macro(text):
+    commands=[row.split() for row in text.splitlines() if row.strip().startswith('/')]
+    if sum(row[0]=='/run/beamOn' for row in commands)!=1:
+        raise ValueError('exactly one beamOn command is required')
+    for tokens in commands:
+        if tokens[0] in ('/control/shell','/control/execute','/g4cmp/HitsFile',
+                         '/main/detector_param/setSubstrateName','/main/detector_param/setSubstrateG4Name',
+                         '/main/gun/setGunType','/main/sensor/setHitType') or tokens[0].endswith('SourceMat'): continue
+        for value in tokens[1:]:
+            value=value.rstrip(',')
+            if value and value[0] in '+-.0123456789':
+                try: float(value)
+                except ValueError as exc: raise ValueError(f'malformed macro number: {value}') from exc
+    beam=next(i for i,row in enumerate(commands) if row[0]=='/run/beamOn')
+    if beam==0 or commands[beam-1][0]!='/random/setSeeds' or beam+1==len(commands) or commands[beam+1][0]!='/control/shell':
+        raise ValueError('random seeds and completion marker must surround beamOn')
+
+
+def input_text(prepared, installation):
+    """Render the candidate lattice and common macro once before task dispatch."""
+    derived=prepared['derived']; point=prepared['values']; fixed=prepared['fixed']
+    top,bottom=prepared['top_film'],prepared['bottom_film']
+    text=prepared['source_text']
+    settings={'vsound':f"{derived['vsound_m_s']:.12g} m/s",'vtrans':f"{derived['vtrans_m_s']:.12g} m/s"}
+    if derived['config_mode']=='pseudo_si_base':
+        for key,name,unit in [('cubic','sub_lattice_a','Ang'),('stiffness 1 1','sub_c11','GPa'),('stiffness 1 2','sub_c12','GPa'),
+                             ('stiffness 4 4','sub_c44','GPa'),('scat','sub_scat','s3'),('decay','sub_decay','s4'),('decayTT','sub_decayTT','')]:
+            settings[key]=f'{point[name]:.12g} {unit}'.strip()
+    for key,(value,unit) in prepared.get('config',{}).items(): settings[key]=f'{value:.12g} {unit}'.strip()
+    for key,value in settings.items():
+        parts=text.splitlines(); indexes=[i for i,row in enumerate(parts) if row.strip().startswith(key+' ')]
+        if len(indexes)>1: raise ValueError(f'duplicate lattice field {key}')
+        if indexes: parts[indexes[0]]=f'{key} {value}'
+        else: parts.append(f'{key} {value}')
+        text='\n'.join(parts)+'\n'
+    commands={'/main/detector_param/setSubstrateG4Name':derived['g4_material_name'],
+              '/main/detector_param/setSubstrateName':derived['lattice_map_name'],
+              '/main/gun/setEnergy':f"{fixed['gun_energy_eV']} eV",'/g4cmp/minEPhonons':f"{fixed['min_e_phonons_eV']} eV",
+              '/main/detector_param/setMiller':' '.join(map(str,derived.get('miller',point.get('miller',[0,0,1])))),
+              '/main/detector_param/setLatticeDeg':point.get('lattice_deg',45.),
+              '/g4cmp/temperature':f"{point.get('temperature',fixed.get('temperature_K',0.))} K"}
+    if fixed.get('gun_type','phonon_Caustic')!='phonon_Caustic':
+        raise ValueError('this phonon study requires gun_type=phonon_Caustic')
+    for key in ('setTopAbs','setTopFilmAbs','setBotAbs'): commands['/main/detector_param/'+key]=derived[key]
+    for key in ('setTopVSound','setTopGap','setTopQPLim','setTopPhLifetime','setTopPhLifetimeSlope',
+                'setWallAbs','setTopPSpecProb','setTopFilmPSpecProb','setBotPSpecProb','setWallPSpecProb'):
+        commands['/main/detector_param/'+key]=fixed[key]
+    for key,unit in (('setTopThickness_um','um'),('setSubWidth_mm',''),('setSubHeight_mm',''),('setSubThickness_um','')):
+        commands['/main/detector_param/'+key.rsplit('_',1)[0]]=f'{fixed[key]} {unit}'.strip()
+    for prefix,film in (('setTopFilm',top),('setBot',bottom)):
+        for suffix,key in [('SourceMat','g4_material'),('VSound','vsound_km_s'),('Gap','gap_eV'),('QPLim','qp_limit'),('PhLifetime','ph_lifetime_ns')]:
+            commands['/main/detector_param/'+prefix+suffix]=film[key]
+        commands['/main/detector_param/'+prefix+'Thickness']=f"{film['thickness_um']} um"
+    commands['/main/detector_param/setTopFilmPhLifetimeSlope']=top.get('ph_lifetime_slope',.29)
+    commands['/main/detector_param/setBotGapThres']=bottom['gap_threshold_eV']
+    for key in ('chargeBounces','phononBounces'): commands['/g4cmp/'+key]=fixed[key]
+    for key in ('clearance_mm','eTrappingMFP_mm','hTrappingMFP_mm'):
+        commands['/g4cmp/'+key.rsplit('_',1)[0]]=f'{fixed[key]} mm'
+    for suffix,key in [('Width','electrode_width_um'),('Height','electrode_height_um'),('Island','electrode_island_um'),('IslandSpacing','electrode_island_spacing_um')]:
+        commands['/main/electrode_param/set'+suffix]=str(fixed[key])+(' um' if suffix.startswith('Island') else '')
+    for suffix,key in [('XLocations','electrode_x_mm'),('YLocations','electrode_y_mm')]:
+        commands['/main/electrode_param/set'+suffix]=', '.join(f'{v:.6f}' for v in fixed[key])
+    commands.update(prepared.get('macro',{}))
+    template=installation.get('template_text') or Path(installation['macro_template']).read_text()
+    return text,replace_commands(template,commands)
+
+
+def render_inputs(prepared, task, installation, directory):
+    directory=Path(directory).resolve(); directory.mkdir(parents=True,exist_ok=False)
+    derived=prepared['derived']; lattice_dir=directory/'CrystalMaps'/derived['lattice_map_name']
+    lattice_dir.mkdir(parents=True)
+    lattice,base=prepared.get('input_text') or input_text(prepared,installation)
+    (lattice_dir/'config.txt').write_text(lattice)
+    output=directory/'hits.csv'; witness=directory/'complete'; macro=directory/'run.mac'; log=directory/'run.log'
+    text=replace_commands(base,{'/g4cmp/HitsFile':str(output),'/main/gun/setPosition':' '.join(map(str,task['site_mm']))+' mm','/run/beamOn':str(task['events'])})
+    block=f"/random/setSeeds {task['seeds'][0]} {task['seeds'][1]}\n/run/beamOn {task['events']}\n/control/shell touch {shlex.quote(str(witness))}"
+    text=text.replace('/run/beamOn '+str(task['events']),block)
+    validate_macro(text); macro.write_text(text)
+    return {'directory':str(directory),'macro':str(macro),'output':str(output),'witness':str(witness),'log':str(log),
+            'lattice_root':str(directory/'CrystalMaps'),'expected_material':derived['g4_material_name'],
+            'expected_density_kg_m3':derived['substrate_density_kg_m3'],'density_probe':derived.get('density_probe',False),
+            'input_sha256':{'macro':records.sha256_file(macro),'lattice':records.sha256_file(lattice_dir/'config.txt')}}
+
+
+def process_stats(pid, *, children=True):
+    if not Path('/proc/self/stat').exists(): return None
+    try:
+        if int(Path('/proc/self/stat').read_text().split(' ',1)[0])!=os.getpid(): return None
+        queue=[pid]; ticks=0; memory=0
+        while queue:
+            current=queue.pop()
+            fields=Path(f'/proc/{current}/stat').read_text().rsplit(')',1)[1].split()
+            ticks+=int(fields[11])+int(fields[12]); memory+=int(fields[21])*os.sysconf('SC_PAGE_SIZE')
+            child=Path(f'/proc/{current}/task/{current}/children')
+            if children and child.exists(): queue.extend(map(int,child.read_text().split()))
+        return ticks,memory
+    except (OSError,ValueError,IndexError): return None
+
+
+def stop_process(process):
+    if process.poll() is not None: return
+    try: os.killpg(process.pid,signal.SIGKILL)
+    except (ProcessLookupError,PermissionError): process.kill()
+
+
+def memory_headroom():
+    """Host/cgroup available bytes; only inactive file cache receives credit."""
+    available=None; limiting=None; raw_available=None
+    for row in Path('/proc/meminfo').read_text().splitlines():
+        if row.startswith('MemAvailable:'): available=int(row.split()[1])*1024; break
+    for row in Path('/proc/self/cgroup').read_text().splitlines():
+        if not row.startswith('0::'): continue
+        root=Path('/sys/fs/cgroup'); leaf=root/row.split('::',1)[1].lstrip('/')
+        for path in (leaf,*leaf.parents):
+            if path!=root and root not in path.parents: continue
+            maximum,current=path/'memory.max',path/'memory.current'
+            if not maximum.is_file() or not current.is_file(): continue
+            value=maximum.read_text().strip()
+            if value=='max': continue
+            usage=int(current.read_text()); residual=max(0,int(value)-usage)
+            raw_available=residual if raw_available is None else min(raw_available,residual)
+            stat=path/'memory.stat'; inactive=0
+            if stat.is_file():
+                for item in stat.read_text().splitlines():
+                    if item.startswith('inactive_file '): inactive=max(0,min(usage,int(item.split()[1]))); break
+            residual=max(0,int(value)-usage+inactive)
+            if available is None or residual<available: available,limiting=residual,str(path)
+    return {'available_bytes':available,'limiting_cgroup':limiting,
+            'raw_unreclaimed_headroom_bytes':raw_available if raw_available is not None else available}
+
+
+def monitor_processes(active,lock,limits,stop_event=None):
+    now=time.monotonic()
+    with lock:
+        rows=list(active.values())
+        parent=process_stats(os.getpid(),children=False)
+        total=parent[1] if parent else 0
+        for row in rows:
+            stats=process_stats(row['process'].pid); size=sum(Path(row[k]).stat().st_size if Path(row[k]).exists() else 0 for k in ('log','output'))
+            if stats:
+                total+=stats[1]; row['peak_rss_bytes']=max(row.get('peak_rss_bytes',0),stats[1])
+                progress=(stats[0],size)
+                if progress!=row.get('progress'): row.update(progress=progress,last_change=now)
+            reason=None
+            if limits.get('timeout_s') and now-row['started']>limits['timeout_s']: reason='timeout'
+            elif stats and limits.get('stall_timeout_s') and now-row.get('last_change',now)>limits['stall_timeout_s']: reason='stalled'
+            elif stats and stats[1]>limits.get('per_task_mem_gb',float('inf'))*1024**3: reason='memory_limit'
+            if reason:
+                row['stopped_reason']=reason; stop_process(row['process'])
+        if total>limits.get('total_mem_gb',float('inf'))*1024**3:
+            for row in sorted(rows,key=lambda r:r.get('peak_rss_bytes',0),reverse=True):
+                row['stopped_reason']='total_memory_limit'; stop_process(row['process']); break
+        headroom=memory_headroom()
+        if headroom['available_bytes'] is not None and headroom['available_bytes']<limits.get('system_mem_reserve_gb',16)*1024**3:
+            if stop_event is not None: stop_event.set()
+            for row in rows:
+                row['stopped_reason']='system_memory_limit'; stop_process(row['process'])
+            raise RuntimeError('host or cgroup memory reserve reached; restart after memory is available')
+
+
+def run_task(task, prepared, installation, environment, directory, active=None, lock=None, stop_event=None):
+    paths=render_inputs(prepared,task,installation,directory)
+    env=dict(environment); env['G4LATTICEDATA']=paths['lattice_root']
+    active={} if active is None else active; lock=lock or threading.Lock()
+    started=time.monotonic(); row={**paths,'started':started,'last_change':started}
+    with open(paths['log'],'xb') as log:
+        with lock:
+            if stop_event is not None and stop_event.is_set():
+                return {'status':'interrupted','reason':'launch stopped','elapsed_s':time.monotonic()-started,'paths':paths}
+            process=subprocess.Popen([installation['executable'],paths['macro']],cwd=paths['directory'],env=env,
+                                     stdin=subprocess.DEVNULL,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
+            row['process']=process
+            active[task['task_id']]=row
+        try: returncode=process.wait()
+        finally:
+            with lock: active.pop(task['task_id'],None)
+    elapsed=time.monotonic()-started
+    if row.get('stopped_reason'):
+        return {'status':'timeout' if row['stopped_reason'] in ('timeout','stalled') else 'failed','reason':row['stopped_reason'],
+                'elapsed_s':elapsed,'peak_rss_bytes':row.get('peak_rss_bytes'),'paths':paths,'returncode':returncode}
+    try:
+        if not Path(paths['witness']).is_file(): raise ValueError('missing post-beamOn completion marker')
+        if returncode not in (0,139,-signal.SIGSEGV): raise ValueError(f'simulator exit status {returncode}')
+        path=Path(paths['output'])
+        if not path.is_file() or not path.stat().st_size: raise ValueError('missing or zero-byte hit file')
+        with path.open() as handle:
+            header=handle.readline()
+        if not all(name in header for name in ('Energy Deposited [eV]','End X [m]','End Y [m]','End Z [m]','Final Time [ns]')):
+            raise ValueError('hit file lacks required columns')
+        text=Path(paths['log']).read_text(errors='replace')
+        match=re.search(r'Material:\s+(\S+).*?density:\s+([\d.eE+-]+)',text)
+        if not match: raise ValueError('missing runtime material and density')
+        if float(match[2])<=0 or match[1]!=paths['expected_material'] or (not paths.get('density_probe') and abs(float(match[2])*1000/paths['expected_density_kg_m3']-1)>.03):
+            raise ValueError('runtime material or density differs from physical input')
+        result={'output':str(path),'sha256':records.sha256_file(path),'bytes':path.stat().st_size,
+                'runtime_material':match[1],'runtime_density_kg_m3':float(match[2])*1000,
+                'teardown_fault':returncode!=0}
+    except (ValueError,OSError) as exc:
+        return {'status':'invalid','reason':str(exc),'elapsed_s':elapsed,'peak_rss_bytes':row.get('peak_rss_bytes'),'paths':paths,'returncode':returncode}
+    return {'status':'complete','elapsed_s':elapsed,'returncode':returncode,'peak_rss_bytes':row.get('peak_rss_bytes'),
+            'paths':paths,**result}
+
+
+def probe_density(material, study, output):
+    """Read a named Geant4 density; this diagnostic does not model that compound."""
+    from concurrent.futures import ThreadPoolExecutor
+    if not re.fullmatch(r'G4_[A-Za-z0-9_]+',material):
+        raise ValueError('expected one named Geant4 material')
+    root=Path(output).resolve(); root.mkdir(parents=True,exist_ok=True)
+    prepared=physics.prepare_values(study)
+    prepared['derived'].update(g4_material_name=material,density_probe=True)
+    environment,build=prepare_environment(study['installation'])
+    task={'task_id':'density-probe','events':1,'seeds':[41,42],'site_mm':study['design']['sites_mm'][0]}
+    active={}; lock=threading.Lock(); stop_event=threading.Event()
+    pool=ThreadPoolExecutor(max_workers=1); future=None
+    try:
+        future=pool.submit(run_task,task,prepared,study['installation'],environment,root/'attempt',active,lock,stop_event)
+        while not future.done():
+            monitor_processes(active,lock,{'timeout_s':60,'stall_timeout_s':30,'per_task_mem_gb':2,'total_mem_gb':2},stop_event)
+            time.sleep(.1)
+        result=future.result()
+    finally:
+        close_workers(pool,[future] if future is not None else [],active,lock,stop_event)
+    if result['status']!='complete':
+        raise RuntimeError('density probe failed: '+result.get('reason','unknown'))
+    report={'material':material,'density_kg_m3':result['runtime_density_kg_m3'],'build':build,
+            'log':result['paths']['log'],'scope':'Density measurement only; the Si lattice is a diagnostic placeholder.'}
+    records.write_json(root/'density.json',report)
+    return report
+
+
+if __name__ == "__main__":
     raise SystemExit(main())
