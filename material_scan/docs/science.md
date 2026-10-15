@@ -52,31 +52,29 @@ The recorded designs instead inject over `[-4, 4] mm × [-4, 4] mm`, an
 This region is split by distance from the exact 10 µm by 10 µm junction
 rectangles:
 
-The following 128-site example is historical; it is not the revised queue's
-128-site allocation.
+| Region | Area fraction |
+|---|---:|
+| inside an electrode rectangle | 0.0000266 |
+| within 0.05 mm of an electrode | 0.002637 |
+| 0.05–0.20 mm away | 0.032862 |
+| 0.20–0.50 mm away | 0.178481 |
+| remaining injection area | 0.785995 |
 
-| Region | Area fraction | Historical 128-site example |
-|---|---:|---:|
-| inside an electrode rectangle | 0.0000266 | 19 |
-| within 0.05 mm of an electrode | 0.002637 | 23 |
-| 0.05–0.20 mm away | 0.032862 | 28 |
-| 0.20–0.50 mm away | 0.178481 | 22 |
-| remaining injection area | 0.785995 | 36 |
-
-The revised queue uses these explicit counts, in the same region order:
+The current comparisons use at most 1,024 sites, with these counts:
 
 | Sites | Junctions | 0–0.05 mm | 0.05–0.20 mm | 0.20–0.50 mm | Bulk |
 |---|---:|---:|---:|---:|---:|
+| 128 | 34 | 16 | 24 | 24 | 30 |
 | 512 | 68 | 64 | 128 | 128 | 124 |
-| 2,653 | 68 | 64 | 256 | 415 | 1,850 |
-| 3,041 | 136 | 128 | 512 | 415 | 1,850 |
+| 1,024 | 136 | 128 | 256 | 256 | 248 |
 
-The 2,653-site design appends to the fresh queue's recorded 2,361 sites; the
-3,041-site design appends to those 2,653 sites. Existing positions and area
-weights remain unchanged. This sequence is separate from the inherited
-historical layouts and from the revised 512-site search layout. Independent
-position layouts use their own position seeds and the same selected counts and
-area weights; they do not retain a previous layout's prefix.
+The 128-site design is a pilot. The 1,024-site design appends positions to the
+corrected, recorded 512-site design; its first 512 positions and all area weights
+remain unchanged. Four additional 1,024-site layouts use independent position
+seeds and the same region counts and area weights. They have no retained
+positions from an earlier layout. Completed historical 2,361-site measurements
+remain available; the unfinished 2,653-site study was cancelled and larger
+studies are omitted from the current comparisons.
 
 Near electrodes are deliberately oversampled. If region `h` has true area
 fraction `W_h` and mean response `μ_h`, the estimator is
@@ -128,8 +126,8 @@ domains:
 The first includes layout variation and finite transport noise. The second
 conditions on layout `k` and measures transport noise alone. More primaries
 can reduce transport noise while leaving spatial integration error unresolved.
-The revised queue uses four independent layouts and a Student-t 95% interval
-`bar J ± t_(0.975,K−1) SE_layout`, with relative precision
+The current comparison uses four independent 1,024-site layouts and a
+Student-t 95% interval `bar J ± t_(0.975,K−1) SE_layout`, with relative precision
 `SE_layout / |bar J| ≤ 0.02`.
 
 The independent-layout mean must also agree with the selected retained-layout
@@ -149,15 +147,21 @@ reported. All these checks hold `W_h` fixed; they support statistical equivalenc
 of the integral approximations under the model and do not prove absence of
 systematic bias.
 
-For a nested coarse/fine comparison, the site bootstrap retains shared-site
-covariance and each region's own site-count denominator. With
+For the nested 512/1,024-site comparison, both estimates use the 1,024-site
+transport results: the coarse estimate retains the first 512 sites. A separate
+512-site run uses an independent transport seed bank and provides an additional
+measurement. The nested site bootstrap retains shared-site covariance and each
+region's own site-count denominator. With
 `ΔJ = J_fine − J_coarse`, the full 95% interval must lie inside
 `(−0.05 J_fine, +0.05 J_fine)`. Each region that gains sites must also have
 its mean-change interval inside `±0.05 |μ_fine,h|`. A small or unresolved
 point difference alone does not pass these tests. Nested intervals describe
 that retained-layout contrast; the independent-layout precision check supplies
-separate evidence about position integration. Source validation stops the
-queue before later expensive studies if the required checks fail.
+separate evidence about position integration. The current queue records all
+spatial and primary-count checks, then stops for review whether the criteria
+pass or fail. No optimization or larger spatial refinement starts automatically.
+The chosen limit of 1,024 sites does not establish spatial convergence; an
+unresolved interval or a failed precision check remains unresolved at that limit.
 
 ## Crystal direction
 

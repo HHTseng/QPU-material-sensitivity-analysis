@@ -131,108 +131,93 @@ and verifies its contents. Historical raw data should have two independently
 verified copies before any later removal.
 
 <!-- full-scale-start -->
-## Revised full-scale measurements
+## Source and primary-count comparisons up to 1,024 sites
 
-The revised queue in [`studies/full_scale/queue.yaml`](studies/full_scale/queue.yaml)
-retains complete evidence from `material_scan_data/full_scale_20261014` and adds
-the missing validation. The previous 2,361-site comparison finished and its
-archives passed persistent-copy verification. The revised tmux queue
-`full_scale_20261014_revised` started on 2026-10-14; at 22:23 EDT its
-recorded state was `running` for `source-2653`. All 53 stage
-declarations were checked; the current full test suite passes 160 tests.
-The completed 0 K and 20 mK comparisons are retained. The main temperature
-remains 20 mK.
-The continuous search requires an upper-film
-gap of at least 1.5384 meV. Linked Ta/Ti checks retain their own gaps.
+The queue in [`studies/full_scale/queue.yaml`](studies/full_scale/queue.yaml)
+is limited to **1,024 source sites** and stops after the initial comparisons.
+The unfinished 2,653-site study was cancelled on 2026-10-14. Its 6,105 completed
+task measurements are retained separately from 57,567 unmeasured tasks; this
+partial study supplies no complete candidate comparison. Earlier completed
+measurements, including the 2,361-site comparison and the 0 K/20 mK checks,
+remain historical evidence. No further study above 1,024 sites will start.
 
-The recorded 2,361-site layout is extended to 2,653 and then 3,041 sites without
-changing earlier positions or area weights. The five regions are the junctions
-($S_0$), the successive 0.05, 0.20 and 0.50 mm distance bands ($S_1,S_2,S_3$),
-and the remaining source area ($S_4$). Explicit counts ensure that added sites
-resolve near-junction variation:
+The source remains uniform over 8 × 8 mm² at 20 mK, with 10 meV primary phonons.
+The upper-film gap restriction remains 1.5384 meV. The five spatial regions are
+junction rectangles ($S_0$), successive distance bands of 0.05, 0.20 and 0.50 mm
+($S_1,S_2,S_3$), and the remaining source area ($S_4$):
 
 | Sites | $S_0$ | $S_1$ | $S_2$ | $S_3$ | $S_4$ |
 |---|---:|---:|---:|---:|---:|
 | 128 | 34 | 16 | 24 | 24 | 30 |
 | 512 | 68 | 64 | 128 | 128 | 124 |
-| 2,653 | 68 | 64 | 256 | 415 | 1,850 |
-| 3,041 | 136 | 128 | 512 | 415 | 1,850 |
+| 1,024 | 136 | 128 | 256 | 256 | 248 |
 
-Spatial checks use eight transport realizations and 62,500 primaries per task.
-The confidence interval for the total and each refined region's change must
-fit within the declared ±5% margin. Four independent position layouts then
-check the selected 2,653- or 3,041-site resolution. Their mean must also agree
-with the retained layout's estimate: the entire 95% difference interval must
-fit inside ±5% of the independent mean. This interval combines the layout and
-retained hierarchical standard errors in quadrature and uses a conservative
-Student-t critical value with three degrees of freedom. Area weights remain
-fixed and regional shifts are reported. Source validation stops the queue
-before the remaining expensive studies if required interval containment fails
-or the independent-layout relative standard error exceeds 2%. Passing supports
-statistical equivalence of the integral approximations under these assumptions;
-systematic bias may remain. Extra primaries alone cannot resolve uncertainty
-from source positions.
+The recorded corrected 512 sites and region area fractions $W_h$ remain fixed.
+The 1,024-site layout appends positions within each region. Its nested comparison
+recomputes the 512-site estimate from the shared prefix of the same outputs,
+retaining covariance. A separate 512-site study uses its own transport streams.
+Four independently generated 1,024-site layouts measure position uncertainty.
 
-The queue also covers primary-count convergence, the soft $C_{44}$ limit,
-transport and density sensitivity, eighteen linked-material cases, and three
-seeds each for GP and CMA-ES. Search uses the 512-site allocation above and
-requires 120 successful measurements per optimizer; incomplete attempts have
-no measured response. Finalists and anchors are confirmed on four additional
-independent layouts with sixteen realizations and unused transport streams.
-Physical-tolerance checks measure the two selected centers once; rate and
-interface checks measure their three centers once. Perturbation batches reuse
-those centers with matched positions and streams. These checks test the stated
-model assumptions and do not establish measured SiC coefficients or validated
-interface transmission.
+| Comparison | Sites | Realizations | Primaries per task | Candidates |
+|---|---:|---:|---:|---:|
+| Pilot | 128 | 2 | 31,250 | 1 |
+| Nested layouts | 512 and 1,024 | 8 | 62,500 | 3 |
+| Four independent layouts | 1,024 each | 8 | 62,500 | 3 |
+| Primary-count variation | 512 | 8 | 31,250; 125,000; 500,000 | 2 |
 
-[`run_all.sh`](run_all.sh) executes the stages sequentially and freezes the
-five modules, physical inputs, executable, libraries, lattice maps and Geant4
-datasets before transport. The revised output directory is
-`material_scan_data/full_scale_20261014_revised`; repeat `run` to resume checked
-work. The planned launch uses its own tmux session after transition verification:
+The spatial candidates are the reference, the $C_{44}=1$ GPa test and the
+SiC-derived model. Primary-count checks use the first two. Spatial checks
+report 95% intervals for the total and each refined region, a ±5% equivalence
+margin, a 2% relative standard-error criterion for independent layouts, and a
+10% upper limit on any single site's contribution to the estimated total.
+Primary-count errors condition on the fixed source positions. All results and
+failed criteria are retained. **The 1,024-site limit does not establish spatial
+convergence.** The queue stops for review after these checks, regardless of
+whether they pass. Search, linked-material, tolerance and model-range studies
+remain deferred until the results are reviewed.
+
+[`run_all.sh`](run_all.sh) freezes the scientific code, physical inputs,
+executable, libraries, lattice maps and Geant4 datasets before transport.
+The new run directory and tmux session are `initial_checks_1024_20261014`:
 
 ```bash
-bash run_all.sh check material_scan_data/full_scale_20261014_revised
-bash run_all.sh prepare material_scan_data/full_scale_20261014_revised
-tmux -L material-scan new-session -d -s full_scale_20261014_revised \
-  'bash run_all.sh run material_scan_data/full_scale_20261014_revised > material_scan_data/full_scale_20261014_revised/queue.log 2>&1'
-bash run_all.sh status material_scan_data/full_scale_20261014_revised
-bash run_all.sh stop material_scan_data/full_scale_20261014_revised
+bash run_all.sh check
+bash run_all.sh prepare
+tmux -L material-scan new-session -d -s initial_checks_1024_20261014 \
+  'bash run_all.sh run > material_scan_data/initial_checks_1024_20261014/queue.log 2>&1'
+bash run_all.sh status
+bash run_all.sh stop
 ```
 
-At most half the available CPU affinity is used: on this machine 96 of 192
-logical CPUs, with 94 transport workers and one numerical thread per process.
-The total RSS limit is 64 GiB, each transport process is limited to 2 GiB, and
-16 GiB of available memory and 20 GiB of free disk are reserved. Memory checks
-include ancestor cgroup limits. A task exceeding six hours is right-censored;
-missing output never supplies a zero response.
+There are 10 measured studies and one source-validation step, totaling
+**13.832 billion primary phonons**. At the earlier measured rate of
+0.25–0.40 million primaries/s and 10–20% extra processing time, the conditional
+estimate is **about 11–19 hours**, excluding interruptions and long-running
+transport cases. The live status and launch record below supersede this estimate
+as new measurements finish.
 
-Completed stages are compressed, fully verified, and retained both under
+At most half the available CPU affinity is used: 96 of 192 logical CPUs on this
+machine, with 94 transport workers and one numerical thread per process.
+The total RSS limit is 64 GiB, each transport process is limited to 2 GiB,
+and 16 GiB of available memory and 20 GiB of free disk are reserved. Memory
+checks include ancestor cgroup limits. Failed, incomplete or timed-out tasks
+have no measured response.
+
+Completed studies have two fully verified archive copies: under
 `material_scan_data/` and on the independent persistent filesystem at
-`/data/htseng/material-scan-archives`. Both copies must pass verification before
-raw working files are removed. Recovery uses
-`python scan.py recover ARCHIVE --output DIRECTORY`. Summaries record both
-archive paths and checksums. Once all declared stages finish, numerical results,
-figures and publication status are refreshed from the completed evidence. Both
-frozen source and Geant4 snapshots also have verified archives on `/data`.
+`/data/htseng/material-scan-archives`. Raw working files are removed only after
+both copies pass verification. The cancelled partial study is also preserved
+in two verified archives, with its raw files retained. Recovery uses
+`python scan.py recover ARCHIVE --output DIRECTORY`.
 
-Full-scale results remain pending. The original
-[launch verification](verification/full_scale_launch.json) and
-[timing record](verification/full_scale_eta_20261014.json) describe the earlier
-queue; they do not establish the revised launch or its completion date. The
-software comparisons below remain separate from these transport measurements.
-
-The declared revised work is approximately **566–634 billion primary phonons**,
-depending on spatial refinement and before physically infeasible moves are
-removed. At 0.25–0.40 million primaries/s with 10–20% additional processing, the
-conditional completion estimate remains **about 3–5 weeks**. Reusing centers
-avoids 58 repeated measurements: 154–176 billion primaries at the revised site
-counts. Four independent confirmation layouts provide stronger spatial checks,
-so the whole queue is not expected to gain the full time saved by center reuse.
-The [verification and timing record](verification/revised_queue_checks.json)
-contains the measured progress, source checks, design checks, and assumptions.
-A failed spatial check stops before further expensive work and requires a new
-position study; this timing range assumes the declared checks pass.
+<!-- initial-checks-start -->
+The capped queue started in tmux on **2026-10-14 at 22:55 EDT**. The pilot
+finished and its two archive copies passed verification; the 512-site comparison
+is running. **166 tests passed** before launch. The
+[launch and preservation record](verification/initial_1024_launch.json) retains
+the site counts, source checks, limits and archive checksums. Measured results
+and uncertainties will replace this paragraph after all comparisons finish.
+<!-- initial-checks-end -->
 
 <!-- full-scale-end -->
 

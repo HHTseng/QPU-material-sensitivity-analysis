@@ -1885,7 +1885,7 @@ class QueueTests(unittest.TestCase):
         return subprocess.run(['bash',str(ROOT/'run_all.sh'),mode,str(run),*map(str,arguments)],
                               cwd=self.root,env=environment,capture_output=True,text=True,timeout=30)
 
-    def queue_python(self, *functions, branch=None, scope=None, **values):
+    def queue_python(self, *functions, branch=None, scope=None, start=None, stop=None, **values):
         import ast
         import itertools
         import math
@@ -1894,15 +1894,23 @@ class QueueTests(unittest.TestCase):
         code=[node for node in tree.body if isinstance(node,ast.FunctionDef) and node.name in functions]
         self.assertEqual(len(code),len(functions))
         if scope is not None:
-            scopes=[node for node in ast.walk(tree) if isinstance(node,ast.If) and ast.unparse(node.test)==f'mode == {scope!r}']
+            condition=scope if scope.startswith('mode ') else f'mode == {scope!r}'
+            scopes=[node for node in ast.walk(tree) if isinstance(node,ast.If) and ast.unparse(node.test)==condition]
             self.assertEqual(len(scopes),1)
             tree=scopes[0]
         if branch is not None:
             matched=[node for node in ast.walk(tree) if isinstance(node,ast.If) and ast.unparse(node.test)==branch]
             self.assertEqual(len(matched),1)
             code.extend(matched[0].body)
+        if start is not None:
+            first=next(i for i,node in enumerate(tree.body) if ast.unparse(node).startswith(start))
+            last=next((i for i,node in enumerate(tree.body[first+1:],first+1)
+                       if stop and ast.unparse(node).startswith(stop)),len(tree.body))
+            code.extend(tree.body[first:last])
         namespace={'records':records,'analysis':analysis,'scan':scan,'physics':physics,
-                   'np':np,'copy':copy,'math':math,'itertools':itertools,'Path':Path,**values}
+                   'np':np,'copy':copy,'math':math,'itertools':itertools,'Path':Path,
+                   'os':os,'time':time,'sys':sys,'json':json,'shutil':shutil,
+                   'max_sites':1024,'initial_checks':False,**values}
         exec(compile(ast.Module(body=code,type_ignores=[]),'isolated queue Python','exec'),namespace)
         return namespace
 
@@ -1925,13 +1933,95 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(pair['relative_change']['n_layouts'],4)
         self.assertEqual(result['position_layouts'],[f'layout-{index}' for index in range(4)])
 
+    def test_source_limit_checks_every_declared_layout(self):
+        cfg={'studies':[{'kind':'convergence','sites':[512,1024]},
+                        {'kind':'independent_positions','sampling':{'design':1024}},
+                        {'kind':'search_comparison','sampling':{'sites':512}}]}
+        defaults={'design_counts':[128,512,1024]}
+        self.queue_python(scope="mode in ('check', 'prepare')",start='requested =',stop='allowed =',
+                          defaults=defaults,cfg=cfg)
+        for section,value in (('design',2653),('independent',2048),('convergence',1536),('design',True)):
+            with self.subTest(section=section,value=value):
+                changed_cfg=copy.deepcopy(cfg); changed_defaults=copy.deepcopy(defaults)
+                if section=='design': changed_defaults['design_counts'].append(value)
+                elif section=='independent': changed_cfg['studies'][1]['sampling']['design']=value
+                else: changed_cfg['studies'][0]['sites'].append(value)
+                with self.assertRaisesRegex(ValueError,'1 to 1024 sites'):
+                    self.queue_python(scope="mode in ('check', 'prepare')",start='requested =',stop='allowed =',
+                                      defaults=changed_defaults,cfg=changed_cfg)
+        cfg=records.load_document(ROOT/'studies/full_scale/queue.yaml')
+        limits={'workers':2,'total_mem_gb':1.,'per_task_mem_gb':.5,'system_mem_reserve_gb':0.}
+        namespace=self.queue_python('base_study',cfg=cfg,defaults=cfg['defaults'],limits=limits,
+                                    repo=ROOT,source=self.root/'absent',run=self.root)
+        with self.assertRaisesRegex(ValueError,'exceeds the 1024-site limit'):
+            namespace['base_study']('too-large',{'sites':2048,'replicas':2,'events_per_task':1})
+
+    def test_recorded_512_layout_is_retained_when_extended_to_1024(self):
+        run=self.root/'nested layouts'; run.mkdir()
+        fixed=copy.deepcopy(scan.load_study(self.raw)['fixed'])
+        allocation=dict(zip(physics.REGIONS,[68,64,128,128,124]))
+        previous=physics.build_design(fixed,{'kind':'stratified','sites':512,'position_seed':303,
+                                            'allocation':allocation,'area_samples':65536,'area_seed':0})
+        previous['design_hash']=records.content_hash({key:value for key,value in previous.items() if key!='design_hash'})
+        base_file=self.root/'recorded_512.json'; records.write_json(base_file,previous)
+        defaults=copy.deepcopy(records.load_document(ROOT/'studies/full_scale/queue.yaml')['defaults'])
+        defaults.update(base_design_file=str(base_file),design_counts=[128,512,1024],area_samples=65536)
+        defaults['allocations'].update({'512':list(allocation.values()),'1024':[136,128,256,256,248]})
+        cfg={'studies':[{'kind':'convergence','sites':[512,1024]}]}
+        self.queue_python(scope="mode in ('check', 'prepare')",start='fixed = reference',stop='independent_root =',
+                          reference={'fixed':fixed},defaults=defaults,cfg=cfg,repo=ROOT,run=run)
+        kept=records.load_document(run/'designs/stratified_512.json')
+        fine=records.load_document(run/'designs/stratified_1024.json')
+        self.assertEqual(kept,previous)
+        self.assertEqual(fine['sites_mm'][:512],previous['sites_mm'])
+        self.assertEqual(fine['stratum'][:512],previous['stratum'])
+        self.assertEqual(fine['stratum_weights'],previous['stratum_weights'])
+        self.assertEqual(fine['stratum_counts'],dict(zip(physics.REGIONS,[136,128,256,256,248])))
+        layouts=[records.load_document(run/'designs'/f'source-independent-{index:02d}_1024.json')
+                 for index in range(1,5)]
+        self.assertEqual(len({records.content_hash(layout['sites_mm']) for layout in layouts}),4)
+        self.assertTrue(all(layout['sites_mm']!=fine['sites_mm'] for layout in layouts))
+        self.assertTrue(all(layout['stratum_counts']==fine['stratum_counts'] for layout in layouts))
+        self.assertEqual(records.sha256_file(base_file),records.load_document(run/'base-design.json')['file_sha256'])
+
+    def test_stage_rejects_recorded_layout_larger_than_its_declaration(self):
+        fixed=scan.load_study(self.raw)['fixed']
+        for actual,allocation in ((512,[68,64,128,128,124]),(2653,[68,64,256,415,1850])):
+            with self.subTest(actual_sites=actual):
+                run=self.root/f'misdeclared-{actual}'; run.mkdir()
+                design=physics.build_design(fixed,{'kind':'stratified','sites':actual,'position_seed':303,
+                    'allocation':dict(zip(physics.REGIONS,allocation)),'area_samples':65536,'area_seed':0})
+                records.write_json(run/'designs/stratified_128.json',design)
+                records.write_json(run/'queue.json',[{'id':'misdeclared','kind':'pilot',
+                    'sampling':{'design':128,'replicas':2,'events_per_task':1,'seed_bank':2100}}])
+                rejected=self.queue_command('stage',run,0)
+                self.assertNotEqual(rejected.returncode,0)
+                self.assertIn('recorded source design differs from its declared count or exceeds the site limit',rejected.stderr)
+                self.assertFalse((run/'queue_status.json').exists())
+                self.assertFalse((run/'studies/misdeclared/results.sqlite').exists())
+        self.assertFalse(self.calls.exists())
+
+    def test_initial_queue_stops_before_search_and_material_studies(self):
+        cfg=copy.deepcopy(records.load_document(ROOT/'studies/full_scale/queue.yaml'))
+        convergence=next(group for group in cfg['studies'] if group['kind']=='convergence')
+        convergence['sites']=[512,1024]
+        namespace=self.queue_python(scope="mode in ('check', 'prepare')",start="queue = [{'id': 'pilot'",
+                                    stop="records.write_json(run / 'queue.json'",cfg=cfg,defaults=cfg['defaults'],
+                                    initial_checks=True,run=self.root)
+        queue=namespace['queue']; kinds={step['kind'] for step in queue}
+        self.assertEqual(kinds,{'pilot','convergence','independent_positions','source_validation','event_count_convergence'})
+        self.assertEqual([step['id'] for step in queue if step['kind']=='convergence'],['source-512','source-1024'])
+        self.assertEqual(sum(step['kind']=='independent_positions' for step in queue),4)
+        self.assertEqual(queue[-1]['kind'],'event_count_convergence')
+        self.assertFalse(kinds&{'search','confirmation','morris','explicit_tolerance','model_ranges'})
+
     def test_source_validation_rejects_imprecision_and_retained_layout_bias(self):
         for label,values,retained,precise in (('imprecise',[1.,10.,1.,10.],5.5,False),
                                              ('biased',[10.]*4,8.,True)):
             with self.subTest(label=label):
                 run=self.root/label; run.mkdir()
                 records.write_json(run/'queue.json',[{'id':'source-validation','kind':'source_validation'}])
-                records.write_json(run/'studies/source-2653/summary.json',{
+                records.write_json(run/'studies/source-1024/summary.json',{
                     'spatial_check':{'passed':True},'results':[{'name':'reference','value':retained,
                     'standard_error':0.,'estimate':{'means_by_stratum':{'region':retained}}}]})
                 for index,value in enumerate(values,1):
@@ -1939,9 +2029,12 @@ class QueueTests(unittest.TestCase):
                                        {'id':f'source-independent-{index:02d}','results':[{
                                            'name':'reference','value':value,'units':'QP/eV',
                                            'estimate':{'means_by_stratum':{'region':value},'maximum_site_leverage':.001}}]})
-                result=self.queue_command('stage',run,0)
-                self.assertNotEqual(result.returncode,0)
-                self.assertIn('source-position checks did not pass',result.stderr)
+                cfg={'studies':[{'kind':'convergence','sites':[512,1024]},
+                                {'kind':'independent_positions','check':{'relative_limit':.05}}]}
+                with self.assertRaisesRegex(ValueError,'source-position checks did not pass'):
+                    self.queue_python('mean_interval','layout_summary','selected_spatial_sites',
+                                      scope='stage',branch="step['kind'] in ('source_validation', 'finalist_validation')",
+                                      step={'kind':'source_validation'},identifier='source-validation',cfg=cfg,run=run)
                 validation=records.load_document(run/'source-validation.json')
                 self.assertTrue(validation['nested']['passed'])
                 self.assertFalse(validation['passed'])
@@ -1951,6 +2044,34 @@ class QueueTests(unittest.TestCase):
                     self.assertEqual(validation['retained_layout_agreement']['reference']['difference'],2.)
                 self.assertEqual(records.load_document(run/'queue_status.json')['state'],'needs_more_positions')
                 self.assertFalse((run/'source-validation-skipped.json').exists())
+
+    def test_initial_source_validation_retains_failed_checks_without_claiming_convergence(self):
+        from contextlib import redirect_stdout
+        run=self.root/'diagnostic validation'; run.mkdir()
+        records.write_json(run/'studies/source-1024/summary.json',{
+            'spatial_check':{'passed':False},'results':[{'name':'reference','value':10.,
+            'standard_error':0.,'estimate':{'means_by_stratum':{'region':10.}}}]})
+        for index,value in enumerate([1.,10.,1.,10.],1):
+            records.write_json(run/'studies'/f'source-independent-{index:02d}'/'summary.json',
+                               {'id':f'source-independent-{index:02d}','results':[{
+                                   'name':'reference','value':value,'units':'QP/eV',
+                                   'estimate':{'means_by_stratum':{'region':value},'maximum_site_leverage':.001}}]})
+        cfg={'studies':[{'kind':'convergence','sites':[512,1024]},
+                        {'kind':'independent_positions','check':{'relative_limit':.05}}]}
+        output=io.StringIO()
+        with redirect_stdout(output),self.assertRaises(SystemExit) as stopped:
+            self.queue_python('mean_interval','layout_summary','selected_spatial_sites',scope='stage',
+                              branch="step['kind'] in ('source_validation', 'finalist_validation')",
+                              step={'kind':'source_validation'},identifier='source-validation',cfg=cfg,run=run,
+                              initial_checks=True)
+        self.assertEqual(stopped.exception.code,0)
+        self.assertEqual(output.getvalue().strip(),'SKIP')
+        validation=records.load_document(run/'source-validation.json')
+        self.assertFalse(validation['passed'])
+        self.assertFalse(validation['nested']['passed'])
+        self.assertFalse(validation['candidates']['reference']['passed'])
+        self.assertFalse(records.load_document(run/'source-validation-skipped.json')['passed'])
+        self.assertFalse((run/'queue_status.json').exists())
 
     def test_event_count_gate_uses_transport_precision_and_retains_area_error(self):
         run=self.root/'event gate'; output=run/'studies/events-125000'; output.mkdir(parents=True)
@@ -2085,7 +2206,10 @@ if [[ "$mode" != execute ]]; then
     case "$mode" in
         verify-source) exit 0 ;;
         stage) printf '%s\\n' "$material_run/trial.yaml"; exit 0 ;;
-        pause|wait|record|finish|publish) printf '%s\\n' "$mode" >> "$material_run/actions.txt"; exit 0 ;;
+        pause|wait|record|finish|publish)
+            printf '%s\\n' "$mode" >> "$material_run/actions.txt"
+            [[ "$mode" != finish ]] || printf '{"state":"%s"}' "${MATERIAL_TEST_STATE:-complete}" > "$material_run/queue_status.json"
+            exit 0 ;;
     esac
 fi
 if [[ "$mode" == execute ]]; then
@@ -2094,6 +2218,12 @@ if [[ "$mode" == execute ]]; then
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertEqual((run/'attempts.txt').read_text(),'2')
         self.assertEqual((run/'actions.txt').read_text().splitlines(),['pause','wait','record','finish','publish'])
+        for name in ('attempts.txt','actions.txt'): (run/name).unlink()
+        reviewed=subprocess.run(['bash',str(script),'execute',str(run)],capture_output=True,text=True,timeout=30,
+                                env={**os.environ,'MATERIAL_TEST_STATE':'awaiting_review'})
+        self.assertEqual(reviewed.returncode,0,reviewed.stderr)
+        self.assertEqual((run/'attempts.txt').read_text(),'2')
+        self.assertEqual((run/'actions.txt').read_text().splitlines(),['pause','wait','record','finish'])
 
     def test_bash_syntax_and_check_respect_overrides_and_half_affinity(self):
         syntax=subprocess.run(['bash','-n',str(ROOT/'run_all.sh')],capture_output=True,text=True)
@@ -2170,12 +2300,81 @@ if [[ "$mode" == execute ]]; then
         self.assertEqual([point['values'] for point in chosen],[{'sub_c44':1.},{'sub_c44':1.}])
         self.assertEqual([point['selected_candidate_id'] for point in chosen],['best','best'])
 
+    def test_initial_finish_stops_for_review_and_reports_failed_precision_honestly(self):
+        run=self.root/'initial queue'; source=run/'source'; source.mkdir(parents=True)
+        for name in ('scan.py','physics.py','analysis.py','records.py','search.py','parameters.yaml'):
+            shutil.copy2(ROOT/name,source/name)
+        cfg=copy.deepcopy(records.load_document(ROOT/'studies/full_scale/queue.yaml'))
+        cfg['execution']['stop_after_initial_checks']=True
+        cfg['defaults']['max_sites']=1024
+        records.write_json(source/'studies/full_scale/queue.yaml',cfg)
+        records.write_json(run/'source-ready.json',{'test':'synthetic measurements; no physical conclusion'})
+        records.write_json(run/'base-design.json',{'sites':512,'design_hash':'synthetic-prefix-check'})
+        public=self.root/'initial public'; public.mkdir()
+        before='Before\n<!-- full-scale-start -->pending<!-- full-scale-end -->\nAfter\n'
+        (public/'README.md').write_text(before)
+        subprocess.run(['git','init','-b','test-results',str(public)],capture_output=True,check=True)
+        remote=str(self.root/'initial-test-remote.git')
+        subprocess.run(['git','remote','add','origin',remote],cwd=public,check=True)
+        records.write_json(run/'publication.json',{'branch':'test-results','remote':remote})
+        baseline=scan.run_study(self.raw,self.root/'initial baseline')
+        names=['source-512','source-1024',*[f'source-independent-{index:02d}' for index in range(1,5)],'events-500000']
+        records.write_json(run/'queue.json',[{'id':name,'kind':'confirmation'} for name in names])
+        independent=[]
+        for name in names:
+            output=run/'studies'/name; report=copy.deepcopy(baseline); report['id']=name
+            if name.startswith('source-independent-'):
+                index=int(name.rsplit('-',1)[1]); report['results'][0]['value']*=1+.1*index
+                independent.append(copy.deepcopy(report))
+            if name=='source-512': report['spatial_check']={'baseline':True,'passed':None}
+            if name=='source-1024': report['spatial_check']={'passed':False,'coarse_sites':512,'fine_sites':1024}
+            if name=='events-500000': report['event_count_check']={'passed':False}
+            records.write_json(output/'summary.json',report)
+            receipt=records.create_archive(output,None,run/'archives'/f'{name}.tar.gz',include_manifest=False)
+            second=self.root/'initial independent'/f'{name}.tar.gz'; second.parent.mkdir(exist_ok=True)
+            shutil.copy2(receipt['path'],second)
+            receipt.update(independent_copy=str(second),independent_copy_verified=True,
+                           summary_content_hash=records.content_hash(report))
+            report.update(archive=receipt,raw_files_present=False)
+            records.write_json(output/'summary.json',report,overwrite=True)
+        namespace=self.queue_python('mean_interval','layout_summary')
+        aggregate=namespace['layout_summary'](independent)
+        records.write_json(run/'source-validation.json',{'passed':False,'independent_layouts':aggregate})
+        environment={**os.environ,'MATERIAL_REPOSITORY':str(public),'MATERIAL_PYTHON':sys.executable}
+        records.write_json(run/'publication.json',{'branch':'changed-branch','remote':remote},overwrite=True)
+        rejected=subprocess.run(['bash',str(ROOT/'run_all.sh'),'finish',str(run)],env=environment,
+                                capture_output=True,text=True,timeout=60)
+        self.assertNotEqual(rejected.returncode,0)
+        self.assertIn('publication branch or remote changed',rejected.stderr)
+        self.assertEqual((public/'README.md').read_text(),before)
+        self.assertFalse((public/'docs/results/initial_checks_summary.json').exists())
+        records.write_json(run/'publication.json',{'branch':'test-results','remote':remote},overwrite=True)
+        finished=subprocess.run(['bash',str(ROOT/'run_all.sh'),'finish',str(run)],env=environment,
+                                capture_output=True,text=True,timeout=60)
+        self.assertEqual(finished.returncode,0,finished.stderr)
+        result=records.load_document(public/'docs/results/initial_checks_summary.json')
+        self.assertEqual(result['state'],'awaiting_review')
+        self.assertEqual(result['max_sites'],1024)
+        self.assertEqual(result['base_design']['sites'],512)
+        self.assertFalse(result['scientific_checks']['source_spatial'])
+        self.assertFalse(result['scientific_checks']['event_count'])
+        self.assertNotIn('confirmed_finalists',result)
+        self.assertNotIn('method_comparison',result)
+        self.assertIn('not evidence of spatial convergence',result['limitations'][0])
+        self.assertEqual(records.load_document(run/'queue_status.json')['state'],'awaiting_review')
+        self.assertGreater((public/'figures/initial_source_checks.png').stat().st_size,1000)
+        self.assertIn('waiting for review',(public/'README.md').read_text())
+        self.assertIn('Spatial criteria passed: False',(public/'docs/results/initial_checks_summary.md').read_text())
+
     def test_final_report_keeps_paired_errors_sensitivity_and_incomplete_physics(self):
         run=self.root/'final queue'; source=run/'source'; source.mkdir(parents=True)
         for name in ('scan.py','physics.py','analysis.py','records.py','search.py','parameters.yaml'):
             shutil.copy2(ROOT/name,source/name)
         for name in ('legacy','studies','figures'):
             shutil.copytree(ROOT/name,source/name,ignore=shutil.ignore_patterns('.env','*.env','__pycache__'))
+        cfg=records.load_document(source/'studies/full_scale/queue.yaml')
+        cfg['execution']['stop_after_initial_checks']=False
+        records.write_json(source/'studies/full_scale/queue.yaml',cfg,overwrite=True)
         records.write_json(run/'source-ready.json',{'test':'synthetic measurements; no physical conclusion'})
         public=self.root/'public'; public.mkdir()
         (public/'README.md').write_text('Before\n<!-- full-scale-start -->pending<!-- full-scale-end -->\nAfter\n')
@@ -2188,7 +2387,7 @@ if [[ "$mode" == execute ]]; then
         confirmations=[f'unused-stream-confirmation-{index:02d}' for index in range(1,5)]
         queue=[{'id':name,'kind':'search'} for name in seeds]
         queue += [{'id':name,'kind':'confirmation'} for name in
-                  ['source-2653',*confirmations,'events-500000','material-transport-morris','density-morris']]
+                  ['source-1024',*confirmations,'events-500000','material-transport-morris','density-morris']]
         records.write_json(run/'queue.json',queue)
         layout_reports=[]
         for step in queue:
@@ -2207,7 +2406,7 @@ if [[ "$mode" == execute ]]; then
                 raw['candidates']=[{'name':row['name'],'values':row['parameters']} for row in report['results']]
                 records.write_json(run/'definitions'/f'{name}.yaml',raw)
                 layout_reports.append(copy.deepcopy(report))
-            if name=='source-2653': report['spatial_check']={'passed':False}
+            if name=='source-1024': report['spatial_check']={'passed':False}
             if name=='events-500000': report['event_count_check']={'passed':False}
             if name.endswith('morris'): report['sensitivity']={'status':'complete','method':'morris','names':['a'],'mu':[1.],'mu_star':[1.],'mu_star_conf':[0.],'sigma':[0.]}
             records.write_json(output/'summary.json',report)
