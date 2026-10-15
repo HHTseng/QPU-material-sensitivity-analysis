@@ -1,0 +1,25 @@
+{
+  "change_scope": "Completed-study figures and scientific assessment; plotting comment corrected to include side boundaries. Numerical code unchanged.",
+  "date": "2026-10-15",
+  "git_diff_check_passed": true,
+  "hit_histogram": {
+    "archive_hit_checksums_markers_and_database_counts_verified": true,
+    "cohort": "events-500000/reference",
+    "files": 4096,
+    "png_reproduced_identically_from_tracked_csv": true,
+    "provenance": "figures/surface_hits_events500000_reference.json",
+    "surface_hit_records": 10050999
+  },
+  "markdown_links_valid": true,
+  "new_transport_or_model_inference_started": false,
+  "optimizer_record": "verification/optimizer_contributions.json",
+  "result_record": "verification/initial_1024_results.json",
+  "tests": {
+    "log_sha256": "72e6eccdac2d6cb0ecd6470dc25777eedf108678e65b75f8a60204d8dd3b4595",
+    "new_checks_passed": 9,
+    "prelaunch_full_suite_passed": 166,
+    "prelaunch_verification": "verification/initial_1024_launch.json",
+    "seconds": 3.236,
+    "suite": "test_workflow.HitHistogramTests"
+  }
+}

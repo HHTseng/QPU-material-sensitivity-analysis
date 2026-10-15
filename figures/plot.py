@@ -217,7 +217,7 @@ def export_presentation(figures, output, title="Material-property study"):
 
 
 def count_hit_files(paths, *, expected_checksums=None):
-    """H_f=sum_k 1 over CSV data rows in file f; both surfaces, including zero E_dep.
+    """H_f=sum_k 1 over CSV rows in file f; all recorded surfaces, including zero E_dep.
 
     Header-only files have H_f=0. A malformed or changing file has no count.
     """

@@ -1,7 +1,7 @@
 # Historical experiments and interpretation
 
 Historical measurements through 2026-09-14; source and interpretation notes
-updated 2026-10-14.
+updated 2026-10-15.
 
 The measurements below describe the earlier source revision. A later inherited
 2,361-site comparison and CMA-ES confirmations are distinguished below. The
@@ -34,8 +34,8 @@ constant.
 
 ### Continuous-property search before the device correction
 
-A corrected equal-compute comparison ran 96 evaluations for each method at
-4,000,000 primaries per candidate, 16 sites, and eight replicas:
+The earlier report lists 96 responses per method, nominally at 4,000,000
+primaries per candidate, 16 sites and eight replicas:
 
 | Method | Best value | Median value | Values below `1.15e-4` |
 |---|---:|---:|---:|
@@ -44,11 +44,14 @@ A corrected equal-compute comparison ran 96 evaluations for each method at
 | Sobol | `7.35e-5` | `3.62e-4` | 2/96 |
 | random | `1.02e-4` | `4.02e-4` | 1/96 |
 
-The adaptive methods clearly concentrated evaluations in lower-response
-regions. They are not ranked against each other: their best values overlap the
-measured uncertainty and only one optimizer seed was run. The comparison used
-69 genuine Gaussian-process acquisition points and eight complete CMA-ES
-generations, fixing the earlier source-label errors.
+The adaptive methods concentrated responses in lower-response regions. They
+are not ranked against each other: their best values overlap the measured
+uncertainty and only one optimizer seed was run. The reports identify 69 GP
+acquisition points and eight CMA-ES generations. However, recorded primary use
+and accumulated ledger success counts differ between methods; 96 response
+entries do not establish 96 fresh independent evaluations or equal computation.
+The [current audit](optimization.md) retains this limitation and distinguishes
+the later physically constrained search.
 
 Sixteen fresh reference evaluations had a coefficient of variation of 0.25%,
 well below their roughly 5% statistical error. No run-time drift was detected.
@@ -204,16 +207,28 @@ source model establishes a fabricable material optimum.
    interval and an external engineering limit are available.
 7. No fabrication optimum or logical-error reduction has been established.
 
-## Fresh queue started on 2026-10-14
+## Fresh comparisons completed on 2026-10-15
 
-The [full-scale definition](../../studies/full_scale/queue.yaml) replaces reuse
-of historical optimizer outputs with fresh measurements. It uses 20 mK, a
-matched 0 K reference, a direct Nb-compatible gap limit, a $C_{44}$ boundary
-scan, primary-count and spatial checks, transport and density Morris studies,
-eighteen linked-material cases, three seeds each for GP and CMA-ES with 120
-successful measurements, unused-stream confirmation, physical tolerances, and
-assumed SiC rate and interface ranges. Final results remain pending; see the
-[main README](../../README.md) for the live queue and completed pilot.
+The [queue definition](../../studies/full_scale/queue.yaml) now limits source
+designs to 1,024 sites and stops for review after spatial and primary-count
+comparisons. All ten measured studies finished at 10:38 EDT on October 15:
+160,000 completed tasks and 13.832 billion primaries in 11 h 43 min. Twenty
+study-archive copies match their recorded checksums. The unfinished 2,653-site
+study was cancelled; its completed measurements remain separately preserved.
+
+Four independent 1,024-site layouts give $J=0.00234472$ QPs/eV for the reference,
+$0.00223919$ for the predefined $C_{44}=1$ GPa test and $0.00154571$ for the
+SiC-derived model. Their paired reductions are 4.50% and 34.08%, respectively.
+These test points were specified before transport and are not optimizer gains.
+Primary-count checks passed; spatial equivalence remains unconfirmed because
+some total and regional intervals exceed the declared ±5% margin.
+
+The [completed summary](../../docs/results/initial_checks_summary.md) and
+[numerical checks](../../verification/initial_1024_results.json) give errors,
+intervals, counts and archive verification. Further search, sensitivity,
+linked-material, tolerance and model-range studies are deferred. The
+[optimization assessment](optimization.md) separates historical algorithm gains
+from these new measurements and proposes comparisons within the current cap.
 
 The SiC literature check did not establish the required measured 20 mK acoustic
 coefficients. The new ranges therefore remain explicit assumptions. MP
@@ -221,6 +236,10 @@ elasticity and density are DFT calculations; verified native phonon fields and
 curated film fields are kept separate when comparing property targets.
 
 ## Earlier recommended order of new work
+
+This historical order predates the 1,024-site cap. The current proposal is in
+[optimization.md](optimization.md); no larger design or later study starts
+automatically.
 
 1. Verify the retained definitions and task completeness of the 2,361-site
    result before reusing its converged design. If the physical source should

@@ -63,16 +63,30 @@ zero; failed, timed-out, or incomplete simulations have no measured response.
 
 For file $f$, let $H_f$ be the number of valid surface-hit rows. The histogram
 shows how many files have each count $H_f$. These rows record deposited energy
-and the final phonon position and time. A row is a recorded hit, rather than
-a unique injected phonon or the junction-QP response defined above.
+and final phonon position and time. A row is a recorded boundary hit; it is
+neither a distinct injected phonon nor the junction-QP response defined above.
 
-![Surface-hit records per file in the historical test data](figures/surface_hits_histogram.png)
+![Surface-hit records in the completed 500,000-primary reference study](figures/surface_hits_events500000_reference.png)
 
-This historical checking example contains **32 files and 113 surface-hit
-records**, including **7 complete files with zero records**, at 125,000 primary
-phonons per file. It includes both substrate surfaces: 78 records on the upper
-surface and 35 on the lower surface. The plot describes these recorded files;
-it does not establish spatial convergence or a material ranking.
+This new example uses **all 4,096 completed reference files** from the
+`events-500000` study: 512 positions × 8 realizations at 20 mK, with 500,000
+primaries per file. It contains **10,050,999 records**: 5,733,757 upper-surface,
+4,297,824 lower-surface and 19,418 side-boundary records. No file has zero hits;
+the median is 213 records/file and the range is 12–18,762. Bins are equally
+spaced in $\log(1+H_f)$; horizontal labels show raw counts. The file histogram
+retains the deliberate near-junction oversampling and is not an area-weighted
+physical source distribution.
+
+The [per-file counts](figures/surface_hits_events500000_reference.csv) and
+[provenance and reproduction command](figures/surface_hits_events500000_reference.json)
+retain archive-relative paths, positions, realizations and checksums. The
+archive, hit files, completion markers and saved per-file counts agree. All
+recorded boundaries are counted, including zero deposited energy when present;
+this particular cohort has no zero-energy rows. These counts do not establish
+spatial convergence or rank materials.
+
+The [historical 32-file checking example](figures/surface_hits_histogram.png)
+remains available. To regenerate that small example and the device drawings:
 
 ```bash
 conda run -n G4CMP python figures/plot.py hits tests/fixtures/random_trial_9a3f0ab28d9d/hits \
@@ -81,16 +95,14 @@ conda run -n G4CMP python figures/plot.py hits tests/fixtures/random_trial_9a3f0
 conda run -n G4CMP python figures/draw.py
 ```
 
-The [per-file counts](figures/surface_hits_counts.csv) retain the inputs to this
-histogram. The [verification record](verification/hit_figures_checks.json)
-records **160 passing tests**, including the hit-file and plotting checks.
-A recorded study directory selects only completed tasks and checks
-their saved file checksums. Direct raw-file input should contain completed
-measurements; task directories also require the post-transport completion marker.
-The drawings use the [recorded spatial sites](figures/spatial_sites.json)
-and current reference dimensions. `draw.py --design FILE --output-dir DIRECTORY`
-selects another saved design or destination. Both figure scripts and the supplied
-`device_stack.png` are under `figures/`; full-scale result plots also go there.
+A recorded study directory selects completed tasks and checks saved hit-file
+checksums. Direct raw-file input should contain completed measurements; task
+directories also require the post-transport completion marker. Archived studies
+must be recovered before recounting raw hits. The new plot can also be
+regenerated from its tracked count table using the command in its provenance.
+Both figure scripts, all images and the supplied `device_stack.png` are under
+`figures/`. The drawings use the [recorded sites](figures/spatial_sites.json)
+and current reference dimensions.
 
 ## Run and verify
 
@@ -189,12 +201,11 @@ bash run_all.sh status
 bash run_all.sh stop
 ```
 
-There are 10 measured studies and one source-validation step, totaling
-**13.832 billion primary phonons**. At the earlier measured rate of
-0.25–0.40 million primaries/s and 10–20% extra processing time, the conditional
-estimate is **about 11–19 hours**, excluding interruptions and long-running
-transport cases. The live status and launch record below supersede this estimate
-as new measurements finish.
+All **10 measured studies and one source-validation step are complete**:
+160,000 completed tasks and **13.832 billion primary phonons**. The queue ran
+from October 14 at 22:55:40 to October 15 at **10:38:38 EDT**, taking **11 h 43 min**.
+This falls within the earlier 11–19 h estimate. There are no remaining queued
+simulations or active transport workers; later studies await a decision.
 
 At most half the available CPU affinity is used: 96 of 192 logical CPUs on this
 machine, with 94 transport workers and one numerical thread per process.
@@ -211,15 +222,71 @@ in two verified archives, with its raw files retained. Recovery uses
 `python scan.py recover ARCHIVE --output DIRECTORY`.
 
 <!-- initial-checks-start -->
-The capped queue started in tmux on **2026-10-14 at 22:55 EDT**. The pilot
-finished and its two archive copies passed verification; the 512-site comparison
-is running. **166 tests passed** before launch. The
-[launch and preservation record](verification/initial_1024_launch.json) retains
-the site counts, source checks, limits and archive checksums. Measured results
-and uncertainties will replace this paragraph after all comparisons finish.
+### Completed source and primary-count checks
+
+Primary-count comparisons passed at 125,000 and 500,000 primaries per task.
+Spatial equivalence remains unconfirmed: nested total changes are small
+(0.71–2.75%), but their 95% intervals extend beyond ±5%; some near-junction
+regional changes are larger. Four independent 1,024-site layouts give:
+
+| Predefined case | $J$, QPs/injected eV | Standard error | Paired reduction from reference, 95% interval |
+|---|---:|---:|---:|
+| Reference | 0.00234472 | 0.00000806 | — |
+| $C_{44}=1$ GPa | 0.00223919 | 0.00000840 | 4.50% [2.99%, 6.00%] |
+| SiC-derived model | 0.00154571 | 0.00000634 | 34.08% [32.98%, 35.17%] |
+
+These are specified test points, not optimizer discoveries. The SiC rates and
+interfaces remain model assumptions. Increasing primaries mainly reduces
+transport noise; uncertainty from source positions still needs examination.
+The 1,024-site cap remains a chosen stopping point.
+
+![Completed source-position checks](figures/initial_source_checks.png)
+
+Error bars are standard errors. The four-layout means include variation between
+independent source layouts. [Measured results and uncertainty definitions](docs/results/initial_checks_summary.md)
+and [regional checks and archive verification](verification/initial_1024_results.json)
+retain the failed criteria. All twenty study-archive copies match their recorded
+checksums. The queue is stopped at `awaiting_review`.
 <!-- initial-checks-end -->
 
 <!-- full-scale-end -->
+
+## What optimization has contributed
+
+The strongest relevant historical result is the 20 mK, Nb-gap-constrained
+CMA-ES search. Three runs improved a shared measured starting point; their
+independent confirmations reduced $J$ by **38.7–48.3% beyond the compatible
+starting anchor**. That anchor was already 74.8% below its matched reference.
+CMA-ES added another **9.8–12.2 percentage points of reference-relative reduction**,
+reaching **84.6–87.0% total reduction**. Seeds 101 and 303 remain statistically
+tied, and all finalists reach the $C_{44}=5$ GPa search limit. These are
+historical model results, not fresh confirmations or a proven global minimum.
+
+Earlier reported screening values place Bayesian search **23.8% below the best
+Sobol value and 45.1% below the best random value**. Those lowest points violate
+the present gap requirement, and the archived tables do not establish equal
+fresh computation. The later constrained BO attempt stalled before completing
+a new measurement: its improvement is unmeasured. No fresh BO, CMA-ES, TPE or
+agentic optimization ran in the completed diagnostic queue.
+
+The next useful steps are to analyze balanced 512-site subsets of the saved
+independent 1,024-site outputs, then compare BO, CMA-ES, Sobol and random over
+three seeds with common starting measurements and recorded runtime. Initially
+vary only four to six supported properties and use moderate primary counts;
+confirm leaders with independent layouts at at most 1,024 sites. Selecting
+expected improvement per predicted time, with completion probability, addresses
+the earlier BO stall. No new simulations have been started.
+
+Agentic AI has **no measured optimization gain here yet**. It may help with
+physical ranges, literature and candidate proposals, but should be compared
+against reliable GP search using the same measurements and including inference
+time. The local model service is unavailable; its prompt also needs the correct
+objective units and measurement errors before testing.
+
+[Detailed measured contributions and proposed comparisons](material_scan/docs/optimization.md)
+include exact values, uncertainties, code changes needed and primary research
+sources. The [numerical audit](verification/optimizer_contributions.json)
+identifies the original historical records.
 
 ## Calculation and source files
 

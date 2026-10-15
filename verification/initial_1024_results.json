@@ -1,0 +1,2285 @@
+{
+  "area_weights": {
+    "S0_junction": 2.65625e-05,
+    "S1_le_0.05": 0.002636631097371374,
+    "S2_le_0.20": 0.032861575994413084,
+    "S3_le_0.50": 0.17848066274749622,
+    "S4_bulk": 0.7859945676607194
+  },
+  "checked_utc": "2026-10-15T16:04:34.391462+00:00",
+  "independent_layout_comparisons": [
+    {
+      "by_layout": [
+        -0.00010700249973778081,
+        -7.436522854141654e-05,
+        -0.00011315268099760904,
+        -0.00012759267451974837
+      ],
+      "candidate": "c44-1gpa",
+      "confidence_interval_95": [
+        -0.000141325229197019,
+        -6.973131270125837e-05
+      ],
+      "n_layouts": 4,
+      "reference": "reference",
+      "relative_change": {
+        "by_layout": [
+          -0.045321795306939694,
+          -0.0320124307326658,
+          -0.048122077029431054,
+          -0.05444390029504409
+        ],
+        "confidence_interval_95": [
+          -0.0600066399839224,
+          -0.029943461698117915
+        ],
+        "n_layouts": 4,
+        "relative_standard_error": 0.10502003262350611,
+        "standard_error": 0.004723281306567783,
+        "uncertainty_method": "Student-t interval across independent source-position layouts",
+        "value": -0.04497505084102016
+      },
+      "relative_standard_error": 0.1065899400319072,
+      "relative_to_b": -0.04497505084102016,
+      "standard_error": 1.1248252072139547e-05,
+      "uncertainty_method": "Student-t interval across independent source-position layouts",
+      "units": "weighted_junction_QPs_per_injected_eV",
+      "value": -0.00010552827094913869
+    },
+    {
+      "by_layout": [
+        -0.0008005481062258472,
+        -0.000770880844136458,
+        -0.0008173489829066236,
+        -0.0008072904902594815
+      ],
+      "candidate": "SiC-derived-rates",
+      "confidence_interval_95": [
+        -0.0008308216696577233,
+        -0.000767212542106482
+      ],
+      "n_layouts": 4,
+      "reference": "reference",
+      "relative_change": {
+        "by_layout": [
+          -0.3390787831372074,
+          -0.3318455427365953,
+          -0.3476058222269678,
+          -0.34447152335553344
+        ],
+        "confidence_interval_95": [
+          -0.3517338679492636,
+          -0.3297669677788884
+        ],
+        "n_layouts": 4,
+        "relative_standard_error": 0.010128410591285353,
+        "standard_error": 0.0034512601412794172,
+        "uncertainty_method": "Student-t interval across independent source-position layouts",
+        "value": -0.340750417864076
+      },
+      "relative_standard_error": 0.012507550967616405,
+      "relative_to_b": -0.340750417864076,
+      "standard_error": 9.993747175817752e-06,
+      "uncertainty_method": "Student-t interval across independent source-position layouts",
+      "units": "weighted_junction_QPs_per_injected_eV",
+      "value": -0.0007990171058821026
+    }
+  ],
+  "independent_layout_estimates": {
+    "SiC-derived-rates": {
+      "by_layout": [
+        0.0015604020506051312,
+        0.0015521301500125585,
+        0.0015340183724219044,
+        0.001536271852414246
+      ],
+      "confidence_interval_95": [
+        0.001525518438059187,
+        0.0015658927746677329
+      ],
+      "maximum_site_leverage": 0.006690683047761216,
+      "means_by_stratum": {
+        "S0_junction": 0.13916126730103806,
+        "S1_le_0.05": 0.03576663602941177,
+        "S2_le_0.20": 0.005925367647058823,
+        "S3_le_0.50": 0.0024844669117647057,
+        "S4_bulk": 0.0010299810246679315
+      },
+      "n_layouts": 4,
+      "region_contributions": {
+        "S0_junction": {
+          "fraction_of_J": 0.002391445788555048,
+          "mean_QPs_per_eV": 0.13916126730103806,
+          "weighted_contribution": 3.696471162683823e-06
+        },
+        "S1_le_0.05": {
+          "fraction_of_J": 0.061009951969686914,
+          "mean_QPs_per_eV": 0.03576663602941177,
+          "weighted_contribution": 9.430342480351048e-05
+        },
+        "S2_le_0.20": {
+          "fraction_of_J": 0.12597283624193187,
+          "mean_QPs_per_eV": 0.005925367647058823,
+          "weighted_contribution": 0.00019471691922866015
+        },
+        "S3_le_0.50": {
+          "fraction_of_J": 0.28687823810721247,
+          "mean_QPs_per_eV": 0.0024844669117647057,
+          "weighted_contribution": 0.0004434293009859899
+        },
+        "S4_bulk": {
+          "fraction_of_J": 0.5237475278926137,
+          "mean_QPs_per_eV": 0.0010299810246679315,
+          "weighted_contribution": 0.0008095594901826156
+        }
+      },
+      "relative_standard_error": 0.004103812753323661,
+      "standard_error": 6.34328638027825e-06,
+      "uncertainty_method": "Student-t interval across independent source-position layouts",
+      "value": 0.00154570560636346
+    },
+    "c44-1gpa": {
+      "by_layout": [
+        0.0022539476570931976,
+        0.0022486457656076,
+        0.002238214674330919,
+        0.002215969668153979
+      ],
+      "confidence_interval_95": [
+        0.002212452186710697,
+        0.0022659366958821506
+      ],
+      "maximum_site_leverage": 0.008191626699252769,
+      "means_by_stratum": {
+        "S0_junction": 1.3236963451557093,
+        "S1_le_0.05": 0.11751511948529414,
+        "S2_le_0.20": 0.019747564338235293,
+        "S3_le_0.50": 0.003367118566176471,
+        "S4_bulk": 0.0008197106261859582
+      },
+      "n_layouts": 4,
+      "region_contributions": {
+        "S0_junction": {
+          "fraction_of_J": 0.01570238096332607,
+          "mean_QPs_per_eV": 1.3236963451557093,
+          "weighted_contribution": 3.5160684168198524e-05
+        },
+        "S1_le_0.05": {
+          "fraction_of_J": 0.13837298482522545,
+          "mean_QPs_per_eV": 0.11751511948529414,
+          "weighted_contribution": 0.0003098440184462392
+        },
+        "S2_le_0.20": {
+          "fraction_of_J": 0.28980783188697407,
+          "mean_QPs_per_eV": 0.019747564338235293,
+          "weighted_contribution": 0.0006489360862054808
+        },
+        "S3_le_0.50": {
+          "fraction_of_J": 0.2683847111073728,
+          "mean_QPs_per_eV": 0.003367118566176471,
+          "weighted_contribution": 0.0006009655532405757
+        },
+        "S4_bulk": {
+          "fraction_of_J": 0.28773209121710175,
+          "mean_QPs_per_eV": 0.0008197106261859582,
+          "weighted_contribution": 0.0006442880992359298
+        }
+      },
+      "relative_standard_error": 0.003752711055866318,
+      "standard_error": 8.403049736087492e-06,
+      "uncertainty_method": "Student-t interval across independent source-position layouts",
+      "value": 0.002239194441296424
+    },
+    "reference": {
+      "by_layout": [
+        0.0023609501568309784,
+        0.0023230109941490165,
+        0.002351367355328528,
+        0.0023435623426737275
+      ],
+      "confidence_interval_95": [
+        0.0023190612864807214,
+        0.0023703841380104036
+      ],
+      "maximum_site_leverage": 0.006640718683972967,
+      "means_by_stratum": {
+        "S0_junction": 1.0102818339100348,
+        "S1_le_0.05": 0.12177454044117647,
+        "S2_le_0.20": 0.017429917279411764,
+        "S3_le_0.50": 0.0034793887867647063,
+        "S4_bulk": 0.0010216793168880455
+      },
+      "n_layouts": 4,
+      "region_contributions": {
+        "S0_junction": {
+          "fraction_of_J": 0.011445110789895742,
+          "mean_QPs_per_eV": 1.0102818339100348,
+          "weighted_contribution": 2.6835611213235297e-05
+        },
+        "S1_le_0.05": {
+          "fraction_of_J": 0.136934972531493,
+          "mean_QPs_per_eV": 0.12177454044117647,
+          "weighted_contribution": 0.00032107454019531385
+        },
+        "S2_le_0.20": {
+          "fraction_of_J": 0.24428242549208387,
+          "mean_QPs_per_eV": 0.017429917279411764,
+          "weighted_contribution": 0.0005727745512537234
+        },
+        "S3_le_0.50": {
+          "fraction_of_J": 0.2648516233389622,
+          "mean_QPs_per_eV": 0.0034793887867647063,
+          "weighted_contribution": 0.0006210036166179716
+        },
+        "S4_bulk": {
+          "fraction_of_J": 0.34248586784756524,
+          "mean_QPs_per_eV": 0.0010216793168880455,
+          "weighted_contribution": 0.0008030343929653185
+        }
+      },
+      "relative_standard_error": 0.0034389685743406208,
+      "standard_error": 8.063427722955196e-06,
+      "uncertainty_method": "Student-t interval across independent source-position layouts",
+      "value": 0.0023447227122455625
+    }
+  },
+  "independent_layout_precision_checks": {
+    "SiC-derived-rates": {
+      "confidence_interval_95": [
+        0.001525518438059187,
+        0.0015658927746677329
+      ],
+      "passed": true,
+      "relative_standard_error": 0.004103812753323661
+    },
+    "c44-1gpa": {
+      "confidence_interval_95": [
+        0.002212452186710697,
+        0.0022659366958821506
+      ],
+      "passed": true,
+      "relative_standard_error": 0.003752711055866318
+    },
+    "reference": {
+      "confidence_interval_95": [
+        0.0023190612864807214,
+        0.0023703841380104036
+      ],
+      "passed": true,
+      "relative_standard_error": 0.0034389685743406208
+    }
+  },
+  "interpretation": {
+    "anchor_selection": "reference, c44-1gpa and SiC-derived-rates were predefined comparison cases. Their reductions are not optimizer contributions.",
+    "event_count_passed": true,
+    "event_scope": "Primary-count precision is conditional on fixed source positions. Increasing primaries cannot remove source integration uncertainty.",
+    "material_scope": "SiC-derived-rates is a model case with assumed rates, not a demonstrated ranking of real materials.",
+    "nested_comparison": "512-site estimates in the nested contrast use the subset of the 1024-site run with matched streams, not the separate source-512 study.",
+    "sampling": "Scrambled Sobol positions outside junctions; independent layout means directly measure variance across that sampling procedure. Per-layout hierarchical intervals instead treat sites exchangeably within each region.",
+    "site_cap": "1024 is the user chosen maximum, not evidence of spatial convergence.",
+    "source_spatial_passed": false,
+    "source_spatial_reason": "Nested global and regional intervals and retained-layout agreement intervals do not fit within declared 5 percent equivalence limits. Four independent-layout means themselves pass the 2 percent RSE criterion. Global shifts are small; insufficient equivalence precision is not proof of a large global bias."
+  },
+  "launch_verification": "verification/initial_1024_launch.json",
+  "maximum_sites": 1024,
+  "nested_spatial_checks": {
+    "baseline": false,
+    "candidates": {
+      "SiC-derived-rates": {
+        "checks": {
+          "confidence_interval_within_margin": false,
+          "every_region": false,
+          "refined_regions_within_margin": false,
+          "relative_shift": true,
+          "within_difference_error": true
+        },
+        "coarse_value": 0.0015094287456163529,
+        "confidence_interval_95": [
+          -3.364924597652739e-05,
+          0.00011534851475182426
+        ],
+        "difference": 4.2665587832832e-05,
+        "equivalence_margin": 7.760471667245925e-05,
+        "equivalent_within_margin": false,
+        "fine_value": 0.0015520943334491849,
+        "fixed_site_transport_difference": {
+          "confidence": 0.95,
+          "confidence_interval": [
+            1.879923718910759e-05,
+            6.653193847655685e-05
+          ],
+          "consistent_with_zero_difference": false,
+          "degrees_of_freedom": 7,
+          "difference": 4.2665587832832214e-05,
+          "equivalence_margin": 7.547143728081766e-05,
+          "equivalent_within_margin": true,
+          "interpretation": "Transport uncertainty conditional on these sites; excludes source-position integration uncertainty.",
+          "mean_new": 0.0015520943334491853,
+          "mean_previous": 0.001509428745616353,
+          "n_new": 8,
+          "n_previous": 8,
+          "paired": true,
+          "relative_difference": 0.028266049627543265,
+          "standard_error": 1.0093083764851232e-05
+        },
+        "limitation": "Sites are treated as exchangeable within each region, with fixed area weights. Independent randomized position layouts are required to assess integration uncertainty and layout bias.",
+        "maximum_site_leverage": 0.006053845948929662,
+        "passed": false,
+        "regions": {
+          "S0_junction": {
+            "area_weight": 2.65625e-05,
+            "coarse_mean": 0.14059273356401386,
+            "confidence_interval_95": [
+              -0.001929052768166113,
+              0.006269952422145325
+            ],
+            "difference": 0.002127508650519,
+            "equivalent_within_margin": true,
+            "fine_mean": 0.14272024221453286,
+            "n_added": 68,
+            "n_coarse": 68,
+            "n_fine": 136,
+            "refinement_assessed": true,
+            "relative_shift": 0.014906845851067094,
+            "standard_error": 0.002102388076597922
+          },
+          "S1_le_0.05": {
+            "area_weight": 0.002636631097371374,
+            "coarse_mean": 0.026955514705882352,
+            "confidence_interval_95": [
+              0.004152899816176472,
+              0.019226948529411765
+            ],
+            "difference": 0.011011764705882346,
+            "equivalent_within_margin": false,
+            "fine_mean": 0.0379672794117647,
+            "n_added": 64,
+            "n_coarse": 64,
+            "n_fine": 128,
+            "refinement_assessed": true,
+            "relative_shift": 0.2900330199184668,
+            "standard_error": 0.0038229098987405184
+          },
+          "S2_le_0.20": {
+            "area_weight": 0.032861575994413084,
+            "coarse_mean": 0.006273529411764706,
+            "confidence_interval_95": [
+              -0.0006211718749999993,
+              0.00012528952205882328
+            ],
+            "difference": -0.00024218749999999935,
+            "equivalent_within_margin": false,
+            "fine_mean": 0.006031341911764706,
+            "n_added": 128,
+            "n_coarse": 128,
+            "n_fine": 256,
+            "refinement_assessed": true,
+            "relative_shift": 0.040154828484783724,
+            "standard_error": 0.00018949705366226629
+          },
+          "S3_le_0.50": {
+            "area_weight": 0.17848066274749622,
+            "coarse_mean": 0.002510845588235294,
+            "confidence_interval_95": [
+              -0.00012318474264705855,
+              9.927619485294113e-05
+            ],
+            "difference": -1.3051470588235081e-05,
+            "equivalent_within_margin": true,
+            "fine_mean": 0.002497794117647059,
+            "n_added": 128,
+            "n_coarse": 128,
+            "n_fine": 256,
+            "refinement_assessed": true,
+            "relative_shift": 0.0052251987047393905,
+            "standard_error": 5.553048724960002e-05
+          },
+          "S4_bulk": {
+            "area_weight": 0.7859945676607194,
+            "coarse_mean": 0.0009927893738140418,
+            "confidence_interval_95": [
+              -6.0728178368121595e-05,
+              0.00011489563567362415
+            ],
+            "difference": 3.0360531309297882e-05,
+            "equivalent_within_margin": false,
+            "fine_mean": 0.0010231499051233397,
+            "n_added": 124,
+            "n_coarse": 124,
+            "n_fine": 248,
+            "refinement_assessed": true,
+            "relative_shift": 0.02967359050445101,
+            "standard_error": 4.450821748697139e-05
+          }
+        },
+        "relative_difference": 0.027489042974609156,
+        "relative_shift": 0.027489042974609156,
+        "same_random_streams": true,
+        "standard_error": 3.810998662368755e-05,
+        "uncertainty_method": "paired site bootstrap with paired realizations"
+      },
+      "c44-1gpa": {
+        "checks": {
+          "confidence_interval_within_margin": false,
+          "every_region": false,
+          "refined_regions_within_margin": false,
+          "relative_shift": true,
+          "within_difference_error": true
+        },
+        "coarse_value": 0.0022120721757977794,
+        "confidence_interval_95": [
+          -9.408938087297209e-05,
+          0.00012066981877364023
+        ],
+        "difference": 1.5854065342925557e-05,
+        "equivalence_margin": 0.00011139631205703526,
+        "equivalent_within_margin": false,
+        "fine_value": 0.002227926241140705,
+        "fixed_site_transport_difference": {
+          "confidence": 0.95,
+          "confidence_interval": [
+            -9.818686146112926e-06,
+            4.152681683196231e-05
+          ],
+          "consistent_with_zero_difference": true,
+          "degrees_of_freedom": 7,
+          "difference": 1.585406534292469e-05,
+          "equivalence_margin": 0.000110603608789889,
+          "equivalent_within_margin": true,
+          "interpretation": "Transport uncertainty conditional on these sites; excludes source-position integration uncertainty.",
+          "mean_new": 0.0022279262411407045,
+          "mean_previous": 0.00221207217579778,
+          "n_new": 8,
+          "n_previous": 8,
+          "paired": true,
+          "relative_difference": 0.0071670651239971175,
+          "standard_error": 1.0857010990961774e-05
+        },
+        "limitation": "Sites are treated as exchangeable within each region, with fixed area weights. Independent randomized position layouts are required to assess integration uncertainty and layout bias.",
+        "maximum_site_leverage": 0.00848387463580987,
+        "passed": false,
+        "regions": {
+          "S0_junction": {
+            "area_weight": 2.65625e-05,
+            "coarse_mean": 1.3463775086505194,
+            "confidence_interval_95": [
+              -0.0753466565743947,
+              -0.011700116782006702
+            ],
+            "difference": -0.04392249134948134,
+            "equivalent_within_margin": false,
+            "fine_mean": 1.302455017301038,
+            "n_added": 68,
+            "n_coarse": 68,
+            "n_fine": 136,
+            "refinement_assessed": true,
+            "relative_shift": 0.03372284705885507,
+            "standard_error": 0.01645489082542621
+          },
+          "S1_le_0.05": {
+            "area_weight": 0.002636631097371374,
+            "coarse_mean": 0.08872536764705882,
+            "confidence_interval_95": [
+              0.014137541360294116,
+              0.05016931066176471
+            ],
+            "difference": 0.03099613970588236,
+            "equivalent_within_margin": false,
+            "fine_mean": 0.11972150735294118,
+            "n_added": 64,
+            "n_coarse": 64,
+            "n_fine": 128,
+            "refinement_assessed": true,
+            "relative_shift": 0.25890201678220753,
+            "standard_error": 0.009281755852042507
+          },
+          "S2_le_0.20": {
+            "area_weight": 0.032861575994413084,
+            "coarse_mean": 0.0223141544117647,
+            "confidence_interval_95": [
+              -0.004174878216911762,
+              -5.607536764706261e-05
+            ],
+            "difference": -0.002093290441176468,
+            "equivalent_within_margin": false,
+            "fine_mean": 0.020220863970588233,
+            "n_added": 128,
+            "n_coarse": 128,
+            "n_fine": 256,
+            "refinement_assessed": true,
+            "relative_shift": 0.10352131561842327,
+            "standard_error": 0.0010525747636193018
+          },
+          "S3_le_0.50": {
+            "area_weight": 0.17848066274749622,
+            "coarse_mean": 0.0031744485294117643,
+            "confidence_interval_95": [
+              -0.00018463924632352942,
+              0.0003104917279411767
+            ],
+            "difference": 5.5055147058823486e-05,
+            "equivalent_within_margin": false,
+            "fine_mean": 0.0032295036764705878,
+            "n_added": 128,
+            "n_coarse": 128,
+            "n_fine": 256,
+            "refinement_assessed": true,
+            "relative_shift": 0.01704755670660556,
+            "standard_error": 0.00012945266397665098
+          },
+          "S4_bulk": {
+            "area_weight": 0.7859945676607194,
+            "coarse_mean": 0.0008174573055028463,
+            "confidence_interval_95": [
+              -6.603652751423137e-05,
+              5.104601518026554e-05
+            ],
+            "difference": -7.3055028462997405e-06,
+            "equivalent_within_margin": false,
+            "fine_mean": 0.0008101518026565465,
+            "n_added": 124,
+            "n_coarse": 124,
+            "n_fine": 248,
+            "refinement_assessed": true,
+            "relative_shift": 0.009017449350040901,
+            "standard_error": 3.0209129362259384e-05
+          }
+        },
+        "relative_difference": 0.007116063831093541,
+        "relative_shift": 0.007116063831093541,
+        "same_random_streams": true,
+        "standard_error": 5.4844812723559674e-05,
+        "uncertainty_method": "paired site bootstrap with paired realizations"
+      },
+      "reference": {
+        "checks": {
+          "confidence_interval_within_margin": false,
+          "every_region": false,
+          "refined_regions_within_margin": false,
+          "relative_shift": true,
+          "within_difference_error": true
+        },
+        "coarse_value": 0.002298084663452524,
+        "confidence_interval_95": [
+          -6.0328382032056715e-05,
+          0.0001310554521090417
+        ],
+        "difference": 3.4103709056884125e-05,
+        "equivalence_margin": 0.00011660941862547041,
+        "equivalent_within_margin": false,
+        "fine_value": 0.002332188372509408,
+        "fixed_site_transport_difference": {
+          "confidence": 0.95,
+          "confidence_interval": [
+            2.579187025285907e-06,
+            6.562823108848147e-05
+          ],
+          "consistent_with_zero_difference": false,
+          "degrees_of_freedom": 7,
+          "difference": 3.410370905688369e-05,
+          "equivalence_margin": 0.00011490423317262622,
+          "equivalent_within_margin": true,
+          "interpretation": "Transport uncertainty conditional on these sites; excludes source-position integration uncertainty.",
+          "mean_new": 0.002332188372509408,
+          "mean_previous": 0.0022980846634525244,
+          "n_new": 8,
+          "n_previous": 8,
+          "paired": true,
+          "relative_difference": 0.014840057722524475,
+          "standard_error": 1.3331725753198727e-05
+        },
+        "limitation": "Sites are treated as exchangeable within each region, with fixed area weights. Independent randomized position layouts are required to assess integration uncertainty and layout bias.",
+        "maximum_site_leverage": 0.00679508278000671,
+        "passed": false,
+        "regions": {
+          "S0_junction": {
+            "area_weight": 2.65625e-05,
+            "coarse_mean": 1.0224546712802767,
+            "confidence_interval_95": [
+              -0.045968784602076325,
+              -0.005327984429065876
+            ],
+            "difference": -0.025712629757785432,
+            "equivalent_within_margin": true,
+            "fine_mean": 0.9967420415224912,
+            "n_added": 68,
+            "n_coarse": 68,
+            "n_fine": 136,
+            "refinement_assessed": true,
+            "relative_shift": 0.025796674251354165,
+            "standard_error": 0.010486435666825491
+          },
+          "S1_le_0.05": {
+            "area_weight": 0.002636631097371374,
+            "coarse_mean": 0.09604816176470587,
+            "confidence_interval_95": [
+              0.010446006433823539,
+              0.04186895680147058
+            ],
+            "difference": 0.025050735294117665,
+            "equivalent_within_margin": false,
+            "fine_mean": 0.12109889705882354,
+            "n_added": 64,
+            "n_coarse": 64,
+            "n_fine": 128,
+            "refinement_assessed": true,
+            "relative_shift": 0.20686179562766227,
+            "standard_error": 0.008044282483966643
+          },
+          "S2_le_0.20": {
+            "area_weight": 0.032861575994413084,
+            "coarse_mean": 0.01894908088235294,
+            "confidence_interval_95": [
+              -0.002787346047794119,
+              1.23414522058838e-05
+            ],
+            "difference": -0.0013836397058823516,
+            "equivalent_within_margin": false,
+            "fine_mean": 0.01756544117647059,
+            "n_added": 128,
+            "n_coarse": 128,
+            "n_fine": 256,
+            "refinement_assessed": true,
+            "relative_shift": 0.07877056385784244,
+            "standard_error": 0.0007021589745861491
+          },
+          "S3_le_0.50": {
+            "area_weight": 0.17848066274749622,
+            "coarse_mean": 0.0033987132352941178,
+            "confidence_interval_95": [
+              -0.00017033318014705916,
+              0.00022390165441176445
+            ],
+            "difference": 2.068014705882337e-05,
+            "equivalent_within_margin": false,
+            "fine_mean": 0.003419393382352941,
+            "n_added": 128,
+            "n_coarse": 128,
+            "n_fine": 256,
+            "refinement_assessed": true,
+            "relative_shift": 0.006047899362954553,
+            "standard_error": 9.950806765239685e-05
+          },
+          "S4_bulk": {
+            "area_weight": 0.7859945676607194,
+            "coarse_mean": 0.0010030360531309297,
+            "confidence_interval_95": [
+              -6.330170777988599e-05,
+              9.13685958254271e-05
+            ],
+            "difference": 1.337760910815949e-05,
+            "equivalent_within_margin": false,
+            "fine_mean": 0.0010164136622390892,
+            "n_added": 124,
+            "n_coarse": 124,
+            "n_fine": 248,
+            "refinement_assessed": true,
+            "relative_shift": 0.01316157938952684,
+            "standard_error": 3.943433382102193e-05
+          }
+        },
+        "relative_difference": 0.01462305080450638,
+        "relative_shift": 0.01462305080450638,
+        "same_random_streams": true,
+        "standard_error": 4.843628252496855e-05,
+        "uncertainty_method": "paired site bootstrap with paired realizations"
+      }
+    },
+    "coarse_sites": 512,
+    "fine_sites": 1024,
+    "interpretation": "Nested-layout contrasts only; independent position layouts must also pass.",
+    "passed": false
+  },
+  "new_transports_launched": false,
+  "next_analysis_without_transport": [
+    {
+      "action": "Recompute balanced 512-site subsets of each existing independent 1024-site layout, retaining first half of sites in each region. Compare 1024 minus 512 using the four independent paired layout differences.",
+      "transport_runs": 0
+    },
+    {
+      "action": "Estimate within-region site spreads from archived measurements and plan allocation n_h proportional to W_h sigma_h subject to total sites<=1024 and per-junction coverage. Do not change area weights.",
+      "transport_runs": 0
+    }
+  ],
+  "objective": {
+    "definition": "J=sum_h W_h mean_i,r(b_i,r), b_i,r=sum_e a_e N_i,r,e/(n_primary E_gun)",
+    "symbol": "J",
+    "uncertainty": "SE is one standard error; RSE=SE/abs(J). Independent-layout intervals are Student-t with three degrees of freedom.",
+    "units": "junction_QPs_per_injected_eV"
+  },
+  "proposed_next_experiments_not_launched": [
+    "If independent paired spatial intervals remain too broad, use additional independently scrambled layouts of at most 1024 sites rather than more primaries at identical sites.",
+    "Use 512 sites and modest primary counts for optimizer comparisons, then independently check finalists on 1024 sites; report separate search and confirmation results.",
+    "Use identical objective, physical bounds, evaluation counts and time limits for random or Sobol sampling, Bayesian optimization and CMA-ES, with repeated independent searches."
+  ],
+  "retained_layout_agreement": {
+    "SiC-derived-rates": {
+      "confidence_interval_95": [
+        -0.0001276174424335684,
+        0.00011483998826211853
+      ],
+      "difference": -6.3887270857249275e-06,
+      "passed": false,
+      "regions": {
+        "S0_junction": {
+          "difference": -0.0035589749134948,
+          "independent_mean": 0.13916126730103806,
+          "retained_mean": 0.14272024221453286
+        },
+        "S1_le_0.05": {
+          "difference": -0.0022006433823529292,
+          "independent_mean": 0.03576663602941177,
+          "retained_mean": 0.0379672794117647
+        },
+        "S2_le_0.20": {
+          "difference": -0.00010597426470588308,
+          "independent_mean": 0.005925367647058823,
+          "retained_mean": 0.006031341911764706
+        },
+        "S3_le_0.50": {
+          "difference": -1.332720588235331e-05,
+          "independent_mean": 0.0024844669117647057,
+          "retained_mean": 0.002497794117647059
+        },
+        "S4_bulk": {
+          "difference": 6.831119544591785e-06,
+          "independent_mean": 0.0010299810246679315,
+          "retained_mean": 0.0010231499051233397
+        }
+      },
+      "standard_error": 3.809293346020372e-05,
+      "uncertainty_method": "Independent layout variance plus retained hierarchical variance; conservative t critical value with three degrees of freedom. Area weights held fixed."
+    },
+    "c44-1gpa": {
+      "confidence_interval_95": [
+        -0.00016436473710769106,
+        0.0001869011374191288
+      ],
+      "difference": 1.1268200155718864e-05,
+      "passed": false,
+      "regions": {
+        "S0_junction": {
+          "difference": 0.021241327854671255,
+          "independent_mean": 1.3236963451557093,
+          "retained_mean": 1.302455017301038
+        },
+        "S1_le_0.05": {
+          "difference": -0.0022063878676470416,
+          "independent_mean": 0.11751511948529414,
+          "retained_mean": 0.11972150735294118
+        },
+        "S2_le_0.20": {
+          "difference": -0.0004732996323529408,
+          "independent_mean": 0.019747564338235293,
+          "retained_mean": 0.020220863970588233
+        },
+        "S3_le_0.50": {
+          "difference": 0.00013761488970588306,
+          "independent_mean": 0.003367118566176471,
+          "retained_mean": 0.0032295036764705878
+        },
+        "S4_bulk": {
+          "difference": 9.558823529411662e-06,
+          "independent_mean": 0.0008197106261859582,
+          "retained_mean": 0.0008101518026565465
+        }
+      },
+      "standard_error": 5.518802845842599e-05,
+      "uncertainty_method": "Independent layout variance plus retained hierarchical variance; conservative t critical value with three degrees of freedom. Area weights held fixed."
+    },
+    "reference": {
+      "confidence_interval_95": [
+        -0.0001401830881743662,
+        0.00016525176764667495
+      ],
+      "difference": 1.2534339736154382e-05,
+      "passed": false,
+      "regions": {
+        "S0_junction": {
+          "difference": 0.013539792387543548,
+          "independent_mean": 1.0102818339100348,
+          "retained_mean": 0.9967420415224912
+        },
+        "S1_le_0.05": {
+          "difference": 0.0006756433823529306,
+          "independent_mean": 0.12177454044117647,
+          "retained_mean": 0.12109889705882354
+        },
+        "S2_le_0.20": {
+          "difference": -0.00013552389705882503,
+          "independent_mean": 0.017429917279411764,
+          "retained_mean": 0.01756544117647059
+        },
+        "S3_le_0.50": {
+          "difference": 5.9995404411765114e-05,
+          "independent_mean": 0.0034793887867647063,
+          "retained_mean": 0.003419393382352941
+        },
+        "S4_bulk": {
+          "difference": 5.265654648956312e-06,
+          "independent_mean": 0.0010216793168880455,
+          "retained_mean": 0.0010164136622390892
+        }
+      },
+      "standard_error": 4.798743270451068e-05,
+      "uncertainty_method": "Independent layout variance plus retained hierarchical variance; conservative t critical value with three degrees of freedom. Area weights held fixed."
+    }
+  },
+  "run_root": "material_scan_data/initial_checks_1024_20261014",
+  "schema": "initial-checks-audit-1",
+  "source": {
+    "frozen_file_count": 67428,
+    "source_archive": {
+      "created": 1792033140.079584,
+      "home": {
+        "bytes": 2150830754,
+        "manifest_sha256": "8d4bc45bf0a2bed9b3039664e48e9e1b3b51188d9d317ecc83c20f3adcc86837",
+        "members": 67428,
+        "path": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/initial_checks_1024_20261014/archives/source.tar.gz",
+        "schema": "material-scan-archive-1",
+        "sha256": "b8468c8f1da9ccd6c0038e2fe0bc7d5f9739df28c7b23baf4d0885081acb6c7a",
+        "verified": true
+      },
+      "independent": {
+        "bytes": 2150830754,
+        "manifest_sha256": "8d4bc45bf0a2bed9b3039664e48e9e1b3b51188d9d317ecc83c20f3adcc86837",
+        "members": 67428,
+        "path": "/data/htseng/material-scan-archives/initial_checks_1024_20261014/source.tar.gz",
+        "schema": "material-scan-archive-1",
+        "sha256": "b8468c8f1da9ccd6c0038e2fe0bc7d5f9739df28c7b23baf4d0885081acb6c7a",
+        "verified": true
+      },
+      "verified": true
+    },
+    "source_metadata_sha256": "e0834937cb601628ca5631532cd70d50ca9455b723fb823b3e0aeda2ec92b950",
+    "source_sha256": {
+      "analysis.py": "a694c4d35cbc821fb704d5f940afb4aa22e4cfed30350db3c34ed61a24c511ee",
+      "figures/plot.py": "7d8e72110491bd6274609fe60171d46b7ea4593ec46e98a45dbba8404430118a",
+      "parameters.yaml": "902b657893d5fc9fc99d1b7d23b4987e1aa9355cd4bad91f092fd69e8d020900",
+      "physics.py": "5132113c77d22c5dc6a3caff0b22909e3fde35503cc3a4e5198e1f37c9749edf",
+      "records.py": "cb65827bc75015be556ca7f54e5b08261a169f0f361ca51886ca16461441ef32",
+      "run_all.sh": "fb553af3c4a746fda3aeff458071a03d09c3cdfb5c7ef61c6c8a0e21cbaba46b",
+      "scan.py": "1c9bba8586da91c052e823ccc7fb9e1a5af320bc36fa449aa537b7a697281037",
+      "search.py": "7d6ff717a200507b6e3b783800b5f86050cfbe6d9c35e2c71133b39282c38c66"
+    }
+  },
+  "source_paths": {
+    "queue_status": "material_scan_data/initial_checks_1024_20261014/queue_status.json",
+    "spatial_validation": "material_scan_data/initial_checks_1024_20261014/source-validation.json",
+    "summary": "docs/results/initial_checks_summary.json"
+  },
+  "status": {
+    "max_sites": 1024,
+    "scientific_checks": {
+      "event_count": true,
+      "source_spatial": false
+    },
+    "state": "awaiting_review",
+    "studies": 10,
+    "updated": 1792075118.559444
+  },
+  "studies": {
+    "events-125000": {
+      "archive_current_verification": {
+        "independent_copy": {
+          "compressed_bytes": 229774711,
+          "exists": true,
+          "matches_recorded": true,
+          "sha256": "08d8654270e89c4a72f8486eff6cfba62be0b5145983cadbe254fab2fa31603e"
+        },
+        "path": {
+          "compressed_bytes": 229774711,
+          "exists": true,
+          "matches_recorded": true,
+          "sha256": "08d8654270e89c4a72f8486eff6cfba62be0b5145983cadbe254fab2fa31603e"
+        }
+      },
+      "archive_receipt": {
+        "bytes": 1073256091,
+        "compressed_bytes": 229774711,
+        "independent_copy": "/data/htseng/material-scan-archives/initial_checks_1024_20261014/events-125000.tar.gz",
+        "independent_copy_verified": true,
+        "manifest_sha256": "52ca34976f702a928fb139e7cad25daa3d4e274918865b1fae5c813bc6baf94e",
+        "members": 40965,
+        "path": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/initial_checks_1024_20261014/archives/events-125000.tar.gz",
+        "persistent_copy_verified": true,
+        "schema": "material-scan-archive-1",
+        "sha256": "08d8654270e89c4a72f8486eff6cfba62be0b5145983cadbe254fab2fa31603e",
+        "summary_content_hash": "a067c9496a453a8b41d5a1ea176ded6f257354f111b063bfd300e7fd92731d31",
+        "verified": true
+      },
+      "candidate_count": 2,
+      "complete": true,
+      "completed_tasks": 8192,
+      "estimates": {
+        "c44-1gpa": {
+          "by_replica": [
+            0.0022211863697122794,
+            0.002226758268435665,
+            0.0021910670297639054,
+            0.0021857122982137027,
+            0.0022139221776465677,
+            0.0021574284862485677,
+            0.00221231811378067,
+            0.0022072047262452674
+          ],
+          "maximum_site_leverage": 0.016914158631131104,
+          "means_by_stratum": {
+            "S0_junction": 1.3468510380622838,
+            "S1_le_0.05": 0.08845533088235294,
+            "S2_le_0.20": 0.022125367647058823,
+            "S3_le_0.50": 0.0032178308823529412,
+            "S4_bulk": 0.0008035104364326375
+          },
+          "relative_standard_error": 0.03333903511973865,
+          "sites_by_stratum": {
+            "S0_junction": 68,
+            "S1_le_0.05": 64,
+            "S2_le_0.20": 128,
+            "S3_le_0.50": 128,
+            "S4_bulk": 124
+          },
+          "standard_error": 7.341087783863298e-05,
+          "value": 0.0022019496837558284
+        },
+        "reference": {
+          "by_replica": [
+            0.0022541138087256497,
+            0.0023476328121464106,
+            0.002310160949511991,
+            0.0022515261720891097,
+            0.002290071641366651,
+            0.002292836062682176,
+            0.0022631656834931923,
+            0.0022841692761123643
+          ],
+          "maximum_site_leverage": 0.008683167654706099,
+          "means_by_stratum": {
+            "S0_junction": 1.0254501730103807,
+            "S1_le_0.05": 0.09565238970588236,
+            "S2_le_0.20": 0.019072610294117644,
+            "S3_le_0.50": 0.0033368566176470585,
+            "S4_bulk": 0.0009986717267552183
+          },
+          "relative_standard_error": 0.02713418968203522,
+          "sites_by_stratum": {
+            "S0_junction": 68,
+            "S1_le_0.05": 64,
+            "S2_le_0.20": 128,
+            "S3_le_0.50": 128,
+            "S4_bulk": 124
+          },
+          "standard_error": 6.204801069820464e-05,
+          "value": 0.002286709550765943
+        }
+      },
+      "event_count_check": {
+        "candidates": {
+          "c44-1gpa": {
+            "area_standard_error": 7.341087783863298e-05,
+            "conditional_on_sites": {
+              "confidence": 0.95,
+              "confidence_interval": [
+                -7.272292803229581e-05,
+                2.8297797962761823e-05
+              ],
+              "consistent_with_zero_difference": true,
+              "degrees_of_freedom": 9.042258478015837,
+              "difference": -2.221256503476699e-05,
+              "equivalence_margin": 0.00011120811243952976,
+              "equivalent_within_margin": true,
+              "mean_new": 0.002201949683755828,
+              "mean_previous": 0.002224162248790595,
+              "n_new": 8,
+              "n_previous": 8,
+              "paired": false,
+              "relative_difference": -0.009986935551507198,
+              "standard_error": 2.2344313681139113e-05
+            },
+            "passed": true,
+            "transport": {
+              "confidence": 0.95,
+              "confidence_interval": [
+                0.002182916403995632,
+                0.0022209829635160237
+              ],
+              "degrees_of_freedom": 7,
+              "mean": 0.002201949683755828,
+              "n_replicas": 8,
+              "relative_standard_error": 0.003655477380725836,
+              "standard_error": 8.049177262465837e-06,
+              "uncertainty_method": "Student-t interval across independent replicas at fixed source positions"
+            }
+          },
+          "reference": {
+            "area_standard_error": 6.204801069820464e-05,
+            "conditional_on_sites": {
+              "confidence": 0.95,
+              "confidence_interval": [
+                -5.6070384194073226e-05,
+                3.7167454220262265e-05
+              ],
+              "consistent_with_zero_difference": true,
+              "degrees_of_freedom": 11.747691706495207,
+              "difference": -9.45146498690548e-06,
+              "equivalence_margin": 0.00011480805078764242,
+              "equivalent_within_margin": true,
+              "mean_new": 0.002286709550765943,
+              "mean_previous": 0.0022961610157528484,
+              "n_new": 8,
+              "n_previous": 8,
+              "paired": false,
+              "relative_difference": -0.004116203054604428,
+              "standard_error": 2.134552063634468e-05
+            },
+            "passed": true,
+            "transport": {
+              "confidence": 0.95,
+              "confidence_interval": [
+                0.0022599502221180776,
+                0.002313468879413808
+              ],
+              "degrees_of_freedom": 7,
+              "mean": 0.002286709550765943,
+              "n_replicas": 8,
+              "relative_standard_error": 0.00494882467836093,
+              "standard_error": 1.1316524657074133e-05,
+              "uncertainty_method": "Student-t interval across independent replicas at fixed source positions"
+            }
+          }
+        },
+        "interpretation": "Independent transport banks at fixed sites. Position uncertainty is reported separately.",
+        "passed": true
+      },
+      "events_per_task": 125000,
+      "events_total_per_candidate": 512000000,
+      "replicas": 8,
+      "sites": 512,
+      "timing": {
+        "evaluation_s": 3492.8061278830282,
+        "preparation_s": 1.0421546520665288,
+        "total_s": 3495.0358767230064
+      }
+    },
+    "events-31250": {
+      "archive_current_verification": {
+        "independent_copy": {
+          "compressed_bytes": 106745898,
+          "exists": true,
+          "matches_recorded": true,
+          "sha256": "8e4ad8c9d3f1fe239f927c0b13fcf7c16ed1b9516b7d0837ffbc7a9f7530c2a8"
+        },
+        "path": {
+          "compressed_bytes": 106745898,
+          "exists": true,
+          "matches_recorded": true,
+          "sha256": "8e4ad8c9d3f1fe239f927c0b13fcf7c16ed1b9516b7d0837ffbc7a9f7530c2a8"
+        }
+      },
+      "archive_receipt": {
+        "bytes": 598233919,
+        "compressed_bytes": 106745898,
+        "independent_copy": "/data/htseng/material-scan-archives/initial_checks_1024_20261014/events-31250.tar.gz",
+        "independent_copy_verified": true,
+        "manifest_sha256": "27f8868b23d9850e958d7b6e271cbf16212de141e79842caa81b420566150f9f",
+        "members": 40965,
+        "path": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/initial_checks_1024_20261014/archives/events-31250.tar.gz",
+        "persistent_copy_verified": true,
+        "schema": "material-scan-archive-1",
+        "sha256": "8e4ad8c9d3f1fe239f927c0b13fcf7c16ed1b9516b7d0837ffbc7a9f7530c2a8",
+        "summary_content_hash": "7f45c3a13bcaf06d8a4b7f60eb2de26d71c76dabdc6d5bd88a57195c6e1d7aa5",
+        "verified": true
+      },
+      "candidate_count": 2,
+      "complete": true,
+      "completed_tasks": 8192,
+      "estimates": {
+        "c44-1gpa": {
+          "by_replica": [
+            0.002280452419010144,
+            0.002294813080096747,
+            0.002251757023679763,
+            0.0021080376316470954,
+            0.00219921759176617,
+            0.0021913419391153856,
+            0.002238175882371001,
+            0.0022295024226384533
+          ],
+          "maximum_site_leverage": 0.016225132093966574,
+          "means_by_stratum": {
+            "S0_junction": 1.3490325259515572,
+            "S1_le_0.05": 0.08904338235294118,
+            "S2_le_0.20": 0.02222720588235294,
+            "S3_le_0.50": 0.003309926470588235,
+            "S4_bulk": 0.0008045540796963945
+          },
+          "relative_standard_error": 0.03441977559400466,
+          "sites_by_stratum": {
+            "S0_junction": 68,
+            "S1_le_0.05": 64,
+            "S2_le_0.20": 128,
+            "S3_le_0.50": 128,
+            "S4_bulk": 124
+          },
+          "standard_error": 7.655516548802899e-05,
+          "value": 0.0022241622487905936
+        },
+        "reference": {
+          "by_replica": [
+            0.0022931065314053577,
+            0.002293069722520948,
+            0.0023484870302139227,
+            0.0021937370247531295,
+            0.002253760863661668,
+            0.0023272782022960344,
+            0.002334935780146735,
+            0.0023249129710249923
+          ],
+          "maximum_site_leverage": 0.008833758015742058,
+          "means_by_stratum": {
+            "S0_junction": 1.0278961937716264,
+            "S1_le_0.05": 0.09652794117647058,
+            "S2_le_0.20": 0.01880036764705882,
+            "S3_le_0.50": 0.0034191176470588234,
+            "S4_bulk": 0.001000379506641366
+          },
+          "relative_standard_error": 0.029508240638642116,
+          "sites_by_stratum": {
+            "S0_junction": 68,
+            "S1_le_0.05": 64,
+            "S2_le_0.20": 128,
+            "S3_le_0.50": 128,
+            "S4_bulk": 124
+          },
+          "standard_error": 6.775567179790393e-05,
+          "value": 0.0022961610157528475
+        }
+      },
+      "event_count_check": {
+        "candidates": {
+          "c44-1gpa": {
+            "area_standard_error": 7.655516548802899e-05,
+            "conditional_on_sites": null,
+            "passed": false,
+            "transport": {
+              "confidence": 0.95,
+              "confidence_interval": [
+                0.002174873637265605,
+                0.0022734508603155846
+              ],
+              "degrees_of_freedom": 7,
+              "mean": 0.002224162248790595,
+              "n_replicas": 8,
+              "relative_standard_error": 0.009371691407100907,
+              "standard_error": 2.0844162234989046e-05,
+              "uncertainty_method": "Student-t interval across independent replicas at fixed source positions"
+            }
+          },
+          "reference": {
+            "area_standard_error": 6.775567179790393e-05,
+            "conditional_on_sites": null,
+            "passed": false,
+            "transport": {
+              "confidence": 0.95,
+              "confidence_interval": [
+                0.0022533640916695507,
+                0.002338957939836146
+              ],
+              "degrees_of_freedom": 7,
+              "mean": 0.0022961610157528484,
+              "n_replicas": 8,
+              "relative_standard_error": 0.007882211387882084,
+              "standard_error": 1.8098826506777994e-05,
+              "uncertainty_method": "Student-t interval across independent replicas at fixed source positions"
+            }
+          }
+        },
+        "interpretation": "Independent transport banks at fixed sites. Position uncertainty is reported separately.",
+        "passed": false
+      },
+      "events_per_task": 31250,
+      "events_total_per_candidate": 128000000,
+      "replicas": 8,
+      "sites": 512,
+      "timing": {
+        "evaluation_s": 1046.5885500689037,
+        "preparation_s": 1.0381169938482344,
+        "total_s": 1048.8046086546965
+      }
+    },
+    "events-500000": {
+      "archive_current_verification": {
+        "independent_copy": {
+          "compressed_bytes": 716600300,
+          "exists": true,
+          "matches_recorded": true,
+          "sha256": "a9f6851cf81bc065775a96c642727198c9b3dabaf1dad87627428dc99a1eccf7"
+        },
+        "path": {
+          "compressed_bytes": 716600300,
+          "exists": true,
+          "matches_recorded": true,
+          "sha256": "a9f6851cf81bc065775a96c642727198c9b3dabaf1dad87627428dc99a1eccf7"
+        }
+      },
+      "archive_receipt": {
+        "bytes": 2985568093,
+        "compressed_bytes": 716600300,
+        "independent_copy": "/data/htseng/material-scan-archives/initial_checks_1024_20261014/events-500000.tar.gz",
+        "independent_copy_verified": true,
+        "manifest_sha256": "2d61cb7d1008acabf1bbc288fe0dc22e3d22389b0b64229c60230832ff529925",
+        "members": 40965,
+        "path": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/initial_checks_1024_20261014/archives/events-500000.tar.gz",
+        "persistent_copy_verified": true,
+        "schema": "material-scan-archive-1",
+        "sha256": "a9f6851cf81bc065775a96c642727198c9b3dabaf1dad87627428dc99a1eccf7",
+        "summary_content_hash": "1c8a1e6e80be48daa30feb4820969372423a02e53a42bab2aff1b98ce30d62bc",
+        "verified": true
+      },
+      "candidate_count": 2,
+      "complete": true,
+      "completed_tasks": 8192,
+      "estimates": {
+        "c44-1gpa": {
+          "by_replica": [
+            0.0021983350128467233,
+            0.0022205857213976076,
+            0.0022021587878022493,
+            0.00220002106799356,
+            0.002207823786978558,
+            0.0021927111669208708,
+            0.0022124945918389335,
+            0.0022238250582685684
+          ],
+          "maximum_site_leverage": 0.017452412992055664,
+          "means_by_stratum": {
+            "S0_junction": 1.3466781141868511,
+            "S1_le_0.05": 0.08853667279411764,
+            "S2_le_0.20": 0.022174402573529414,
+            "S3_le_0.50": 0.0032248621323529413,
+            "S4_bulk": 0.000806333017077799
+          },
+          "relative_standard_error": 0.03194416377159042,
+          "sites_by_stratum": {
+            "S0_junction": 68,
+            "S1_le_0.05": 64,
+            "S2_le_0.20": 128,
+            "S3_le_0.50": 128,
+            "S4_bulk": 124
+          },
+          "standard_error": 7.050857657375567e-05,
+          "value": 0.0022072443992558837
+        },
+        "reference": {
+          "by_replica": [
+            0.00226305205623434,
+            0.0022763716756289184,
+            0.002253195493171451,
+            0.0022904430764797033,
+            0.0022527752730267074,
+            0.002294159024604712,
+            0.0022980957434987647,
+            0.002291713575662064
+          ],
+          "maximum_site_leverage": 0.008763131651358707,
+          "means_by_stratum": {
+            "S0_junction": 1.0244315743944636,
+            "S1_le_0.05": 0.09662624080882354,
+            "S2_le_0.20": 0.01901015625,
+            "S3_le_0.50": 0.0033418198529411762,
+            "S4_bulk": 0.0009851755218216317
+          },
+          "relative_standard_error": 0.02577333572358902,
+          "sites_by_stratum": {
+            "S0_junction": 68,
+            "S1_le_0.05": 64,
+            "S2_le_0.20": 128,
+            "S3_le_0.50": 128,
+            "S4_bulk": 124
+          },
+          "standard_error": 5.869814684389396e-05,
+          "value": 0.0022774757397883323
+        }
+      },
+      "event_count_check": {
+        "candidates": {
+          "c44-1gpa": {
+            "area_standard_error": 7.050857657375567e-05,
+            "conditional_on_sites": {
+              "confidence": 0.95,
+              "confidence_interval": [
+                -1.4600458264325408e-05,
+                2.518988926443783e-05
+              ],
+              "consistent_with_zero_difference": true,
+              "degrees_of_freedom": 10.107383593692882,
+              "difference": 5.29471550005621e-06,
+              "equivalence_margin": 0.0001100974841877914,
+              "equivalent_within_margin": true,
+              "mean_new": 0.002207244399255884,
+              "mean_previous": 0.002201949683755828,
+              "n_new": 8,
+              "n_previous": 8,
+              "paired": false,
+              "relative_difference": 0.002404557896629638,
+              "standard_error": 8.941915309468604e-06
+            },
+            "passed": true,
+            "transport": {
+              "confidence": 0.95,
+              "confidence_interval": [
+                0.0021980349255035173,
+                0.002216453873008251
+              ],
+              "degrees_of_freedom": 7,
+              "mean": 0.002207244399255884,
+              "n_replicas": 8,
+              "relative_standard_error": 0.0017645023925073116,
+              "standard_error": 3.894688023335371e-06,
+              "uncertainty_method": "Student-t interval across independent replicas at fixed source positions"
+            }
+          },
+          "reference": {
+            "area_standard_error": 5.869814684389396e-05,
+            "conditional_on_sites": {
+              "confidence": 0.95,
+              "confidence_interval": [
+                -3.8031704151455245e-05,
+                1.956408219623497e-05
+              ],
+              "consistent_with_zero_difference": true,
+              "degrees_of_freedom": 11.328736830668944,
+              "difference": -9.233810977610137e-06,
+              "equivalence_margin": 0.00011433547753829715,
+              "equivalent_within_margin": true,
+              "mean_new": 0.0022774757397883327,
+              "mean_previous": 0.002286709550765943,
+              "n_new": 8,
+              "n_previous": 8,
+              "paired": false,
+              "relative_difference": -0.004038034027765893,
+              "standard_error": 1.313042967490242e-05
+            },
+            "passed": true,
+            "transport": {
+              "confidence": 0.95,
+              "confidence_interval": [
+                0.002261729321237238,
+                0.0022932221583394276
+              ],
+              "degrees_of_freedom": 7,
+              "mean": 0.0022774757397883327,
+              "n_replicas": 8,
+              "relative_standard_error": 0.002923922735698661,
+              "standard_error": 6.6591630955692334e-06,
+              "uncertainty_method": "Student-t interval across independent replicas at fixed source positions"
+            }
+          }
+        },
+        "interpretation": "Independent transport banks at fixed sites. Position uncertainty is reported separately.",
+        "passed": true
+      },
+      "events_per_task": 500000,
+      "events_total_per_candidate": 2048000000,
+      "replicas": 8,
+      "sites": 512,
+      "timing": {
+        "evaluation_s": 9305.931843407918,
+        "preparation_s": 1.037533797789365,
+        "total_s": 9307.561896215193
+      }
+    },
+    "pilot": {
+      "archive_current_verification": {
+        "independent_copy": {
+          "compressed_bytes": 4245414,
+          "exists": true,
+          "matches_recorded": true,
+          "sha256": "55af40d19194a6f43c40e32d1cb188df79df8c1ac801711ca3dc19189f505a7c"
+        },
+        "path": {
+          "compressed_bytes": 4245414,
+          "exists": true,
+          "matches_recorded": true,
+          "sha256": "55af40d19194a6f43c40e32d1cb188df79df8c1ac801711ca3dc19189f505a7c"
+        }
+      },
+      "archive_receipt": {
+        "bytes": 22493642,
+        "compressed_bytes": 4245414,
+        "independent_copy": "/data/htseng/material-scan-archives/initial_checks_1024_20261014/pilot.tar.gz",
+        "independent_copy_verified": true,
+        "manifest_sha256": "22f9c2cf5a04836f7af64e2d710ae8960e66fbd3a23209ed4e37cbe5dec65886",
+        "members": 1285,
+        "path": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/initial_checks_1024_20261014/archives/pilot.tar.gz",
+        "persistent_copy_verified": true,
+        "schema": "material-scan-archive-1",
+        "sha256": "55af40d19194a6f43c40e32d1cb188df79df8c1ac801711ca3dc19189f505a7c",
+        "summary_content_hash": "8c96cbb5861ed96914d7b08abf0666a95eae3ea510a51e7822b6692e291c36fb",
+        "verified": true
+      },
+      "candidate_count": 1,
+      "complete": true,
+      "completed_tasks": 256,
+      "estimates": {
+        "reference": {
+          "by_replica": [
+            0.002032615953128742,
+            0.002282281298563569
+          ],
+          "maximum_site_leverage": 0.050289991777210906,
+          "means_by_stratum": {
+            "S0_junction": 1.0143335640138407,
+            "S1_le_0.05": 0.0881764705882353,
+            "S2_le_0.20": 0.020870588235294116,
+            "S3_le_0.50": 0.0026745098039215685,
+            "S4_bulk": 0.0009349019607843137
+          },
+          "relative_standard_error": 0.08360726355172285,
+          "sites_by_stratum": {
+            "S0_junction": 34,
+            "S1_le_0.05": 16,
+            "S2_le_0.20": 24,
+            "S3_le_0.50": 24,
+            "S4_bulk": 30
+          },
+          "standard_error": 0.0001803783758604218,
+          "value": 0.0021574486258461555
+        }
+      },
+      "event_count_check": null,
+      "events_per_task": 31250,
+      "events_total_per_candidate": 8000000,
+      "replicas": 2,
+      "sites": 128,
+      "timing": {
+        "evaluation_s": 34.44444405985996,
+        "preparation_s": 1.0397276119329035,
+        "total_s": 35.49943712493405
+      }
+    },
+    "source-1024": {
+      "archive_current_verification": {
+        "independent_copy": {
+          "compressed_bytes": 378760439,
+          "exists": true,
+          "matches_recorded": true,
+          "sha256": "ba4c1845fac0351dbed93cac873b4d05d6accef9435ac418c7f3879a205ccefa"
+        },
+        "path": {
+          "compressed_bytes": 378760439,
+          "exists": true,
+          "matches_recorded": true,
+          "sha256": "ba4c1845fac0351dbed93cac873b4d05d6accef9435ac418c7f3879a205ccefa"
+        }
+      },
+      "archive_receipt": {
+        "bytes": 2026113904,
+        "compressed_bytes": 378760439,
+        "independent_copy": "/data/htseng/material-scan-archives/initial_checks_1024_20261014/source-1024.tar.gz",
+        "independent_copy_verified": true,
+        "manifest_sha256": "9f980096600e0070ab9c291f200d2b245b054a09d906028d1871c02c5aa217f5",
+        "members": 122885,
+        "path": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/initial_checks_1024_20261014/archives/source-1024.tar.gz",
+        "persistent_copy_verified": true,
+        "schema": "material-scan-archive-1",
+        "sha256": "ba4c1845fac0351dbed93cac873b4d05d6accef9435ac418c7f3879a205ccefa",
+        "summary_content_hash": "f291bcac8c710312bcb6ad3fef1eae475438e3add0c3dff6303472e957e90823",
+        "verified": true
+      },
+      "candidate_count": 3,
+      "complete": true,
+      "completed_tasks": 24576,
+      "estimates": {
+        "SiC-derived-rates": {
+          "by_replica": [
+            0.0015106914045071263,
+            0.001548341290813961,
+            0.0015994529156458824,
+            0.0015971533410527993,
+            0.0015947478433582648,
+            0.0015369279755423626,
+            0.0015312043471783238,
+            0.0014982355494947614
+          ],
+          "maximum_site_leverage": 0.006053845948929662,
+          "means_by_stratum": {
+            "S0_junction": 0.14272024221453286,
+            "S1_le_0.05": 0.0379672794117647,
+            "S2_le_0.20": 0.006031341911764706,
+            "S3_le_0.50": 0.002497794117647059,
+            "S4_bulk": 0.0010231499051233397
+          },
+          "relative_standard_error": 0.024200252151590728,
+          "sites_by_stratum": {
+            "S0_junction": 136,
+            "S1_le_0.05": 128,
+            "S2_le_0.20": 256,
+            "S3_le_0.50": 256,
+            "S4_bulk": 248
+          },
+          "standard_error": 3.7561074232525415e-05,
+          "value": 0.0015520943334491849
+        },
+        "c44-1gpa": {
+          "by_replica": [
+            0.002232015171236193,
+            0.002236904674083337,
+            0.0021902228278256218,
+            0.002225828014219895,
+            0.002233385476335081,
+            0.002250548962553105,
+            0.0022474612838708284,
+            0.002207043519001576
+          ],
+          "maximum_site_leverage": 0.00848387463580987,
+          "means_by_stratum": {
+            "S0_junction": 1.302455017301038,
+            "S1_le_0.05": 0.11972150735294118,
+            "S2_le_0.20": 0.020220863970588233,
+            "S3_le_0.50": 0.0032295036764705878,
+            "S4_bulk": 0.0008101518026565465
+          },
+          "relative_standard_error": 0.024482203506994118,
+          "sites_by_stratum": {
+            "S0_junction": 136,
+            "S1_le_0.05": 128,
+            "S2_le_0.20": 256,
+            "S3_le_0.50": 256,
+            "S4_bulk": 248
+          },
+          "standard_error": 5.454454363417919e-05,
+          "value": 0.002227926241140705
+        },
+        "reference": {
+          "by_replica": [
+            0.0023758085925529677,
+            0.0022746945761989244,
+            0.002318493084183959,
+            0.0023556787988847226,
+            0.002299313115327559,
+            0.002330330661750881,
+            0.0023789102991114827,
+            0.0023242778520647695
+          ],
+          "maximum_site_leverage": 0.00679508278000671,
+          "means_by_stratum": {
+            "S0_junction": 0.9967420415224912,
+            "S1_le_0.05": 0.12109889705882354,
+            "S2_le_0.20": 0.01756544117647059,
+            "S3_le_0.50": 0.003419393382352941,
+            "S4_bulk": 0.0010164136622390892
+          },
+          "relative_standard_error": 0.020283578008805286,
+          "sites_by_stratum": {
+            "S0_junction": 136,
+            "S1_le_0.05": 128,
+            "S2_le_0.20": 256,
+            "S3_le_0.50": 256,
+            "S4_bulk": 248
+          },
+          "standard_error": 4.7305124785023225e-05,
+          "value": 0.002332188372509408
+        }
+      },
+      "event_count_check": null,
+      "events_per_task": 62500,
+      "events_total_per_candidate": 512000000,
+      "replicas": 8,
+      "sites": 1024,
+      "timing": {
+        "evaluation_s": 4724.13170542568,
+        "preparation_s": 1.0515225338749588,
+        "total_s": 4726.825502960943
+      }
+    },
+    "source-512": {
+      "archive_current_verification": {
+        "independent_copy": {
+          "compressed_bytes": 189253273,
+          "exists": true,
+          "matches_recorded": true,
+          "sha256": "00c1574ae8ba30f2a466f7e7cdf7ab5a2fac21076d5d9a52b161bd445705efa4"
+        },
+        "path": {
+          "compressed_bytes": 189253273,
+          "exists": true,
+          "matches_recorded": true,
+          "sha256": "00c1574ae8ba30f2a466f7e7cdf7ab5a2fac21076d5d9a52b161bd445705efa4"
+        }
+      },
+      "archive_receipt": {
+        "bytes": 1014122050,
+        "compressed_bytes": 189253273,
+        "independent_copy": "/data/htseng/material-scan-archives/initial_checks_1024_20261014/source-512.tar.gz",
+        "independent_copy_verified": true,
+        "manifest_sha256": "be25beab3aefefa04422bb833f9e51599700aa7909008473437aa7a2a7e83ef8",
+        "members": 61445,
+        "path": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/initial_checks_1024_20261014/archives/source-512.tar.gz",
+        "persistent_copy_verified": true,
+        "schema": "material-scan-archive-1",
+        "sha256": "00c1574ae8ba30f2a466f7e7cdf7ab5a2fac21076d5d9a52b161bd445705efa4",
+        "summary_content_hash": "c741277af43b221bce62688e2c981cc4ca4f59b4c55385506857e60f5fe19e51",
+        "verified": true
+      },
+      "candidate_count": 3,
+      "complete": true,
+      "completed_tasks": 12288,
+      "estimates": {
+        "SiC-derived-rates": {
+          "by_replica": [
+            0.001559356525673401,
+            0.0015677682541165704,
+            0.0015511177000122381,
+            0.001477114377843146,
+            0.0015131658259817959,
+            0.001411202475907755,
+            0.0015476179946100229,
+            0.0015412715505456426
+          ],
+          "maximum_site_leverage": 0.011668223449761903,
+          "means_by_stratum": {
+            "S0_junction": 0.1396764705882353,
+            "S1_le_0.05": 0.027281985294117645,
+            "S2_le_0.20": 0.006247426470588235,
+            "S3_le_0.50": 0.0024909926470588237,
+            "S4_bulk": 0.001012144212523719
+          },
+          "relative_standard_error": 0.03314877367754955,
+          "sites_by_stratum": {
+            "S0_junction": 68,
+            "S1_le_0.05": 64,
+            "S2_le_0.20": 128,
+            "S3_le_0.50": 128,
+            "S4_bulk": 124
+          },
+          "standard_error": 5.042183185188614e-05,
+          "value": 0.001521076838086321
+        },
+        "c44-1gpa": {
+          "by_replica": [
+            0.002172293522381692,
+            0.002205681218715545,
+            0.0021659575073384703,
+            0.0021702649945553043,
+            0.0022785423307009017,
+            0.0021375823360917914,
+            0.0020919451773615382,
+            0.0020878239335491372
+          ],
+          "maximum_site_leverage": 0.017370412436850266,
+          "means_by_stratum": {
+            "S0_junction": 1.347444636678201,
+            "S1_le_0.05": 0.08810367647058824,
+            "S2_le_0.20": 0.022222426470588235,
+            "S3_le_0.50": 0.0032397058823529414,
+            "S4_bulk": 0.0007470588235294118
+          },
+          "relative_standard_error": 0.03396043858820379,
+          "sites_by_stratum": {
+            "S0_junction": 68,
+            "S1_le_0.05": 64,
+            "S2_le_0.20": 128,
+            "S3_le_0.50": 128,
+            "S4_bulk": 124
+          },
+          "standard_error": 7.348228538306367e-05,
+          "value": 0.0021637613775867975
+        },
+        "reference": {
+          "by_replica": [
+            0.002302113798388697,
+            0.002246999366545236,
+            0.002377363024413474,
+            0.00224422084572299,
+            0.002323783662152113,
+            0.0022808105547834487,
+            0.0022640229046519914,
+            0.0022925947126305945
+          ],
+          "maximum_site_leverage": 0.008456801658995237,
+          "means_by_stratum": {
+            "S0_junction": 1.0249532871972318,
+            "S1_le_0.05": 0.09744705882352941,
+            "S2_le_0.20": 0.019031617647058824,
+            "S3_le_0.50": 0.0032737132352941177,
+            "S4_bulk": 0.0010148007590132827
+          },
+          "relative_standard_error": 0.027694283303839606,
+          "sites_by_stratum": {
+            "S0_junction": 68,
+            "S1_le_0.05": 64,
+            "S2_le_0.20": 128,
+            "S3_le_0.50": 128,
+            "S4_bulk": 124
+          },
+          "standard_error": 6.346113471578084e-05,
+          "value": 0.0022914886086610672
+        }
+      },
+      "event_count_check": null,
+      "events_per_task": 62500,
+      "events_total_per_candidate": 256000000,
+      "replicas": 8,
+      "sites": 512,
+      "timing": {
+        "evaluation_s": 2579.0313654188067,
+        "preparation_s": 1.0398536291904747,
+        "total_s": 2582.3636734569445
+      }
+    },
+    "source-independent-01": {
+      "archive_current_verification": {
+        "independent_copy": {
+          "compressed_bytes": 377892020,
+          "exists": true,
+          "matches_recorded": true,
+          "sha256": "9ebe15a985a3b3546a9b17579bb4f7adafea59984225ef53e7d5a833fe3af408"
+        },
+        "path": {
+          "compressed_bytes": 377892020,
+          "exists": true,
+          "matches_recorded": true,
+          "sha256": "9ebe15a985a3b3546a9b17579bb4f7adafea59984225ef53e7d5a833fe3af408"
+        }
+      },
+      "archive_receipt": {
+        "bytes": 2024000949,
+        "compressed_bytes": 377892020,
+        "independent_copy": "/data/htseng/material-scan-archives/initial_checks_1024_20261014/source-independent-01.tar.gz",
+        "independent_copy_verified": true,
+        "manifest_sha256": "1805f85235069a3f08520765719573a2ed02acfc34671e48606ee3bc9d216787",
+        "members": 122885,
+        "path": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/initial_checks_1024_20261014/archives/source-independent-01.tar.gz",
+        "persistent_copy_verified": true,
+        "schema": "material-scan-archive-1",
+        "sha256": "9ebe15a985a3b3546a9b17579bb4f7adafea59984225ef53e7d5a833fe3af408",
+        "summary_content_hash": "4904391ab6becfe5b94a117095a3e5d13ce759087145b1ce8a5c8525050f2e32",
+        "verified": true
+      },
+      "candidate_count": 3,
+      "complete": true,
+      "completed_tasks": 24576,
+      "estimates": {
+        "SiC-derived-rates": {
+          "by_replica": [
+            0.0015616421350860303,
+            0.0015830506349243023,
+            0.0015808490243246743,
+            0.0015200479877488437,
+            0.0016303695485017906,
+            0.0015450237377061297,
+            0.001550811346460838,
+            0.0015114219900884437
+          ],
+          "maximum_site_leverage": 0.006690683047761216,
+          "means_by_stratum": {
+            "S0_junction": 0.13743512110726644,
+            "S1_le_0.05": 0.033209007352941175,
+            "S2_le_0.20": 0.006108455882352941,
+            "S3_le_0.50": 0.0024892463235294117,
+            "S4_bulk": 0.0010485768500948765
+          },
+          "relative_standard_error": 0.024534354706289046,
+          "sites_by_stratum": {
+            "S0_junction": 136,
+            "S1_le_0.05": 128,
+            "S2_le_0.20": 256,
+            "S3_le_0.50": 256,
+            "S4_bulk": 248
+          },
+          "standard_error": 3.828345739396708e-05,
+          "value": 0.0015604020506051312
+        },
+        "c44-1gpa": {
+          "by_replica": [
+            0.002222511962081687,
+            0.0022655263532314865,
+            0.0022428186019964737,
+            0.0022161900108768288,
+            0.0022741410690721047,
+            0.0022986962974215607,
+            0.00222479488074498,
+            0.0022869020813204607
+          ],
+          "maximum_site_leverage": 0.007459966674583467,
+          "means_by_stratum": {
+            "S0_junction": 1.3117340830449828,
+            "S1_le_0.05": 0.10937867647058824,
+            "S2_le_0.20": 0.02023455882352941,
+            "S3_le_0.50": 0.003468198529411765,
+            "S4_bulk": 0.000822865275142315
+          },
+          "relative_standard_error": 0.02377538000130044,
+          "sites_by_stratum": {
+            "S0_junction": 136,
+            "S1_le_0.05": 128,
+            "S2_le_0.20": 256,
+            "S3_le_0.50": 256,
+            "S4_bulk": 248
+          },
+          "standard_error": 5.3588462050431596e-05,
+          "value": 0.0022539476570931976
+        },
+        "reference": {
+          "by_replica": [
+            0.0024077704417748585,
+            0.0023295468846117073,
+            0.0023816273902728387,
+            0.0024120424017814498,
+            0.0023202487542289697,
+            0.002344806309990684,
+            0.002325798534788062,
+            0.0023657605371992575
+          ],
+          "maximum_site_leverage": 0.005390658685092626,
+          "means_by_stratum": {
+            "S0_junction": 1.00405,
+            "S1_le_0.05": 0.11404319852941178,
+            "S2_le_0.20": 0.017904044117647056,
+            "S3_le_0.50": 0.003510202205882353,
+            "S4_bulk": 0.0010416508538899432
+          },
+          "relative_standard_error": 0.020756252052721552,
+          "sites_by_stratum": {
+            "S0_junction": 136,
+            "S1_le_0.05": 128,
+            "S2_le_0.20": 256,
+            "S3_le_0.50": 256,
+            "S4_bulk": 248
+          },
+          "standard_error": 4.900447653909626e-05,
+          "value": 0.0023609501568309784
+        }
+      },
+      "event_count_check": null,
+      "events_per_task": 62500,
+      "events_total_per_candidate": 512000000,
+      "replicas": 8,
+      "sites": 1024,
+      "timing": {
+        "evaluation_s": 5055.913304375019,
+        "preparation_s": 0.7725102319382131,
+        "total_s": 5059.952217028942
+      }
+    },
+    "source-independent-02": {
+      "archive_current_verification": {
+        "independent_copy": {
+          "compressed_bytes": 379628485,
+          "exists": true,
+          "matches_recorded": true,
+          "sha256": "9a1e8c72966e7c9425d0965b1a1cf6e93141682a8be4a75832bd42af37c934cd"
+        },
+        "path": {
+          "compressed_bytes": 379628485,
+          "exists": true,
+          "matches_recorded": true,
+          "sha256": "9a1e8c72966e7c9425d0965b1a1cf6e93141682a8be4a75832bd42af37c934cd"
+        }
+      },
+      "archive_receipt": {
+        "bytes": 2029347627,
+        "compressed_bytes": 379628485,
+        "independent_copy": "/data/htseng/material-scan-archives/initial_checks_1024_20261014/source-independent-02.tar.gz",
+        "independent_copy_verified": true,
+        "manifest_sha256": "87451f6a9daa7d8ac78e46c522765996dfadd24137d5dbd72f8901c91c554460",
+        "members": 122885,
+        "path": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/initial_checks_1024_20261014/archives/source-independent-02.tar.gz",
+        "persistent_copy_verified": true,
+        "schema": "material-scan-archive-1",
+        "sha256": "9a1e8c72966e7c9425d0965b1a1cf6e93141682a8be4a75832bd42af37c934cd",
+        "summary_content_hash": "3dd735cbfdb0576897ed8e8273a6137609f086be61da5b1ff0f3501ce40b020c",
+        "verified": true
+      },
+      "candidate_count": 3,
+      "complete": true,
+      "completed_tasks": 24576,
+      "estimates": {
+        "SiC-derived-rates": {
+          "by_replica": [
+            0.001504083999723899,
+            0.0015725403699280941,
+            0.00160714046257485,
+            0.0015686666272831519,
+            0.0015544446135150668,
+            0.001562917107266772,
+            0.0015312745952328903,
+            0.0015159734245757458
+          ],
+          "maximum_site_leverage": 0.00639002326590432,
+          "means_by_stratum": {
+            "S0_junction": 0.13872335640138408,
+            "S1_le_0.05": 0.03439540441176471,
+            "S2_le_0.20": 0.005979044117647059,
+            "S3_le_0.50": 0.002501654411764706,
+            "S4_bulk": 0.0010366223908918404
+          },
+          "relative_standard_error": 0.024561316182023906,
+          "sites_by_stratum": {
+            "S0_junction": 136,
+            "S1_le_0.05": 128,
+            "S2_le_0.20": 256,
+            "S3_le_0.50": 256,
+            "S4_bulk": 248
+          },
+          "standard_error": 3.812235937011065e-05,
+          "value": 0.0015521301500125585
+        },
+        "c44-1gpa": {
+          "by_replica": [
+            0.00222287681715264,
+            0.0022782947847052202,
+            0.0022531730376774547,
+            0.0021935238364435873,
+            0.0022753435457046616,
+            0.0022895210804330227,
+            0.0022277027780255787,
+            0.002248730244718638
+          ],
+          "maximum_site_leverage": 0.007378176011088868,
+          "means_by_stratum": {
+            "S0_junction": 1.3190773356401384,
+            "S1_le_0.05": 0.11270698529411764,
+            "S2_le_0.20": 0.019562132352941176,
+            "S3_le_0.50": 0.0033528492647058824,
+            "S4_bulk": 0.0008590132827324477
+          },
+          "relative_standard_error": 0.024000348105739137,
+          "sites_by_stratum": {
+            "S0_junction": 136,
+            "S1_le_0.05": 128,
+            "S2_le_0.20": 256,
+            "S3_le_0.50": 256,
+            "S4_bulk": 248
+          },
+          "standard_error": 5.3968281141078695e-05,
+          "value": 0.0022486457656076
+        },
+        "reference": {
+          "by_replica": [
+            0.0023279070943773715,
+            0.0023539930913654777,
+            0.0022992925039998615,
+            0.002317885450736662,
+            0.0023438961927742734,
+            0.002368795084737291,
+            0.002293894453574573,
+            0.0022784240816266215
+          ],
+          "maximum_site_leverage": 0.00645430263993297,
+          "means_by_stratum": {
+            "S0_junction": 1.0081192041522493,
+            "S1_le_0.05": 0.11945551470588237,
+            "S2_le_0.20": 0.017178308823529408,
+            "S3_le_0.50": 0.003504871323529412,
+            "S4_bulk": 0.001006641366223909
+          },
+          "relative_standard_error": 0.02069500767347062,
+          "sites_by_stratum": {
+            "S0_junction": 136,
+            "S1_le_0.05": 128,
+            "S2_le_0.20": 256,
+            "S3_le_0.50": 256,
+            "S4_bulk": 248
+          },
+          "standard_error": 4.807473034947051e-05,
+          "value": 0.0023230109941490165
+        }
+      },
+      "event_count_check": null,
+      "events_per_task": 62500,
+      "events_total_per_candidate": 512000000,
+      "replicas": 8,
+      "sites": 1024,
+      "timing": {
+        "evaluation_s": 4780.271365027875,
+        "preparation_s": 1.0469042328186333,
+        "total_s": 4782.976428332739
+      }
+    },
+    "source-independent-03": {
+      "archive_current_verification": {
+        "independent_copy": {
+          "compressed_bytes": 380326551,
+          "exists": true,
+          "matches_recorded": true,
+          "sha256": "62463588061221fb532c2f4e637835924536e04475b71075379d1fa7318d082e"
+        },
+        "path": {
+          "compressed_bytes": 380326551,
+          "exists": true,
+          "matches_recorded": true,
+          "sha256": "62463588061221fb532c2f4e637835924536e04475b71075379d1fa7318d082e"
+        }
+      },
+      "archive_receipt": {
+        "bytes": 2032732014,
+        "compressed_bytes": 380326551,
+        "independent_copy": "/data/htseng/material-scan-archives/initial_checks_1024_20261014/source-independent-03.tar.gz",
+        "independent_copy_verified": true,
+        "manifest_sha256": "66f46cb72a12b3ac19e63985674e5a2e925230a8ace0d8bd587f8fdf5362cc22",
+        "members": 122885,
+        "path": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/initial_checks_1024_20261014/archives/source-independent-03.tar.gz",
+        "persistent_copy_verified": true,
+        "schema": "material-scan-archive-1",
+        "sha256": "62463588061221fb532c2f4e637835924536e04475b71075379d1fa7318d082e",
+        "summary_content_hash": "10e0d55cb4e4b3bf2420fbd77e14d3a5ae6e024899bc6b6b749fcd98b1b54817",
+        "verified": true
+      },
+      "candidate_count": 3,
+      "complete": true,
+      "completed_tasks": 24576,
+      "estimates": {
+        "SiC-derived-rates": {
+          "by_replica": [
+            0.0015796489578576384,
+            0.0015286336634622918,
+            0.001510245446365401,
+            0.0015445773820168722,
+            0.0015522061985426237,
+            0.0015033620532835888,
+            0.001491073453483439,
+            0.0015623998243633822
+          ],
+          "maximum_site_leverage": 0.005930730686125584,
+          "means_by_stratum": {
+            "S0_junction": 0.14281098615916954,
+            "S1_le_0.05": 0.038794852941176475,
+            "S2_le_0.20": 0.005722242647058823,
+            "S3_le_0.50": 0.002485477941176471,
+            "S4_bulk": 0.0010130929791271346
+          },
+          "relative_standard_error": 0.023805063039132397,
+          "sites_by_stratum": {
+            "S0_junction": 136,
+            "S1_le_0.05": 128,
+            "S2_le_0.20": 256,
+            "S3_le_0.50": 256,
+            "S4_bulk": 248
+          },
+          "standard_error": 3.651740405869071e-05,
+          "value": 0.0015340183724219044
+        },
+        "c44-1gpa": {
+          "by_replica": [
+            0.0022858499246536756,
+            0.0021964299698209286,
+            0.002238274552249904,
+            0.002236656986613325,
+            0.00225652507390959,
+            0.002243556849618962,
+            0.002244715056630115,
+            0.002203708981150853
+          ],
+          "maximum_site_leverage": 0.008029245173864689,
+          "means_by_stratum": {
+            "S0_junction": 1.3093032871972319,
+            "S1_le_0.05": 0.128940625,
+            "S2_le_0.20": 0.019370220588235294,
+            "S3_le_0.50": 0.0033261948529411767,
+            "S4_bulk": 0.0008056925996204933
+          },
+          "relative_standard_error": 0.024084935922142038,
+          "sites_by_stratum": {
+            "S0_junction": 136,
+            "S1_le_0.05": 128,
+            "S2_le_0.20": 256,
+            "S3_le_0.50": 256,
+            "S4_bulk": 248
+          },
+          "standard_error": 5.390725701125819e-05,
+          "value": 0.002238214674330919
+        },
+        "reference": {
+          "by_replica": [
+            0.002301095490483566,
+            0.002371495419983848,
+            0.0024322056177929494,
+            0.002340477007787359,
+            0.0022835916784907603,
+            0.0023012653268753144,
+            0.002379508350127197,
+            0.002401299951087229
+          ],
+          "maximum_site_leverage": 0.006640718683972967,
+          "means_by_stratum": {
+            "S0_junction": 0.9996382352941178,
+            "S1_le_0.05": 0.13223437500000002,
+            "S2_le_0.20": 0.01682619485294118,
+            "S3_le_0.50": 0.003502205882352941,
+            "S4_bulk": 0.0010154648956356735
+          },
+          "relative_standard_error": 0.02070386102950593,
+          "sites_by_stratum": {
+            "S0_junction": 136,
+            "S1_le_0.05": 128,
+            "S2_le_0.20": 256,
+            "S3_le_0.50": 256,
+            "S4_bulk": 248
+          },
+          "standard_error": 4.868238295403873e-05,
+          "value": 0.002351367355328528
+        }
+      },
+      "event_count_check": null,
+      "events_per_task": 62500,
+      "events_total_per_candidate": 512000000,
+      "replicas": 8,
+      "sites": 1024,
+      "timing": {
+        "evaluation_s": 5171.7945899157785,
+        "preparation_s": 0.7066782400943339,
+        "total_s": 5175.731370308902
+      }
+    },
+    "source-independent-04": {
+      "archive_current_verification": {
+        "independent_copy": {
+          "compressed_bytes": 383080180,
+          "exists": true,
+          "matches_recorded": true,
+          "sha256": "177b30b6bd2fd62825dddc4007aca84742c089250efce74c894582f019fa840b"
+        },
+        "path": {
+          "compressed_bytes": 383080180,
+          "exists": true,
+          "matches_recorded": true,
+          "sha256": "177b30b6bd2fd62825dddc4007aca84742c089250efce74c894582f019fa840b"
+        }
+      },
+      "archive_receipt": {
+        "bytes": 2043757017,
+        "compressed_bytes": 383080180,
+        "independent_copy": "/data/htseng/material-scan-archives/initial_checks_1024_20261014/source-independent-04.tar.gz",
+        "independent_copy_verified": true,
+        "manifest_sha256": "dc68f382af5f8b7682c2d1359ce93c10b81740128ad2350ed14a4aaaf18c8e71",
+        "members": 122885,
+        "path": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/initial_checks_1024_20261014/archives/source-independent-04.tar.gz",
+        "persistent_copy_verified": true,
+        "schema": "material-scan-archive-1",
+        "sha256": "177b30b6bd2fd62825dddc4007aca84742c089250efce74c894582f019fa840b",
+        "summary_content_hash": "7564f8d48f843485fe88e0d7e958a3380b0c6c57ca80d0423c50d212cd2cacde",
+        "verified": true
+      },
+      "candidate_count": 3,
+      "complete": true,
+      "completed_tasks": 24576,
+      "estimates": {
+        "SiC-derived-rates": {
+          "by_replica": [
+            0.0015810625810398341,
+            0.001502927108989208,
+            0.0015576924138461976,
+            0.0015160393049289157,
+            0.0015325510021691863,
+            0.0014882521423268981,
+            0.0015569816773272275,
+            0.0015546685886865049
+          ],
+          "maximum_site_leverage": 0.005970572434569335,
+          "means_by_stratum": {
+            "S0_junction": 0.13767560553633218,
+            "S1_le_0.05": 0.0366672794117647,
+            "S2_le_0.20": 0.00589172794117647,
+            "S3_le_0.50": 0.002461488970588235,
+            "S4_bulk": 0.0010216318785578747
+          },
+          "relative_standard_error": 0.023632609505300082,
+          "sites_by_stratum": {
+            "S0_junction": 136,
+            "S1_le_0.05": 128,
+            "S2_le_0.20": 256,
+            "S3_le_0.50": 256,
+            "S4_bulk": 248
+          },
+          "standard_error": 3.6306112782089875e-05,
+          "value": 0.001536271852414246
+        },
+        "c44-1gpa": {
+          "by_replica": [
+            0.0021934661052495775,
+            0.0022088634882705665,
+            0.0021700814617692343,
+            0.002247820602218289,
+            0.002207246815150803,
+            0.002244196828141841,
+            0.0022578844837951146,
+            0.0021981975606364086
+          ],
+          "maximum_site_leverage": 0.008191626699252769,
+          "means_by_stratum": {
+            "S0_junction": 1.3546706747404844,
+            "S1_le_0.05": 0.1190341911764706,
+            "S2_le_0.20": 0.019823345588235293,
+            "S3_le_0.50": 0.0033212316176470585,
+            "S4_bulk": 0.0007912713472485769
+          },
+          "relative_standard_error": 0.02280745288086657,
+          "sites_by_stratum": {
+            "S0_junction": 136,
+            "S1_le_0.05": 128,
+            "S2_le_0.20": 256,
+            "S3_le_0.50": 256,
+            "S4_bulk": 248
+          },
+          "standard_error": 5.0540623791851405e-05,
+          "value": 0.002215969668153979
+        },
+        "reference": {
+          "by_replica": [
+            0.0023406882554989662,
+            0.002384800873911061,
+            0.0023156823046020262,
+            0.002339108638620177,
+            0.0023377396511146155,
+            0.002328729041405456,
+            0.0023612811023896083,
+            0.0023404688738479077
+          ],
+          "maximum_site_leverage": 0.004630708563701344,
+          "means_by_stratum": {
+            "S0_junction": 1.0293198961937715,
+            "S1_le_0.05": 0.12136507352941175,
+            "S2_le_0.20": 0.01781112132352941,
+            "S3_le_0.50": 0.0034002757352941176,
+            "S4_bulk": 0.0010229601518026564
+          },
+          "relative_standard_error": 0.020321970506357007,
+          "sites_by_stratum": {
+            "S0_junction": 136,
+            "S1_le_0.05": 128,
+            "S2_le_0.20": 256,
+            "S3_le_0.50": 256,
+            "S4_bulk": 248
+          },
+          "standard_error": 4.762580480762442e-05,
+          "value": 0.0023435623426737275
+        }
+      },
+      "event_count_check": null,
+      "events_per_task": 62500,
+      "events_total_per_candidate": 512000000,
+      "replicas": 8,
+      "sites": 1024,
+      "timing": {
+        "evaluation_s": 4713.1349295070395,
+        "preparation_s": 0.9868486509658396,
+        "total_s": 4715.753784504253
+      }
+    }
+  },
+  "timing": {
+    "completed_New_York": "2026-10-15T10:38:38.559444-04:00",
+    "completed_epoch": 1792075118.559444,
+    "elapsed_s": 42178.00070309639,
+    "remaining_s": 0,
+    "started_epoch": 1792032940.5587409,
+    "transport_s": 40904.04822508991
+  },
+  "totals": {
+    "completed_tasks": 160000,
+    "injected_primaries": 13832000000,
+    "measured_studies": 10
+  }
+}

@@ -1,0 +1,787 @@
+{
+  "agentic": {
+    "agent_identity": null,
+    "code_limitations": [
+      "Prompt hard-codes junction QPs per primary although current objective defaults to area-weighted QPs per injected eV.",
+      "Prompt includes top-eight values but no standard errors, runtime or censored failures; cannot currently infer noisy comparisons or avoid known expensive regions from structured history.",
+      "LLM proposals outside bounds are clipped; high clipping/invalid/duplicate rates must count as overhead in a comparison.",
+      "No live measured agentic gain is present. Current availability is to be checked separately by root."
+    ],
+    "current_code": "search.py:546-684",
+    "current_local_availability": {
+      "checked_utc": "2026-10-15T16:04:22.442522+00:00",
+      "error": "<urlopen error [Errno 111] Connection refused>",
+      "extracted_binary": {
+        "bytes": 28132240,
+        "path": "material_scan_data/ollama/v0.34.1/bin/ollama",
+        "present": true,
+        "sha256": "a33cea21cce90fa47b0737f37a76c27cc289eb856297683a5c5200410960eef4"
+      },
+      "gpu_query": {
+        "error": "",
+        "output": "NVIDIA RTX A6000, 49140 MiB\nNVIDIA RTX A6000, 49140 MiB\nNVIDIA RTX A6000, 49140 MiB\nNVIDIA RTX A6000, 49140 MiB\nNVIDIA RTX A6000, 49140 MiB\nNVIDIA RTX A6000, 49140 MiB\nNVIDIA RTX A6000, 49140 MiB\nNVIDIA RTX A6000, 49140 MiB",
+        "returncode": 0
+      },
+      "interpretation": "Ollama absent from PATH; extracted local binary present; default local endpoint not responding; no inference requested.",
+      "local_endpoint_available": false,
+      "model_inference_requested": false,
+      "model_manifests": [
+        {
+          "all_blobs_present": true,
+          "expected_bytes": 142154087123,
+          "manifest": "material_scan_data/ollama/models/manifests/registry.ollama.ai/library/qwen3/235b-a22b-thinking-2507-q4_K_M",
+          "present_bytes": 142154087123
+        }
+      ],
+      "ollama_executable": null
+    },
+    "historical_status": "not run",
+    "methods": [
+      "llm_agent",
+      "llm_bo"
+    ],
+    "operation": "LLM receives variable limits, physical constraints and eight best measured points, proposes vectors; deterministic gates check feasibility; optional GP expected improvement ranks a pool; only simulation supplies objective values.",
+    "recorded_gain": null,
+    "source": {
+      "bytes": 22090,
+      "git_path": "material_scan/experiments/agentic-comparison-status.json",
+      "git_revision": "ae97d0b",
+      "sha256": "2341ae3c36189ae2286028808af5b26dc2218db4d3f8cd680120c4378b8bdd32"
+    }
+  },
+  "checked_date_local": "2026-10-15",
+  "current_code_gaps": [
+    {
+      "code": "search.py:_gp_points; search.py:update",
+      "finding": "GP objective fit uses completed J and measured SE. Rejected/timed-out trials are logged and excluded from objective; no learned runtime/completion-probability model or cost term in acquisition."
+    },
+    {
+      "code": "studies/full_scale/queue.yaml:gp-cma-comparison",
+      "finding": "Deferred comparison is17dimensions with120completed responses. GP first36Sobol; CMA Gaussian population12 centered normalized0.5; initial designs differ. Equal total evaluations can compare end-to-end methods but does not isolate adaptation from a common starting data set."
+    },
+    {
+      "code": "search.py:CMAES.reset",
+      "finding": "CMA initial mean fixed normalized0.5; no configured scientific anchor mean. A short optional initial-mean parameter would enable an explicit shared measured starting anchor."
+    },
+    {
+      "code": "search.py:_gp_points",
+      "finding": "4096candidate pool with25%local Gaussian perturbations around best predicted mean; no adaptive local region, no runtime term, no explicit repeated-evaluation allocation."
+    }
+  ],
+  "early_comparison": {
+    "limits": [
+      "One optimizer seed per method. Adaptive methods not statistically ranked by best value.",
+      "Unconstrained top-film gap winners lie near 0.05 meV, below the present 1.5384 meV minimum. Temperature was variable.",
+      "Best values and medians are verified from historical JSON. Counts below 1.15e-4 are from current tracked material_scan/docs/results.md.",
+      "Historical report lists 96 response entries, but events_used and unique ledger success counts differ (Sobol78unique successful, BO132 across accumulated/restarted records). Do not describe as 96 fresh independent evaluations without raw ledger audit.",
+      "These summed 16-site QPs/primary are not comparable numerically to the later area-weighted QPs/injected-eV response."
+    ],
+    "methods": {
+      "bo_gp": {
+        "best": 5.6e-05,
+        "best_se": 1.0911985546701782e-05,
+        "count_below_1_15e_4": 50,
+        "elapsed_h": 13.07325,
+        "events_per_candidate": 4000000,
+        "events_used": 372000000,
+        "failed": 6,
+        "ledger_status_counts": {
+          "incomplete_scenario_set": 10,
+          "success": 132,
+          "timeout": 1
+        },
+        "median": 0.00010825,
+        "n": 96,
+        "percent_below_best_random": 45.09803921568627,
+        "percent_below_best_sobol": 23.809523809523814,
+        "percent_below_reference": 85.71428571428572,
+        "proposal_sources": {
+          "gp_ei": 69,
+          "sobol_init": 37
+        },
+        "rejected": 4
+      },
+      "cmaes": {
+        "best": 5.3e-05,
+        "best_se": 1.260952021291849e-05,
+        "count_below_1_15e_4": 28,
+        "elapsed_h": 8.807277777777777,
+        "events_per_candidate": 4000000,
+        "events_used": 384000000,
+        "failed": 1,
+        "ledger_status_counts": {
+          "incomplete_scenario_set": 1,
+          "success": 96
+        },
+        "median": 0.0001635,
+        "n": 96,
+        "percent_below_best_random": 48.0392156862745,
+        "percent_below_best_sobol": 27.89115646258503,
+        "percent_below_reference": 86.4795918367347,
+        "proposal_sources": {
+          "cma_generation": 96,
+          "cma_incumbent_reeval": 1
+        },
+        "rejected": 0
+      },
+      "random": {
+        "best": 0.000102,
+        "best_se": 1.3833189901723422e-05,
+        "count_below_1_15e_4": 1,
+        "elapsed_h": 6.6055277777777786,
+        "events_per_candidate": 4000000,
+        "events_used": 384000000,
+        "failed": 4,
+        "ledger_status_counts": {
+          "incomplete_scenario_set": 4,
+          "success": 96
+        },
+        "median": 0.00040175,
+        "n": 96,
+        "percent_below_reference": 73.9795918367347,
+        "proposal_sources": {
+          "random_baseline": 100
+        },
+        "rejected": 0
+      },
+      "sobol": {
+        "best": 7.35e-05,
+        "best_se": 8.321658488546619e-06,
+        "count_below_1_15e_4": 2,
+        "elapsed_h": 4.496472222222222,
+        "events_per_candidate": 4000000,
+        "events_used": 312000000,
+        "failed": 3,
+        "ledger_status_counts": {
+          "incomplete_scenario_set": 2,
+          "success": 78
+        },
+        "median": 0.000362,
+        "n": 96,
+        "percent_below_reference": 81.25,
+        "proposal_sources": {
+          "sobol_init": 99
+        },
+        "rejected": 0
+      }
+    },
+    "objective": "total_qps_per_primary",
+    "reference": 0.000392,
+    "replicas": 8,
+    "reported_responses_per_method": 96,
+    "sites": 16,
+    "source": {
+      "bytes": 22071,
+      "git_path": "data/results/stage4_report.json",
+      "git_revision": "c8cdb996209711bef0e266c7315bfa518eda47e8",
+      "sha256": "afb3d35a88980e77c30daa3b4a9f38155d9b14d5070f2a16a9f5d61350709f7a"
+    }
+  },
+  "fresh_1024_run": {
+    "anchor_values_not_optimizer_improvement": {
+      "c44_1gpa": 0.00223919,
+      "reference": 0.00234472,
+      "sic_derived_rates": 0.00154571
+    },
+    "initial_checks_only": true,
+    "optimization_executed": false,
+    "reason": "The active definition stops after source/primary-count comparisons; optimization remains deferred.",
+    "summary": "docs/results/initial_checks_summary.json"
+  },
+  "full_spatial_confirmation": {
+    "attribution": "Common anchor already74.795% below matched reference. Later CMA reduces another38.707\u201348.302% of anchor response, reaching84.551\u201386.970% below same confirmation reference. The extra absolute reduction is9.756\u201312.174 percentage points of original reference. This is supported historical incremental improvement, not proof of a global minimum.",
+    "candidates": {
+      "cma-101-best": {
+        "confirmed_standard_error": 1.3247647246373706e-05,
+        "confirmed_value": 0.0003118154670495159,
+        "paired_delta_95_interval_reduction_percentage_points_of_observed_anchor": [
+          39.76211338390387,
+          55.178845869468674
+        ],
+        "paired_delta_standard_error_percentage_points_of_observed_anchor": 3.9328399197869413,
+        "paired_difference_from_compatible_anchor": {
+          "confidence_interval_95": [
+            -0.0003275418750022035,
+            -0.00023602808225860943
+          ],
+          "n_sites": 2361,
+          "relative_to_b": -0.47470479626686274,
+          "sites_favouring_a": 1731,
+          "standard_error": 2.3345355291733186e-05,
+          "value": -0.00028178497863040646,
+          "z": -12.070280152480233
+        },
+        "paired_difference_from_reference": {
+          "confidence_interval_95": [
+            -0.002132770926762901,
+            -0.001953812611558289
+          ],
+          "n_sites": 2361,
+          "relative_to_b": -0.8676003103997524,
+          "sites_favouring_a": 2334,
+          "standard_error": 4.5652631429747934e-05,
+          "value": -0.002043291769160595,
+          "z": -44.75737115624743
+        },
+        "percent_reduction_vs_compatible_anchor": 47.47047962668628,
+        "percent_reduction_vs_reference": 86.76003103997523,
+        "resolved_below_compatible_anchor": true,
+        "resolved_below_reference": true,
+        "screening_to_confirmation": -0.16747617262402104,
+        "screening_value": 0.0002595938060630914
+      },
+      "cma-202-best": {
+        "confirmed_standard_error": 1.5549704854339042e-05,
+        "confirmed_value": 0.0003638355395948629,
+        "paired_delta_95_interval_reduction_percentage_points_of_observed_anchor": [
+          30.751517089762302,
+          46.66247670260485
+        ],
+        "paired_delta_standard_error_percentage_points_of_observed_anchor": 4.058918268582282,
+        "paired_difference_from_compatible_anchor": {
+          "confidence_interval_95": [
+            -0.0002769886696719523,
+            -0.00018254114249816652
+          ],
+          "n_sites": 2361,
+          "relative_to_b": -0.38706996896183576,
+          "sites_favouring_a": 1615,
+          "standard_error": 2.4093756932088217e-05,
+          "value": -0.00022976490608505942,
+          "z": -9.536283890166464
+        },
+        "paired_difference_from_reference": {
+          "confidence_interval_95": [
+            -0.0020811124896079067,
+            -0.0019014309036225893
+          ],
+          "n_sites": 2361,
+          "relative_to_b": -0.8455121134185146,
+          "sites_favouring_a": 2329,
+          "standard_error": 4.583713928196872e-05,
+          "value": -0.001991271696615248,
+          "z": -43.442320524539554
+        },
+        "percent_reduction_vs_compatible_anchor": 38.706996896183576,
+        "percent_reduction_vs_reference": 84.55121134185147,
+        "resolved_below_compatible_anchor": true,
+        "resolved_below_reference": true,
+        "screening_to_confirmation": -0.3026243737418306,
+        "screening_value": 0.0002537300372799465
+      },
+      "cma-303-best": {
+        "confirmed_standard_error": 1.8000028987267204e-05,
+        "confirmed_value": 0.0003068781220717043,
+        "paired_delta_95_interval_reduction_percentage_points_of_observed_anchor": [
+          40.076829266686104,
+          56.527654673618315
+        ],
+        "paired_delta_standard_error_percentage_points_of_observed_anchor": 4.196639134421481,
+        "paired_difference_from_compatible_anchor": {
+          "confidence_interval_95": [
+            -0.00033554841007500577,
+            -0.00023789623714143027
+          ],
+          "n_sites": 2361,
+          "relative_to_b": -0.4830224197015221,
+          "sites_favouring_a": 1830,
+          "standard_error": 2.4911268605503944e-05,
+          "value": -0.000286722323608218,
+          "z": -11.50974396963746
+        },
+        "paired_difference_from_reference": {
+          "confidence_interval_95": [
+            -0.0021375059315310325,
+            -0.0019589522967457806
+          ],
+          "n_sites": 2361,
+          "relative_to_b": -0.8696967520827038,
+          "sites_favouring_a": 2329,
+          "standard_error": 4.5549396628890864e-05,
+          "value": -0.0020482291141384066,
+          "z": -44.96720627994587
+        },
+        "percent_reduction_vs_compatible_anchor": 48.30224197015222,
+        "percent_reduction_vs_reference": 86.96967520827037,
+        "resolved_below_compatible_anchor": true,
+        "resolved_below_reference": true,
+        "screening_to_confirmation": -0.24334928644795328,
+        "screening_value": 0.00023219955003906718
+      },
+      "compatible-anchor": {
+        "confirmed_standard_error": 2.090392984535915e-05,
+        "confirmed_value": 0.0005936004456799223,
+        "paired_difference_from_compatible_anchor": null,
+        "paired_difference_from_reference": {
+          "confidence_interval_95": [
+            -0.0018497319792943664,
+            -0.0016732816017660111
+          ],
+          "n_sites": 2361,
+          "relative_to_b": -0.7479518399191212,
+          "sites_favouring_a": 2299,
+          "standard_error": 4.50128514102947e-05,
+          "value": -0.0017615067905301888,
+          "z": -39.133419353374315
+        },
+        "percent_reduction_vs_compatible_anchor": 0.0,
+        "percent_reduction_vs_reference": 74.79518399191211,
+        "resolved_below_compatible_anchor": null,
+        "resolved_below_reference": true,
+        "screening_to_confirmation": -0.1472042330386223,
+        "screening_value": 0.000506219947342225
+      },
+      "reference": {
+        "confirmed_standard_error": 4.701747646705286e-05,
+        "confirmed_value": 0.002355107236210111,
+        "paired_difference_from_compatible_anchor": null,
+        "paired_difference_from_reference": null,
+        "percent_reduction_vs_compatible_anchor": -296.74957344624664,
+        "percent_reduction_vs_reference": 0.0,
+        "resolved_below_compatible_anchor": null,
+        "resolved_below_reference": null,
+        "screening_to_confirmation": -0.04635208700226712,
+        "screening_value": 0.002245943100697631
+      }
+    },
+    "design_hash": "8d6f9b224ce5f834",
+    "events_per_task": 31250,
+    "interval_note": "Original 95% intervals are for paired absolute response differences. Percentage-point intervals above divide those paired-difference intervals by the observed compatible-anchor value as a fixed normalization; they are not a full uncertain-ratio interval.",
+    "objective": "device_junction_qps_per_eV",
+    "pairwise_finalists": {
+      "cma-101-best-minus-cma-202-best": {
+        "a": "cma-101-best",
+        "b": "cma-202-best",
+        "confidence_interval_95": [
+          -8.933046309431133e-05,
+          -1.4709681996382678e-05
+        ],
+        "n_sites": 2361,
+        "relative_to_b": -0.14297688621422813,
+        "resolved_lower": "cma-101-best",
+        "sites_favouring_a": 1230,
+        "standard_error": 1.903591354538996e-05,
+        "value": -5.2020072545347e-05,
+        "z": -2.7327331793826626
+      },
+      "cma-101-best-minus-cma-303-best": {
+        "a": "cma-101-best",
+        "b": "cma-303-best",
+        "confidence_interval_95": [
+          -3.207056246385922e-05,
+          4.194525241948241e-05
+        ],
+        "n_sites": 2361,
+        "relative_to_b": 0.016088944185659298,
+        "resolved_lower": null,
+        "sites_favouring_a": 830,
+        "standard_error": 1.8881585429423886e-05,
+        "value": 4.9373449778115915e-06,
+        "z": 0.2614899578357197
+      },
+      "cma-202-best-minus-cma-303-best": {
+        "a": "cma-202-best",
+        "b": "cma-303-best",
+        "confidence_interval_95": [
+          1.6169640050231593e-05,
+          9.77451949960856e-05
+        ],
+        "n_sites": 2361,
+        "relative_to_b": 0.1856027309429705,
+        "resolved_lower": "cma-303-best",
+        "sites_favouring_a": 787,
+        "standard_error": 2.0810090547411737e-05,
+        "value": 5.6957417523158595e-05,
+        "z": 2.7370095960607292
+      }
+    },
+    "replicas": 8,
+    "sites": 2361,
+    "source": {
+      "bytes": 6296,
+      "git_path": "material_scan/experiments/material-search-confirmation-results.json",
+      "git_revision": "ae97d0b",
+      "sha256": "25dc8ae20f15366bcbfe798f79974d1c3503d2e4dafeecf26bd3b44ec6de808b"
+    },
+    "temperature_K": 0.02,
+    "unused_random_streams": true
+  },
+  "later_common_start_search": {
+    "common_start_composition": {
+      "compatible_anchor": 1,
+      "historical_remeasured": 14,
+      "new_sobol": 16,
+      "reference": 1
+    },
+    "dimensions": 14,
+    "events_per_task": 31250,
+    "gap_min_eV": 0.0015384,
+    "incomplete": {
+      "bo-101": {
+        "candidate_completion_hours_lower_bound": 8.533333333333333,
+        "completed_points": 0,
+        "completed_tasks": 0,
+        "declared_tasks": 512,
+        "incomplete_point": 1,
+        "interpretation": "The first expected-improvement proposal selected the minimum substrate decay face and a near-minimum scattering value. No task finished in one hour. The attempt was stopped without reporting an objective value to the Gaussian process. The elapsed-time estimates are lower bounds based only on the observed first group of simultaneous tasks; they are not quasiparticle measurements.",
+        "method": "bo_gp",
+        "observed_elapsed_seconds_lower_bound": 3600.0,
+        "proposal": {
+          "bot_density": 22000.0,
+          "bot_gap_thres": 0.000382,
+          "bot_ph_lifetime": 0.5,
+          "bot_vsound": 2.0493994459228158,
+          "sub_c11": 946.1754609667673,
+          "sub_c12": 0.0,
+          "sub_c44": 600.0,
+          "sub_decay": 5e-57,
+          "sub_decayTT": 1.0,
+          "sub_scat": 1.5597839783973007e-44,
+          "topfilm_density": 2000.0,
+          "topfilm_gap": 0.0035,
+          "topfilm_ph_lifetime": 0.001,
+          "topfilm_vsound": 1.5
+        },
+        "requested_points": 120,
+        "requested_search_days_lower_bound_if_repeated": 42.666666666666664,
+        "seed": 101,
+        "simultaneous_tasks": 60,
+        "status": "stalled"
+      },
+      "sobol-101": {
+        "candidate_completion_hours_lower_bound": 25.6,
+        "completed_points": 49,
+        "completed_tasks": 0,
+        "declared_tasks": 512,
+        "incomplete_point": 50,
+        "interpretation": "Forty-nine Sobol points completed. The fiftieth produced no completed task in one hour and was stopped without assigning an objective value. Its elapsed time is a lower bound and not a quasiparticle measurement. The partial run can compare coverage through point 49 but cannot be called a complete 64-point run.",
+        "method": "sobol",
+        "observed_elapsed_seconds_lower_bound": 3600.0,
+        "proposal": {
+          "bot_density": 20144.522719085217,
+          "bot_gap_thres": 0.000323393607698381,
+          "bot_ph_lifetime": 1.5215682919467344,
+          "bot_vsound": 3.1192617318592966,
+          "sub_c11": 780.214152559638,
+          "sub_c12": 163.80665376782417,
+          "sub_c44": 579.7642286727205,
+          "sub_decay": 4.484227774899679e-55,
+          "sub_decayTT": 0.5218457845039666,
+          "sub_scat": 4.237079905949471e-43,
+          "topfilm_density": 15985.11272110045,
+          "topfilm_gap": 0.0023125960185798812,
+          "topfilm_ph_lifetime": 0.0011066126607120045,
+          "topfilm_vsound": 2.17016635928303
+        },
+        "requested_points": 64,
+        "requested_search_days_lower_bound_if_repeated": null,
+        "seed": 101,
+        "simultaneous_tasks": 20,
+        "status": "stalled"
+      }
+    },
+    "initial_best": {
+      "name": "compatible-anchor",
+      "standard_error": 8.735424438574645e-05,
+      "value": 0.000506219947342225,
+      "values": {
+        "bot_density": 7184.383239418074,
+        "bot_gap_thres": 0.00012981738953147298,
+        "bot_ph_lifetime": 0.5,
+        "bot_vsound": 3.174554206770729,
+        "sub_c11": 250.92689126211246,
+        "sub_c12": 0.0,
+        "sub_c44": 5.0,
+        "sub_decay": 6.129072648276415e-56,
+        "sub_decayTT": 0.8174135229343212,
+        "sub_scat": 9.99999999999994e-45,
+        "topfilm_density": 15010.886904864794,
+        "topfilm_gap": 0.001670366222399775,
+        "topfilm_ph_lifetime": 0.003337436812440808,
+        "topfilm_vsound": 6.0
+      }
+    },
+    "initial_points": 32,
+    "limits": [
+      "All CMA120 new points per seed are source=cma_generation, used in update; ten generations of twelve; zero failed/fallback proposals.",
+      "Random64 and Sobol49/64 measured proposals use fewer evaluations than CMA120. They are not an equal-count final comparison. At common step40 every CMA run already beats the common initial minimum whereas random/Sobol do not.",
+      "BO0 new completed points after first proposal stalled: improvement unmeasured, not zero percent effectiveness.",
+      "Original report elapsed_seconds is null; cannot derive reliable full-method wall-time efficiency.",
+      "Initial compatible anchor itself originated from an earlier CMA search, so cumulative reductions cannot be entirely assigned to the later algorithm.",
+      "All confirmed CMA points hit C44=5 GPa boundary; broader independent material coordinates are model targets, not a demonstrated compound."
+    ],
+    "objective": "device_junction_qps_per_eV",
+    "replicas": 4,
+    "runs": {
+      "cma-101": {
+        "best": 0.0002595938060630914,
+        "best_by_completed_step": {
+          "100": 0.0002595938060630914,
+          "120": 0.0002595938060630914,
+          "20": 0.00027997182071881155,
+          "40": 0.000270604916816187,
+          "60": 0.00026160760654712266,
+          "69": 0.00026160760654712266,
+          "80": 0.00026160760654712266
+        },
+        "best_optimizer_value": 0.0002595938060630914,
+        "best_source": "optimizer",
+        "best_standard_error": 5.573028134430095e-05,
+        "best_step": 87,
+        "complete": true,
+        "elapsed_seconds": null,
+        "failures": 0,
+        "improvement_from_initial": 0.48719166949856363,
+        "method": "cmaes",
+        "optimizer_state": {
+          "generation": 10,
+          "generation_filled": 0,
+          "generation_reported": 0,
+          "iteration": 120,
+          "n_observations": 152,
+          "n_pending": 0,
+          "n_rejected": 0,
+          "n_used_in_update": 120,
+          "optimizer": "cmaes",
+          "popsize": 12,
+          "proposal_sources": {
+            "cma_generation": 120
+          },
+          "restarts": 0,
+          "seed": 101,
+          "sigma": 0.17060172394591994,
+          "synchronous": true
+        },
+        "proposal_sources": {
+          "cma_generation": 120
+        },
+        "requested_steps": 120,
+        "seed": 101,
+        "simulated_source_phonons": 1920000000,
+        "steps": 120
+      },
+      "cma-202": {
+        "best": 0.0002537300372799465,
+        "best_by_completed_step": {
+          "100": 0.00034915375295913417,
+          "120": 0.0002537300372799465,
+          "20": 0.0003583552859981744,
+          "40": 0.0003583552859981744,
+          "60": 0.0003583552859981744,
+          "69": 0.0003583552859981744,
+          "80": 0.0003583552859981744
+        },
+        "best_optimizer_value": 0.0002537300372799465,
+        "best_source": "optimizer",
+        "best_standard_error": 5.2593765063888946e-05,
+        "best_step": 108,
+        "complete": true,
+        "elapsed_seconds": null,
+        "failures": 0,
+        "improvement_from_initial": 0.49877511028143107,
+        "method": "cmaes",
+        "optimizer_state": {
+          "generation": 10,
+          "generation_filled": 0,
+          "generation_reported": 0,
+          "iteration": 120,
+          "n_observations": 152,
+          "n_pending": 0,
+          "n_rejected": 0,
+          "n_used_in_update": 120,
+          "optimizer": "cmaes",
+          "popsize": 12,
+          "proposal_sources": {
+            "cma_generation": 120
+          },
+          "restarts": 0,
+          "seed": 202,
+          "sigma": 0.1421175010519733,
+          "synchronous": true
+        },
+        "proposal_sources": {
+          "cma_generation": 120
+        },
+        "requested_steps": 120,
+        "seed": 202,
+        "simulated_source_phonons": 1920000000,
+        "steps": 120
+      },
+      "cma-303": {
+        "best": 0.00023219955003906718,
+        "best_by_completed_step": {
+          "100": 0.00023219955003906718,
+          "120": 0.00023219955003906718,
+          "20": 0.00029347284883519194,
+          "40": 0.00023292627278154721,
+          "60": 0.00023292627278154721,
+          "69": 0.00023292627278154721,
+          "80": 0.00023219955003906718
+        },
+        "best_optimizer_value": 0.00023219955003906718,
+        "best_source": "optimizer",
+        "best_standard_error": 4.297329872037718e-05,
+        "best_step": 72,
+        "complete": true,
+        "elapsed_seconds": null,
+        "failures": 0,
+        "improvement_from_initial": 0.5413069926260907,
+        "method": "cmaes",
+        "optimizer_state": {
+          "generation": 10,
+          "generation_filled": 0,
+          "generation_reported": 0,
+          "iteration": 120,
+          "n_observations": 152,
+          "n_pending": 0,
+          "n_rejected": 0,
+          "n_used_in_update": 120,
+          "optimizer": "cmaes",
+          "popsize": 12,
+          "proposal_sources": {
+            "cma_generation": 120
+          },
+          "restarts": 0,
+          "seed": 303,
+          "sigma": 0.15705160877607563,
+          "synchronous": true
+        },
+        "proposal_sources": {
+          "cma_generation": 120
+        },
+        "requested_steps": 120,
+        "seed": 303,
+        "simulated_source_phonons": 1920000000,
+        "steps": 120
+      },
+      "random-101": {
+        "best": 0.000506219947342225,
+        "best_by_completed_step": {
+          "20": 0.000506219947342225,
+          "40": 0.000506219947342225,
+          "60": 0.000506219947342225
+        },
+        "best_optimizer_value": 0.0007252207073164148,
+        "best_source": "common-start",
+        "best_standard_error": 8.735424438574645e-05,
+        "best_step": 0,
+        "complete": true,
+        "elapsed_seconds": null,
+        "failures": 0,
+        "improvement_from_initial": 0.0,
+        "method": "random",
+        "optimizer_state": {
+          "iteration": 64,
+          "n_observations": 96,
+          "n_pending": 0,
+          "n_rejected": 0,
+          "optimizer": "random",
+          "proposal_sources": {
+            "random_baseline": 64
+          },
+          "seed": 101
+        },
+        "proposal_sources": {
+          "random_baseline": 64
+        },
+        "requested_steps": 64,
+        "seed": 101,
+        "simulated_source_phonons": 1024000000,
+        "steps": 64
+      },
+      "sobol-101": {
+        "best": 0.000506219947342225,
+        "best_by_completed_step": {
+          "20": 0.000506219947342225,
+          "40": 0.000506219947342225
+        },
+        "best_optimizer_value": 0.0007566497947810584,
+        "best_source": "common-start",
+        "best_standard_error": 8.735424438574645e-05,
+        "best_step": 0,
+        "complete": false,
+        "elapsed_seconds": null,
+        "failures": 0,
+        "improvement_from_initial": 0.0,
+        "method": "sobol",
+        "optimizer_state": {
+          "iteration": 49,
+          "n_observations": 81,
+          "n_pending": 0,
+          "n_rejected": 0,
+          "optimizer": "sobol",
+          "proposal_sources": {
+            "sobol_init": 49
+          },
+          "seed": 101
+        },
+        "proposal_sources": {
+          "sobol_init": 49
+        },
+        "requested_steps": 64,
+        "seed": 101,
+        "simulated_source_phonons": 784000000,
+        "steps": 49
+      }
+    },
+    "sites": 128,
+    "source": {
+      "bytes": 22090,
+      "git_path": "material_scan/experiments/material-search-results.json",
+      "git_revision": "ae97d0b",
+      "sha256": "2341ae3c36189ae2286028808af5b26dc2218db4d3f8cd680120c4378b8bdd32"
+    },
+    "source_phonons_per_candidate": 16000000,
+    "starting_points_identity": {
+      "bytes": 24771,
+      "git_path": "material_scan/experiments/material-search-starting-points.json",
+      "git_revision": "ae97d0b",
+      "sha256": "44e6c848d7630cfdc6abcaf31f6c1b55adbfcc07c36e036f8a1b6eb024e48f63"
+    },
+    "sub_c44_min_GPa": 5.0,
+    "temperature_K": 0.02
+  },
+  "recommendations_in_order": [
+    "Keep1024site limit; review spatial failures and validate ranking at512vs1024 plus independent layouts before interpreting small optimizer gains.",
+    "Remeasure16\u201332physically compatible previous points under fixed20mK/current objective, sites and random streams. Use same starting measurements and anchor for all methods; do not import old response values.",
+    "Begin3\u20136well-supported sensitive properties or linked physical groups rather than17independent broad coordinates; open additional directions after observed improvement. Check C44 boundary as a physical model test before pushing it lower.",
+    "Pilot likely expensive extreme points with small primary counts. Record cost/completion separately from J; add an improvement-per-time score weighted by measured completion probability, with no zero-loss substitute for a timeout.",
+    "Compare GP/CMA/random/Sobol at common new-measurement counts20,40,60 and common elapsed time over at least3seeds, reporting initialization and failures separately.",
+    "Allocate extra primaries/replicas to uncertain leaders and confirm2\u20133distinct finalists on1024sites and independent layouts with unused streams. Small-screening estimates can rank candidates but require bias checks.",
+    "Only then test a small llm_bo arm against the identical GP without LLM. Keep same initial observations, model/site/seed inputs, measured trial count and elapsed-time accounting; credit LLM only for independently confirmed extra reduction."
+  ],
+  "response_definition": "J is the measured junction-QP response. Reported reduction=100*(1-J_new/J_reference). Search uses log(J) internally by default; percentages below describe J, not log(J), a quantum logical error rate, or a measured material.",
+  "scope": "Read-only audit of retained historical reports and current search code. No raw task reanalysis; older source results are not new-run measurements.",
+  "sources": [
+    {
+      "bytes": 22090,
+      "git_path": "material_scan/experiments/material-search-results.json",
+      "git_revision": "ae97d0b",
+      "sha256": "2341ae3c36189ae2286028808af5b26dc2218db4d3f8cd680120c4378b8bdd32"
+    },
+    {
+      "bytes": 6296,
+      "git_path": "material_scan/experiments/material-search-confirmation-results.json",
+      "git_revision": "ae97d0b",
+      "sha256": "25dc8ae20f15366bcbfe798f79974d1c3503d2e4dafeecf26bd3b44ec6de808b"
+    },
+    {
+      "bytes": 24771,
+      "git_path": "material_scan/experiments/material-search-starting-points.json",
+      "git_revision": "ae97d0b",
+      "sha256": "44e6c848d7630cfdc6abcaf31f6c1b55adbfcc07c36e036f8a1b6eb024e48f63"
+    },
+    {
+      "bytes": 22071,
+      "git_path": "data/results/stage4_report.json",
+      "git_revision": "c8cdb996209711bef0e266c7315bfa518eda47e8",
+      "sha256": "afb3d35a88980e77c30daa3b4a9f38155d9b14d5070f2a16a9f5d61350709f7a"
+    },
+    {
+      "bytes": 22090,
+      "git_path": "material_scan/experiments/agentic-comparison-status.json",
+      "git_revision": "ae97d0b",
+      "sha256": "2341ae3c36189ae2286028808af5b26dc2218db4d3f8cd680120c4378b8bdd32"
+    }
+  ]
+}
