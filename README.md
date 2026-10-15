@@ -135,13 +135,13 @@ verified copies before any later removal.
 
 The revised queue in [`studies/full_scale/queue.yaml`](studies/full_scale/queue.yaml)
 retains complete evidence from `material_scan_data/full_scale_20261014` and adds
-the missing validation. Prepared on 2026-10-14, with **151 tests passing**
-and all 53 stage declarations checked. Tmux session
-`full_scale_20261014_revised` is waiting for `source-2361` to finish and be
-preserved before starting the revised queue. At 21:54 EDT, that comparison
-had 49,542 of 56,664 transport tasks complete; about
-24 minutes of transport remained at its observed average rate,
-followed by archive verification. The four completed studies, including the 0 K and 20 mK comparisons, are retained. The main temperature remains 20 mK.
+the missing validation. The previous 2,361-site comparison finished and its
+archives passed persistent-copy verification. The revised tmux queue
+`full_scale_20261014_revised` started on 2026-10-14; at 22:23 EDT its
+recorded state was `running` for `source-2653`. All 53 stage
+declarations were checked; the current full test suite passes 160 tests.
+The completed 0 K and 20 mK comparisons are retained. The main temperature
+remains 20 mK.
 The continuous search requires an upper-film
 gap of at least 1.5384 meV. Linked Ta/Ti checks retain their own gaps.
 
