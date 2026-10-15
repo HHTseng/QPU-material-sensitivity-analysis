@@ -612,6 +612,39 @@ if mode == 'teardown': sys.exit(139)
         self.assertEqual(scan.main(["check", str(path)]), 0)
 
 
+    def test_disabled_comparisons_survive_compact_reanalysis(self):
+        from unittest.mock import patch
+        raw=copy.deepcopy(self.raw)
+        raw['analysis'].update(objective='device_junction_qps_per_eV',
+                               comparisons=False,diagnostics=False,store_blocks=False)
+        raw['candidates']=[{'name':'first-move','values':{}},
+                           {'name':'second-move','values':{'topfilm_vsound':4.}}]
+        output=self.root/'moves-without-reference'
+        with patch.object(analysis,'paired_difference',side_effect=AssertionError('automatic pairing requested')):
+            report=scan.run_study(raw,output)
+            reread=analysis.read_analysis(output)
+        for result in (report,reread):
+            self.assertTrue(result['complete'])
+            self.assertEqual(result['comparisons'],[])
+            self.assertTrue(all('blocks' not in row for row in result['results']))
+        self.assertEqual([(row['value'],row['standard_error']) for row in reread['results']],
+                         [(row['value'],row['standard_error']) for row in report['results']])
+        enabled=analysis.read_analysis(output,settings={'comparisons':True})
+        self.assertEqual(len(enabled['comparisons']),1)
+        self.assertEqual(enabled['comparisons'][0]['reference'],'first-move')
+        self.assertEqual(enabled['comparisons'][0]['candidate'],'second-move')
+        self.assertTrue(all('blocks' not in row for row in enabled['results']))
+        self.assertEqual(len(self.calls.read_text().splitlines()),8)
+
+    def test_reanalysis_preserves_tail_draws_and_explicit_diagnostics(self):
+        raw=copy.deepcopy(self.raw)
+        raw['analysis'].update(bootstrap_draws=19,tail_bootstrap_draws=13,diagnostics=True)
+        output=self.root/'tail-roundtrip'
+        run=scan.run_study(raw,output)
+        reread=analysis.read_analysis(output)
+        self.assertEqual(run['results'][0]['estimate'],reread['results'][0]['estimate'])
+
+
 class SeriesTests(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
@@ -1681,6 +1714,216 @@ class QueueTests(unittest.TestCase):
         return subprocess.run(['bash',str(ROOT/'run_all.sh'),mode,str(run),*map(str,arguments)],
                               cwd=self.root,env=environment,capture_output=True,text=True,timeout=30)
 
+    def queue_python(self, *functions, branch=None, scope=None, **values):
+        import ast
+        import itertools
+        import math
+        text=(ROOT/'run_all.sh').read_text().rsplit("<<'PY'\n",1)[1].rsplit('\nPY',1)[0]
+        tree=ast.parse(text)
+        code=[node for node in tree.body if isinstance(node,ast.FunctionDef) and node.name in functions]
+        self.assertEqual(len(code),len(functions))
+        if scope is not None:
+            scopes=[node for node in ast.walk(tree) if isinstance(node,ast.If) and ast.unparse(node.test)==f'mode == {scope!r}']
+            self.assertEqual(len(scopes),1)
+            tree=scopes[0]
+        if branch is not None:
+            matched=[node for node in ast.walk(tree) if isinstance(node,ast.If) and ast.unparse(node.test)==branch]
+            self.assertEqual(len(matched),1)
+            code.extend(matched[0].body)
+        namespace={'records':records,'analysis':analysis,'scan':scan,'physics':physics,
+                   'np':np,'copy':copy,'math':math,'itertools':itertools,'Path':Path,**values}
+        exec(compile(ast.Module(body=code,type_ignores=[]),'isolated queue Python','exec'),namespace)
+        return namespace
+
+    def test_layout_averages_keep_paired_relative_errors(self):
+        reports=[]
+        references=[10.,20.,30.,40.]; ratios=[.9,.8,.7,.6]
+        for index,(reference,ratio) in enumerate(zip(references,ratios)):
+            rows=[{'name':name,'value':value,'standard_error':99.,'units':'QP/eV',
+                   'estimate':{'means_by_stratum':{'region':value},'maximum_site_leverage':.1}}
+                  for name,value in [('reference',reference),('target',reference*ratio)]]
+            reports.append({'id':f'layout-{index}','results':rows})
+        namespace=self.queue_python('mean_interval','layout_summary')
+        result=namespace['layout_summary'](reports)
+        pair=result['comparisons'][0]
+        relative=np.asarray(ratios)-1
+        self.assertAlmostEqual(pair['relative_to_b'],float(relative.mean()))
+        self.assertAlmostEqual(pair['relative_change']['standard_error'],float(relative.std(ddof=1)/2))
+        self.assertAlmostEqual(pair['standard_error'],float(np.std(np.asarray(references)*relative,ddof=1)/2))
+        self.assertNotAlmostEqual(pair['relative_to_b'],result['results'][1]['value']/result['results'][0]['value']-1)
+        self.assertEqual(pair['relative_change']['n_layouts'],4)
+        self.assertEqual(result['position_layouts'],[f'layout-{index}' for index in range(4)])
+
+    def test_source_validation_rejects_imprecision_and_retained_layout_bias(self):
+        for label,values,retained,precise in (('imprecise',[1.,10.,1.,10.],5.5,False),
+                                             ('biased',[10.]*4,8.,True)):
+            with self.subTest(label=label):
+                run=self.root/label; run.mkdir()
+                records.write_json(run/'queue.json',[{'id':'source-validation','kind':'source_validation'}])
+                records.write_json(run/'studies/source-2653/summary.json',{
+                    'spatial_check':{'passed':True},'results':[{'name':'reference','value':retained,
+                    'standard_error':0.,'estimate':{'means_by_stratum':{'region':retained}}}]})
+                for index,value in enumerate(values,1):
+                    records.write_json(run/'studies'/f'source-independent-{index:02d}'/'summary.json',
+                                       {'id':f'source-independent-{index:02d}','results':[{
+                                           'name':'reference','value':value,'units':'QP/eV',
+                                           'estimate':{'means_by_stratum':{'region':value},'maximum_site_leverage':.001}}]})
+                result=self.queue_command('stage',run,0)
+                self.assertNotEqual(result.returncode,0)
+                self.assertIn('source-position checks did not pass',result.stderr)
+                validation=records.load_document(run/'source-validation.json')
+                self.assertTrue(validation['nested']['passed'])
+                self.assertFalse(validation['passed'])
+                self.assertEqual(validation['candidates']['reference']['passed'],precise)
+                if precise:
+                    self.assertFalse(validation['retained_layout_agreement']['reference']['passed'])
+                    self.assertEqual(validation['retained_layout_agreement']['reference']['difference'],2.)
+                self.assertEqual(records.load_document(run/'queue_status.json')['state'],'needs_more_positions')
+                self.assertFalse((run/'source-validation-skipped.json').exists())
+
+    def test_event_count_gate_uses_transport_precision_and_retains_area_error(self):
+        run=self.root/'event gate'; output=run/'studies/events-125000'; output.mkdir(parents=True)
+        records.write_json(run/'studies/events-31250/summary.json',
+                           {'results':[{'name':'reference','estimate':{'by_replica':[10.]*4}}]})
+        step={'kind':'event_count_convergence','events_per_task':125000,
+              'check':{'relative_limit':.05,'relative_standard_error_limit':.02}}
+        cfg={'studies':[{'kind':'event_count_convergence','events_per_task':[31250,125000,500000]}]}
+        for replicas,area_error,passed in (([10.]*4,8.,True),([5.,10.,15.,10.],0.,False)):
+            with self.subTest(replicas=replicas):
+                report={'results':[{'name':'reference','standard_error':area_error,
+                                    'estimate':{'by_replica':replicas}}]}
+                self.queue_python(branch="step['kind'] == 'event_count_convergence'",
+                                  step=step,cfg=cfg,run=run,output=output,report=report)
+                check=report['event_count_check']['candidates']['reference']
+                self.assertEqual(check['area_standard_error'],area_error)
+                self.assertEqual(check['passed'],passed)
+                self.assertEqual(report['event_count_check']['passed'],passed)
+                self.assertAlmostEqual(check['transport']['standard_error'],float(np.std(replicas,ddof=1)/2))
+
+    def test_tolerance_stages_measure_centers_once_and_emit_only_moves_in_batches(self):
+        run=self.root/'tolerance stages'; run.mkdir()
+        selected=[{'name':'best','values':{'sub_c44':70.}},{'name':'other','values':{'sub_c44':90.}}]
+        records.write_json(run/'finalist-validation.json',{'independent_layouts':{'results':[
+            {'name':'best','value':1.},{'name':'other','value':2.}]}})
+        step={'kind':'explicit_tolerance','candidate_limit':1,'parameters':['sub_c44'],
+              'physical_fraction':[.05],'center_study':'physical-tolerance-centers',
+              'move_start':0,'move_count':2}
+        branch="kind in ('explicit_tolerance', 'model_ranges')"
+        for centers_only in (True,False):
+            with self.subTest(centers_only=centers_only):
+                raw=copy.deepcopy(self.raw)
+                self.queue_python(branch=branch,scope='stage',kind='explicit_tolerance',step={**step,'centers_only':centers_only},
+                                  raw=raw,run=run,selected_finalists=lambda:selected)
+                self.assertFalse(raw['analysis']['comparisons'])
+                self.assertEqual(raw['provenance']['center_study'],'physical-tolerance-centers')
+                self.assertEqual(raw['provenance']['centers'],['best'])
+                names=[row['name'] for row in raw['candidates']]
+                if centers_only:
+                    self.assertEqual(names,['best'])
+                    self.assertEqual(raw['provenance']['moves'],[])
+                else:
+                    self.assertEqual(len(names),2)
+                    self.assertTrue(all(name.startswith('best:sub_c44:') for name in names))
+                    self.assertNotIn('best',names)
+                    self.assertEqual([row['values']['sub_c44'] for row in raw['candidates']],[66.5,73.5])
+
+    def test_infeasible_move_batch_is_preserved_without_reference_transport(self):
+        from contextlib import redirect_stdout
+        run=self.root/'infeasible batch'; run.mkdir()
+        provenance={'center_study':'centers','infeasible_moves':[
+            {'name':'center:invalid','status':'physically_infeasible','value':None,'reason':'Born stability'}]}
+        output=io.StringIO()
+        with redirect_stdout(output),self.assertRaises(SystemExit) as stopped:
+            self.queue_python(branch="kind in ('explicit_tolerance', 'model_ranges') and (not kept)",
+                              scope='stage',kind='explicit_tolerance',kept=[],run=run,
+                              identifier='moves',raw={'candidates':[],'provenance':provenance})
+        self.assertEqual(stopped.exception.code,0)
+        self.assertEqual(output.getvalue().strip(),'SKIP')
+        self.assertEqual(records.load_document(run/'moves-skipped.json')['physical_moves'],provenance)
+        self.assertFalse((run/'definitions/moves.yaml').exists())
+        self.assertFalse(self.calls.exists())
+
+    def test_restored_center_is_reused_and_rejects_changed_recovery(self):
+        run=self.root/'center reuse'; output=run/'studies/centers'
+        report=scan.run_study(self.raw,output)
+        receipt=records.create_archive(output,None,run/'archives/centers.tar.gz',include_manifest=False)
+        independent=self.root/'independent-center.tar.gz'; shutil.copy2(receipt['path'],independent)
+        receipt.update(independent_copy=str(independent),independent_copy_verified=True,
+                       summary_content_hash=records.content_hash(report))
+        report.update(archive=receipt,raw_files_present=False)
+        records.write_json(output/'summary.json',report,overwrite=True)
+        namespace=self.queue_python('verify_saved_archive','restored_center',run=run)
+        restored,_=namespace['restored_center']('centers')
+        inventory=records.inventory(restored)
+        reused,_=namespace['restored_center']('centers')
+        self.assertEqual(restored,reused)
+        self.assertEqual(records.inventory(reused),inventory)
+        self.assertEqual(len(self.calls.read_text().splitlines()),4)
+        next(restored.glob('tasks/*/*/hits.csv')).write_text('changed raw measurement\n')
+        with self.assertRaisesRegex(FileExistsError,'existing recovery contains different files'):
+            namespace['restored_center']('centers')
+
+    def test_center_comparisons_require_exact_design_and_streams(self):
+        run=self.root/'center matching'; output=run/'studies/moves'; output.mkdir(parents=True)
+        records.write_json(run/'definitions/moves.yaml',{'provenance':{'center_study':'centers'}})
+        center={'design':{'sites_mm':[[0,0,0]],'events_per_task':10},
+                'streams':{'seed_base':10,'seed_bank':20},'results':[]}
+        step={'kind':'explicit_tolerance','id':'moves','center_study':'centers'}
+        for area,key,value in (('design','sites_mm',[[1,0,0]]),('design','events_per_task',11),
+                               ('streams','seed_base',11),('streams','seed_bank',21)):
+            with self.subTest(area=area,key=key):
+                report=copy.deepcopy(center); report[area][key]=value
+                with self.assertRaisesRegex(ValueError,'identical sites, primaries and random streams'):
+                    self.queue_python(branch="step['kind'] in ('explicit_tolerance', 'model_ranges') and (not step.get('centers_only'))",
+                                      run=run,output=output,report=report,step=step,
+                                      restored_center=lambda identifier:(self.root,center))
+
+    def test_transport_monitor_memory_stop_pauses_waits_and_retries(self):
+        import shlex
+        run=self.root/'memory queue'; source=run/'source'; source.mkdir(parents=True)
+        records.write_json(run/'queue.json',[{'id':'trial'}])
+        records.write_json(run/'resources.json',{'total_mem_gb':64,'system_mem_reserve_gb':0,'minimum_free_disk_gb':0})
+        (run/'trial.yaml').write_text('id: trial\n')
+        (source/'scan.py').write_text('''import pathlib,sys
+
+def memory_headroom(): return {'available_bytes':2**60}
+
+if __name__=='__main__':
+    root=pathlib.Path(sys.argv[-1]).parents[1]
+    counter=root/'attempts.txt'
+    attempt=int(counter.read_text())+1 if counter.exists() else 1
+    counter.write_text(str(attempt))
+    if attempt==1:
+        print('host or cgroup memory reserve reached; restart after memory is available',file=sys.stderr)
+        sys.exit(1)
+''')
+        (source/'records.py').write_text('''import json
+
+def write_json(path,value,overwrite=False): path.write_text(json.dumps(value))
+''')
+        shell=(ROOT/'run_all.sh').read_text().split('if [[ "$mode" == execute ]]; then\n',1)[1]
+        shell=shell.split('if [[ "$mode" == publish ]]; then\n',1)[0]
+        script=source/'run_all.sh'
+        script.write_text('''#!/usr/bin/env bash
+set -Eeuo pipefail
+mode=$1
+material_run=$2
+source_dir="$material_run/source"
+material_python='''+shlex.quote(sys.executable)+'''
+if [[ "$mode" != execute ]]; then
+    case "$mode" in
+        verify-source) exit 0 ;;
+        stage) printf '%s\\n' "$material_run/trial.yaml"; exit 0 ;;
+        pause|wait|record|finish|publish) printf '%s\\n' "$mode" >> "$material_run/actions.txt"; exit 0 ;;
+    esac
+fi
+if [[ "$mode" == execute ]]; then
+'''+shell)
+        result=subprocess.run(['bash',str(script),'execute',str(run)],capture_output=True,text=True,timeout=30)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual((run/'attempts.txt').read_text(),'2')
+        self.assertEqual((run/'actions.txt').read_text().splitlines(),['pause','wait','record','finish','publish'])
+
     def test_bash_syntax_and_check_respect_overrides_and_half_affinity(self):
         syntax=subprocess.run(['bash','-n',str(ROOT/'run_all.sh')],capture_output=True,text=True)
         self.assertEqual(syntax.returncode,0,syntax.stderr)
@@ -1765,23 +2008,35 @@ class QueueTests(unittest.TestCase):
         records.write_json(run/'source-ready.json',{'test':'synthetic measurements; no physical conclusion'})
         public=self.root/'public'; public.mkdir()
         (public/'README.md').write_text('Before\n<!-- full-scale-start -->pending<!-- full-scale-end -->\nAfter\n')
+        subprocess.run(['git','init','-b','test-results',str(public)],capture_output=True,check=True)
+        remote=str(self.root/'unused-test-remote.git')
+        subprocess.run(['git','remote','add','origin',remote],cwd=public,check=True)
+        records.write_json(run/'publication.json',{'branch':'test-results','remote':remote})
         baseline=scan.run_study(self.raw,self.root/'baseline')
         seeds=[f'{method}-{seed}' for seed in (101,202,303) for method in ('bo_gp','cmaes')]
+        confirmations=[f'unused-stream-confirmation-{index:02d}' for index in range(1,5)]
         queue=[{'id':name,'kind':'search'} for name in seeds]
-        queue += [{'id':name,'kind':'confirmation'} for name in ('source-2361','unused-stream-confirmation','events-500000','material-transport-morris','density-morris')]
+        queue += [{'id':name,'kind':'confirmation'} for name in
+                  ['source-2653',*confirmations,'events-500000','material-transport-morris','density-morris']]
         records.write_json(run/'queue.json',queue)
+        layout_reports=[]
         for step in queue:
             name=step['id']; output=run/'studies'/name; output.mkdir(parents=True)
             report=copy.deepcopy(baseline); report['id']=name
-            if name in seeds: report['search_counts']={'target_reached':True,'measured':120,'target':120}
-            elif name=='unused-stream-confirmation':
+            if name in seeds:
+                report['search_counts']={'target_reached':True,'measured':120,'target':120}
+            elif name in confirmations:
+                layout=confirmations.index(name)
                 report['results']=[copy.deepcopy(baseline['results'][0]) for _ in range(7)]
-                for row,label in zip(report['results'],['reference',*seeds]): row['name']=label
-                report['comparisons']=[{'candidate':label,'reference':'reference','value':0.,'standard_error':.125,'confidence_interval_95':[-.245,.245]} for label in seeds]
+                for index,(row,label) in enumerate(zip(report['results'],['reference',*seeds])):
+                    factor=(1+.1*layout)*(1 if index==0 else .9+.01*layout+.005*(index-1))
+                    row.update(name=label,candidate_id=f'{name}-{label}',value=row['value']*factor)
+                    row['estimate']['means_by_stratum']={h:value*factor for h,value in row['estimate']['means_by_stratum'].items()}
                 raw=copy.deepcopy(self.raw); raw['id']=name
                 raw['candidates']=[{'name':row['name'],'values':row['parameters']} for row in report['results']]
                 records.write_json(run/'definitions'/f'{name}.yaml',raw)
-            if name in ('source-2361','unused-stream-confirmation'): report['spatial_check']={'passed':False}
+                layout_reports.append(copy.deepcopy(report))
+            if name=='source-2653': report['spatial_check']={'passed':False}
             if name=='events-500000': report['event_count_check']={'passed':False}
             if name.endswith('morris'): report['sensitivity']={'status':'complete','method':'morris','names':['a'],'mu':[1.],'mu_star':[1.],'mu_star_conf':[0.],'sigma':[0.]}
             records.write_json(output/'summary.json',report)
@@ -1789,12 +2044,34 @@ class QueueTests(unittest.TestCase):
             second=self.root/'independent'/f'{name}.tar.gz'; second.parent.mkdir(exist_ok=True); shutil.copy2(receipt['path'],second)
             receipt.update(independent_copy=str(second),independent_copy_verified=True,summary_content_hash=records.content_hash(report))
             report.update(archive=receipt,raw_files_present=False); records.write_json(output/'summary.json',report,overwrite=True)
+        namespace=self.queue_python('mean_interval','layout_summary')
+        confirmation=namespace['layout_summary'](layout_reports)
+        records.write_json(run/'finalist-validation.json',{'passed':False,'independent_layouts':confirmation})
+        records.write_json(run/'source-validation.json',{'passed':False})
         environment={**os.environ,'MATERIAL_REPOSITORY':str(public),'MATERIAL_PYTHON':sys.executable}
+        # A destination change must reject publication before either tracked report changes.
+        records.write_json(run/'publication.json',{'branch':'other-branch','remote':remote},overwrite=True)
+        rejected=subprocess.run(['bash',str(ROOT/'run_all.sh'),'finish',str(run)],env=environment,capture_output=True,text=True,timeout=60)
+        self.assertNotEqual(rejected.returncode,0)
+        self.assertIn('publication branch or remote changed',rejected.stderr)
+        self.assertEqual((public/'README.md').read_text(),'Before\n<!-- full-scale-start -->pending<!-- full-scale-end -->\nAfter\n')
+        self.assertFalse((public/'docs/results/full_scale_summary.json').exists())
+        records.write_json(run/'publication.json',{'branch':'test-results','remote':remote},overwrite=True)
         finished=subprocess.run(['bash',str(ROOT/'run_all.sh'),'finish',str(run)],env=environment,capture_output=True,text=True,timeout=60)
         self.assertEqual(finished.returncode,0,finished.stderr)
         result=records.load_document(public/'docs/results/full_scale_summary.json')
         self.assertEqual(len(result['confirmed_finalists']),6)
-        self.assertEqual(result['confirmed_finalists'][0]['paired_difference_from_reference']['standard_error'],.125)
+        layout_comparison=result['method_comparison']['position_layout_difference']
+        self.assertTrue(layout_comparison['paired'])
+        self.assertEqual(layout_comparison['n_new'],4)
+        self.assertEqual(layout_comparison['degrees_of_freedom'],3)
+        self.assertIn('shared measurement uncertainty',result['method_comparison']['interpretation'])
+        first=result['confirmed_finalists'][0]
+        self.assertEqual(first['paired_difference_from_reference'],confirmation['comparisons'][0])
+        self.assertAlmostEqual(first['relative_to_reference'],-.085)
+        self.assertEqual(len(first['confirmation_candidate_ids']),4)
+        relative_se=first['paired_difference_from_reference']['relative_change']['standard_error']
+        self.assertAlmostEqual(relative_se,float(np.std([-.10,-.09,-.08,-.07],ddof=1)/2))
         self.assertIn('sensitivity',result['studies']['density-morris'])
         self.assertFalse(result['scientific_checks']['finalist_spatial'])
         self.assertIn('Refine sites',result['next_measurements'][0])
@@ -1803,8 +2080,150 @@ class QueueTests(unittest.TestCase):
             self.assertIn('top_film',projected); self.assertIn('bottom_film',projected)
             native=[row for row in projected['projection']['rows'] if row['candidate'].get('phonon_source')]
             self.assertTrue(native)
-        self.assertTrue((public/'README.md').read_text().startswith('Before\n'))
-        self.assertTrue((public/'README.md').read_text().endswith('\nAfter\n'))
+        text=(public/'README.md').read_text()
+        self.assertTrue(text.startswith('Before\n'))
+        self.assertTrue(text.endswith('\nAfter\n'))
+        self.assertIn('Paired standard error (percentage points)',text)
+        self.assertIn(f'| {100*relative_se:.3g} |',text)
+
+class SpatialUncertaintyTests(unittest.TestCase):
+    def inputs(self, ids, regions, values):
+        design={'position_strata':regions,'stratum_weights':{'left':.25,'right':.75},
+                'replica_ids':[0,1,2],'events_per_task':1,'gun_energy_eV':1.,
+                'electrode_weights':[1.],'design_hash':'test','site_ids':ids}
+        blocks=[{'position':i,'replica':r,'events':1,'total_qps':float(value),
+                 'per_electrode_qps':[float(value)]}
+                for i,row in enumerate(values) for r,value in enumerate(row)]
+        return blocks,design
+
+    def test_nested_identical_layout_cancels_shared_sites_and_streams(self):
+        blocks,design=self.inputs(['a','b','c'],['left','left','right'],
+                                 [[1,4,7],[15,21,30],[100,110,130]])
+        result=analysis.nested_spatial_difference(blocks,blocks,design,design,bootstrap_draws=64)
+        self.assertEqual(result['difference'],0.)
+        self.assertEqual(result['standard_error'],0.)
+        self.assertEqual(result['confidence_interval_95'],[0.,0.])
+        self.assertTrue(result['equivalent_within_margin'])
+        self.assertTrue(result['fixed_site_transport_difference']['paired'])
+
+    def test_nested_site_ids_and_each_regional_denominator_are_preserved(self):
+        coarse,cd=self.inputs(['a','b','c'],['left','left','right'],[[2]*3,[6]*3,[20]*3])
+        # Shared sites need not occupy the same array indices.
+        fine,fd=self.inputs(['c','x','b','a','y','z'],
+                            ['right','left','left','left','right','right'],
+                            [[20]*3,[10]*3,[6]*3,[2]*3,[40]*3,[60]*3])
+        result=analysis.nested_spatial_difference(coarse,fine,cd,fd,bootstrap_draws=128)
+        self.assertEqual(result['coarse_value'],16.)
+        self.assertEqual(result['fine_value'],31.5)
+        self.assertEqual(result['difference'],15.5)
+        self.assertEqual(result['regions']['left']['n_coarse'],2)
+        self.assertEqual(result['regions']['left']['n_fine'],3)
+        self.assertEqual(result['regions']['right']['n_added'],2)
+        self.assertEqual(result['regions']['left']['difference'],2.)
+        self.assertEqual(result['regions']['right']['difference'],20.)
+        self.assertEqual(result['fixed_site_transport_difference']['standard_error'],0.)
+
+    def test_independent_transport_is_separate_from_site_pairing(self):
+        blocks,design=self.inputs(['a','b'],['left','right'],[[1,2,3],[4,8,12]])
+        result=analysis.nested_spatial_difference(blocks,blocks,design,design,
+                                                 same_random_streams=False,bootstrap_draws=128)
+        self.assertEqual(result['difference'],0.)
+        self.assertGreater(result['standard_error'],0.)
+        transport=result['fixed_site_transport_difference']
+        self.assertFalse(transport['paired'])
+        self.assertGreater(transport['standard_error'],0.)
+        invalid=copy.deepcopy(design); invalid['site_ids'][0]='unshared'
+        with self.assertRaisesRegex(ValueError,'every coarse site'):
+            analysis.nested_spatial_difference(blocks,blocks,invalid,design,bootstrap_draws=8)
+
+    def test_small_resolved_spatial_shift_passes_equivalence_margin(self):
+        coarse,cd=self.inputs(['a','b'],['left','right'],[[100]*3,[100]*3])
+        fine,fd=self.inputs(['a','b','x','y'],['left','right','left','right'],
+                            [[100]*3,[100]*3,[102]*3,[102]*3])
+        result=analysis.nested_spatial_difference(coarse,fine,cd,fd,bootstrap_draws=128)
+        self.assertEqual(result['difference'],1.)
+        self.assertEqual(result['standard_error'],0.)
+        self.assertFalse(result['checks']['within_difference_error'])
+        self.assertTrue(result['passed'])
+        self.assertTrue(all(row['refinement_assessed'] for row in result['regions'].values()))
+        unchanged=analysis.nested_spatial_difference(coarse,coarse,cd,cd,bootstrap_draws=128)
+        self.assertTrue(all(not row['refinement_assessed'] for row in unchanged['regions'].values()))
+
+    def test_fixed_site_transport_precision_excludes_position_variation(self):
+        blocks,design=self.inputs(['a','b','c','d'],['left','left','right','right'],
+                                 [[1]*3,[9]*3,[20]*3,[80]*3])
+        estimate=analysis.summarize(analysis.prepare_counts(blocks,design),
+                                    diagnostics=False,bootstrap_draws=128)
+        conditional=analysis.transport_precision(estimate['by_replica'])
+        self.assertEqual(conditional['mean'],38.75)
+        self.assertEqual(conditional['standard_error'],0.)
+        self.assertEqual(conditional['confidence_interval'],[38.75,38.75])
+        self.assertGreater(estimate['standard_error'],0.)
+
+    def test_fixed_site_transport_uses_student_t_across_replica_means(self):
+        from scipy.stats import t
+        result=analysis.transport_precision([8.,10.,12.])
+        expected_se=2./np.sqrt(3.)
+        self.assertEqual(result['mean'],10.)
+        self.assertAlmostEqual(result['standard_error'],expected_se)
+        self.assertAlmostEqual(result['relative_standard_error'],expected_se/10.)
+        self.assertEqual(result['degrees_of_freedom'],2)
+        np.testing.assert_allclose(result['confidence_interval'],
+                                   [10.-t.ppf(.975,2)*expected_se,10.+t.ppf(.975,2)*expected_se])
+        with self.assertRaises(ValueError):
+            analysis.transport_precision([10.])
+
+
+class MorrisPrecisionTests(unittest.TestCase):
+    def test_density_morris_keeps_physical_bounds_and_elementary_steps(self):
+        study = scan.load_study({'schema': 'material-scan-study-2', 'id': 'density-precision',
+                                 'kind': 'sensitivity', 'morris': {
+                                     'parameters': ['f_01', 'r', 's', 'I_ph', 'pt', 'n_cooper'],
+                                     'trajectories': 4, 'levels': 4, 'seed': 41}})
+        points = scan.candidate_table(study)
+        problem = study['morris_design']['problem']
+        names = problem['names']
+        bounds = np.asarray(problem['bounds'])
+        values = np.asarray([[point['inputs'][name] for name in names] for point in points])
+        self.assertTrue(np.all(values >= bounds[:, 0]))
+        self.assertTrue(np.all(values <= bounds[:, 1]))
+        for point in points:
+            self.assertEqual(point['ode'], point['inputs'])
+        paths = values.reshape(4, len(names) + 1, len(names))
+        steps = np.abs(np.diff(paths, axis=1))
+        self.assertTrue(np.all(np.count_nonzero(steps, axis=2) == 1))
+        for column in range(len(names)):
+            changed = steps[:, :, column][steps[:, :, column] != 0]
+            np.testing.assert_allclose(changed, (2 / 3) * np.diff(bounds[column])[0],
+                                       rtol=1e-14, atol=0)
+        r_values = values[:, names.index('r')]
+        self.assertTrue(np.any(r_values != np.round(r_values, 6)))
+
+    def test_morris_macro_and_lattice_keep_precision_until_rendering(self):
+        study = scan.load_study({'schema': 'material-scan-study-2', 'id': 'transport-precision',
+                                 'kind': 'sensitivity', 'morris': {
+                                     'parameters': ['/main/detector_param/setTopFilmGap', 'scat'],
+                                     'trajectories': 2, 'levels': 4, 'seed': 41}})
+        for section, name, bounds in (
+            ('detector_params', '/main/detector_param/setTopFilmGap',
+             [0.00123456789123, 0.00212345678912]),
+            ('config_params', 'scat', [1.215123456789, 3.645987654321]),
+        ):
+            entry = next(row for row in study['parameter_table']['morris'][section]
+                         if row[0].strip() == name)
+            entry[2] = bounds
+        for candidate in scan.candidate_table(study):
+            gap = candidate['inputs']['/main/detector_param/setTopFilmGap']
+            self.assertNotEqual(gap, round(gap, 6))
+            scat = candidate['inputs']['scat'] * 1e-42
+            self.assertEqual(candidate['macro']['/main/detector_param/setTopFilmGap'], f'{gap:.12g}')
+            self.assertEqual(candidate['config']['scat'], [scat, 's3'])
+            self.assertEqual(candidate['values']['sub_scat'], scat)
+            prepared = physics.prepare_values(study, candidate)
+            prepared.update({key: candidate[key] for key in ('macro', 'config', 'ode')})
+            lattice, macro = scan.input_text(prepared, study['installation'])
+            self.assertIn(f'scat {scat:.12g} s3\n', lattice)
+            self.assertIn(f'/main/detector_param/setTopFilmGap {gap:.12g}\n', macro)
 
 
 if __name__ == "__main__":

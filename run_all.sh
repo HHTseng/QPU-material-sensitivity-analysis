@@ -6,7 +6,7 @@ mode=status
 if (( $# > 0 )); then mode=$1; fi
 if printenv MATERIAL_REPOSITORY >/dev/null; then repository=$(printenv MATERIAL_REPOSITORY)
 else repository=$(cd -- "$(dirname -- "$BASH_SOURCE")" && pwd -P); fi
-material_run="$repository/material_scan_data/full_scale_20261014"
+material_run="$repository/material_scan_data/full_scale_20261014_revised"
 if (( $# > 1 )); then material_run=$2; fi
 material_run=$(realpath -m -- "$material_run")
 material_python=/home/htseng/.conda/envs/G4CMP/bin/python
@@ -32,6 +32,34 @@ path=Path(f'/proc/{pid}/stat')
 if pid and path.is_file():
     fields=path.read_text().split(') ',1)[1].split()
     if int(fields[19])==state.get('driver_starttime'): os.kill(pid,signal.SIGINT)
+PY
+    exit
+fi
+
+if [[ "$mode" == finish-stage ]]; then
+    "$material_python" - "$material_run" <<'PY'
+import fcntl,json,os,signal,subprocess,sys,time
+from pathlib import Path
+root=Path(sys.argv[1]); state=json.loads((root/'queue_status.json').read_text())
+pid=state['driver_pid']; fields=Path(f'/proc/{pid}/stat').read_text().split(') ',1)[1].split()
+if int(fields[19])!=state['driver_starttime']: raise ValueError('the recorded driver has already changed')
+parent=int(fields[1]); created=int(Path(f'/proc/{parent}/stat').read_text().split(') ',1)[1].split()[19])
+print('Waiting for completed transport:',state['stage'],flush=True)
+while Path(f'/proc/{pid}').exists():
+    try:
+        if int(Path(f'/proc/{pid}/stat').read_text().split(') ',1)[1].split()[19])!=state['driver_starttime']: break
+    except FileNotFoundError: break
+    time.sleep(.2)
+if Path(f'/proc/{parent}/stat').is_file() and int(Path(f'/proc/{parent}/stat').read_text().split(') ',1)[1].split()[19])==created:
+    os.kill(parent,signal.SIGINT)
+with (root/'queue.lock').open('a') as lock:
+    fcntl.flock(lock,fcntl.LOCK_EX)
+    report=json.loads((root/'studies'/state['stage']/'summary.json').read_text())
+    if not report.get('complete'): raise ValueError('transport stopped before completion; retained tasks can be resumed')
+    subprocess.run(['bash',str(root/'source/run_all.sh'),'record',str(root),str(state['index'])],check=True)
+    state.update(state='paused',reason='Completed study retained; remaining studies replaced by revised spatial validation.',updated=time.time())
+    (root/'queue_status.json').write_text(json.dumps(state,indent=2)+'\n')
+print('Old queue paused after verified preservation:',state['stage'],flush=True)
 PY
     exit
 fi
@@ -98,6 +126,9 @@ PY
             kill "$guardian_pid" 2>/dev/null || true
             wait "$guardian_pid" 2>/dev/null || true
             guardian_pid=
+            if (( code != 0 )) && [[ ! -f "$material_run/guard.json" ]] && rg -q 'host or cgroup memory reserve reached; restart after memory is available' "$material_run/logs/$id.log"; then
+                "$material_python" -c 'import json,sys; from pathlib import Path; Path(sys.argv[1]).write_text(json.dumps({"reason":"memory_reserve","source":"transport monitor"})+"\n")' "$material_run/guard.json"
+            fi
             if [[ -f "$material_run/guard.json" ]]; then
                 bash "$BASH_SOURCE" pause "$material_run" "$index"
                 reason=$("$material_python" -c 'import json,sys;print(json.load(open(sys.argv[1]))["reason"])' "$material_run/guard.json")
@@ -166,7 +197,7 @@ def base_study(identifier,sampling,kind='confirmation'):
     raw['execution'].update(timeout_s=cfg['execution']['timeout_s'],stall_timeout_s=cfg['execution']['stall_timeout_s'])
     raw['sampling']={'kind':'recorded-stratified','sites':sampling.get('design',sampling.get('sites',512)),'replicas':sampling['replicas'],'events_per_task':sampling['events_per_task'],'seed_base':defaults['seed_base'],'seed_bank':sampling.get('seed_bank',sampling.get('first_seed_bank',201)),'position_seed':defaults['position_seed']}
     if sampling.get('kind')=='sobol': raw['sampling']['kind']='sobol'
-    else: raw['sampling']['design_file']=str(run/'designs'/f"stratified_{raw['sampling']['sites']}.json")
+    else: raw['sampling']['design_file']=str(run/'designs'/sampling.get('design_file',f"stratified_{raw['sampling']['sites']}.json"))
     if (run/'installation.json').is_file(): raw['installation']=records.load_document(run/'installation.json')
     raw['candidates']=[{'name':'reference','values':{}}]
     return raw
@@ -187,6 +218,48 @@ def selected_finalists():
         point=min((p for p in report['results'] if p['status']=='complete'),key=lambda p:p['value'])
         selected.append({'name':row['id'],'values':point['parameters'],'selected_candidate_id':point['candidate_id'],'search_value':point['value']})
     return selected
+
+def mean_interval(values):
+    # y_k are independent position-layout means, including transport noise.
+    from scipy.stats import t
+    y=np.asarray(values,dtype=float)
+    if len(y)<2 or not np.isfinite(y).all(): raise ValueError('at least two complete independent layouts required')
+    mean=float(y.mean()); se=float(y.std(ddof=1)/math.sqrt(len(y)))
+    radius=float(t.ppf(.975,len(y)-1)*se)
+    return {'value':mean,'standard_error':se,'confidence_interval_95':[mean-radius,mean+radius],
+            'relative_standard_error':se/abs(mean) if mean else None,'by_layout':y.tolist(),
+            'n_layouts':len(y),'uncertainty_method':'Student-t interval across independent source-position layouts'}
+
+def layout_summary(reports):
+    # Equal allocation and W_h in every layout; average independent integrals.
+    out=copy.deepcopy(reports[0]); names=[row['name'] for row in out['results']]
+    if any([row['name'] for row in report['results']]!=names for report in reports):
+        raise ValueError('independent layouts must contain the same complete candidates in order')
+    for row in out['results']:
+        measured=[next(r for r in report['results'] if r['name']==row['name']) for report in reports]
+        estimate=mean_interval([r['value'] for r in measured])
+        estimate['means_by_stratum']={h:float(np.mean([r['estimate']['means_by_stratum'][h] for r in measured])) for h in measured[0]['estimate']['means_by_stratum']}
+        estimate['maximum_site_leverage']=max(r['estimate']['maximum_site_leverage'] for r in measured)
+        row.update(value=estimate['value'],standard_error=estimate['standard_error'],estimate=estimate)
+    reference=np.asarray(out['results'][0]['estimate']['by_layout']); pairs=[]
+    for row in out['results'][1:]:
+        values=np.asarray(row['estimate']['by_layout'])
+        relative=mean_interval(values/reference-1) if np.all(reference>0) else None
+        pairs.append({'candidate':row['name'],'reference':out['results'][0]['name'],
+                      **mean_interval(values-reference),'relative_change':relative,
+                      'relative_to_b':relative['value'] if relative else None,'units':row['units']})
+    out.update(id='independent-layout-mean',comparisons=pairs,position_layouts=[r['id'] for r in reports])
+    return out
+
+def selected_spatial_sites():
+    first=records.load_document(run/'studies/source-2653/summary.json')
+    return 2653 if first['spatial_check']['passed'] else 3041
+
+def restored_center(identifier):
+    report=records.load_document(run/'studies'/identifier/'summary.json')
+    receipt=verify_saved_archive(report); destination=run/'references'/identifier
+    records.recover_archive(receipt['path'],destination,expected_archive_sha256=receipt['sha256'])
+    return destination,report
 
 def verify_saved_archive(report):
     receipt=report['archive']; archive=Path(receipt['path']); second=Path(receipt['independent_copy'])
@@ -283,30 +356,53 @@ if mode in ('check','prepare'):
             if path.is_file(): path.chmod(0o555 if path==source/'bin/Main' else 0o444)
     records.write_json(run/'resources.json',limits)
     fixed=reference['fixed']; fixed['position_half_span_mm']=defaults['source_half_span_mm']
-    design=None; (run/'designs').mkdir(exist_ok=True)
+    (run/'designs').mkdir(exist_ok=True)
+    previous_root=repo/cfg['previous_run']
+    previous_design=records.load_document(previous_root/'designs/stratified_2361.json')
+    records.write_json(run/'designs/stratified_2361.json',previous_design)
     for n in defaults['design_counts']:
-        sampling={'kind':'stratified','sites':n,'position_seed':defaults['position_seed'],'area_samples':defaults['area_samples'],'area_seed':defaults['area_seed']}
-        design=physics.build_design(fixed,sampling,previous=design)
+        sampling={'kind':'stratified','sites':n,'position_seed':defaults['position_seed'],
+                  'area_samples':defaults['area_samples'],'area_seed':defaults['area_seed'],
+                  'allocation':dict(zip(physics.REGIONS,defaults['allocations'][str(n)])),
+                  'stratum_weights':previous_design['stratum_weights']}
+        prior=previous_design if n==2653 else records.load_document(run/'designs/stratified_2653.json') if n==3041 else None
+        design=physics.build_design(fixed,sampling,previous=prior)
         design['design_hash']=records.content_hash({k:v for k,v in design.items() if k!='design_hash'})
         records.write_json(run/'designs'/f'stratified_{n}.json',design)
-    queue=[{'id':'pilot','kind':'pilot','sampling':{'design':128,'replicas':2,'events_per_task':31250,'seed_bank':100}}]
-    groups=cfg['studies'][:2]+[group for group in cfg['studies'] if group['kind']=='event_count_convergence']+[group for group in cfg['studies'][2:] if group['kind']!='event_count_convergence']
+        if n not in (2653,3041): continue
+        for family,seeds in [('source-independent',defaults['independent_position_seeds']),('unused-stream-confirmation',defaults['confirmation_position_seeds'])]:
+            for k,seed in enumerate(seeds,1):
+                sampling['position_seed']=seed
+                independent=physics.build_design(fixed,sampling)
+                independent['design_hash']=records.content_hash({k:v for k,v in independent.items() if k!='design_hash'})
+                if independent['stratum_weights']!=previous_design['stratum_weights']: raise ValueError('independent layouts must share area weights')
+                records.write_json(run/'designs'/f'{family}-{k:02d}_{n}.json',independent)
+    independent_root=Path(os.environ.get('MATERIAL_ARCHIVE_ROOT',cfg['execution']['independent_archive_root']))/run.name
+    independent_root.mkdir(parents=True,exist_ok=True)
+    if independent_root.stat().st_dev==run.stat().st_dev: raise ValueError('archive copies require a separate persistent filesystem')
+    if shutil.disk_usage(independent_root).free<limits['minimum_free_disk_gb']*1024**3: raise ValueError('independent archive disk reserve unavailable')
+    records.write_json(run/'archive-location.json',{'path':str(independent_root),'device':independent_root.stat().st_dev,'working_device':run.stat().st_dev})
+    queue=[{'id':'pilot','kind':'pilot','sampling':{'design':128,'replicas':2,'events_per_task':31250,'seed_bank':1100}}]
+    groups=[g for g in cfg['studies'] if g['kind'] in ('convergence','independent_positions','event_count_convergence')]+[g for g in cfg['studies'] if g['kind'] not in ('convergence','independent_positions','event_count_convergence')]
     for group in groups:
         kind=group['kind']
-        if kind=='temperature_comparison':
-            queue.extend({**group,'id':f"temperature-{temp:g}K",'temperature':temp} for temp in group['temperatures_K'])
-        elif kind=='convergence':
-            queue.extend({**group,'id':f"source-{n}",'sites':n} for n in [*group['sites'],group['refine_if_failed']['sites']])
+        if kind=='convergence':
+            queue.extend({**group,'id':f"source-{n}",'sites':n,'bank':group['sampling']['first_seed_bank']+i} for i,n in enumerate(group['sites']))
+        elif kind=='independent_positions':
+            queue.extend({**group,'id':f"source-independent-{i+1:02d}",'position_seed':seed,'bank':group['sampling']['first_seed_bank']+i} for i,seed in enumerate(defaults['independent_position_seeds']))
+            queue.append({'id':'source-validation','kind':'source_validation'})
         elif kind=='event_count_convergence':
-            queue.extend({**group,'id':f"events-{n}",'events_per_task':n} for n in group['events_per_task'])
+            queue.extend({**group,'id':f"events-{n}",'events_per_task':n,'bank':group['sampling']['first_seed_bank']+i} for i,n in enumerate(group['events_per_task']))
         elif kind=='search_comparison':
             queue.extend({**group,'id':f"{method}-{seed}",'kind':'search','method':method,'seed':seed,'bank':group['sampling']['first_seed_bank']+i} for i,seed in enumerate(group['seeds']) for method in group['methods'])
+        elif kind=='confirmation':
+            queue.extend({**group,'id':f"unused-stream-confirmation-{i+1:02d}",'position_seed':seed,'bank':group['sampling']['first_seed_bank']+i} for i,seed in enumerate(defaults['confirmation_position_seeds']))
+            queue.append({'id':'finalist-validation','kind':'finalist_validation'})
         elif kind in ('explicit_tolerance','model_ranges'):
+            queue.append({**group,'id':group['center_study'],'centers_only':True})
             moves=group['candidate_limit']*len(group['parameters'])*len(group['physical_fraction'])*2 if kind=='explicit_tolerance' else 52
             queue.extend({**group,'id':group['id']+f'-{i//4+1:02d}','move_start':i,'move_count':4} for i in range(0,moves,4))
-        else:
-            queue.append(group)
-            if kind=='confirmation': queue.append({**group,'id':'unused-stream-confirmation-4096','sites':4096,'refinement':True})
+        else: queue.append(group)
     records.write_json(run/'queue.json',queue)
     records.write_json(run/'queue_status.json',{'state':'prepared','stages':len(queue),'updated':time.time()},overwrite=True)
     records.write_json(run/'publication.json',{'branch':subprocess.check_output(['git','branch','--show-current'],cwd=repo,text=True).strip(),'remote':subprocess.check_output(['git','remote','get-url','origin'],cwd=repo,text=True).strip(),'files':['README.md','docs/results/full_scale_summary.json','docs/results/full_scale_finalists.png','docs/results/full_scale_transport_morris.png','docs/results/full_scale_density_morris.png','docs/results/full_scale_methods.png','docs/results/full_scale_projection.png']})
@@ -324,23 +420,60 @@ if mode=='stage':
             receipt=verify_saved_archive(old)
             compact_study(output,old,receipt)
             print('SKIP'); raise SystemExit(0)
-    if step.get('sites')==4096:
-        previous_id='source-2361' if step['kind']=='convergence' else 'unused-stream-confirmation'
-        previous=records.load_document(run/'studies'/previous_id/'summary.json')
-        if previous.get('spatial_check',{}).get('passed'):
-            records.write_json(run/(identifier+'-skipped.json'),{'reason':'declared spatial tests passed at 2361 sites'})
-            print('SKIP'); raise SystemExit(0)
+    if step['kind'] in ('source_validation','finalist_validation'):
+        if (run/(identifier+'.json')).is_file():
+            validation=records.load_document(run/(identifier+'.json'))
+        else:
+            family='source-independent' if step['kind']=='source_validation' else 'unused-stream-confirmation'
+            reports=[records.load_document(run/'studies'/f'{family}-{k:02d}'/'summary.json') for k in range(1,5)]
+            aggregate=layout_summary(reports); checks={}
+            for row in aggregate['results']:
+                estimate=row['estimate']; precision=estimate['relative_standard_error']
+                checks[row['name']]={'relative_standard_error':precision,'confidence_interval_95':estimate['confidence_interval_95'],
+                                     'passed':precision is not None and precision<=.02}
+            validation={'passed':all(row['passed'] for row in checks.values()),'candidates':checks,'independent_layouts':aggregate}
+            if step['kind']=='source_validation':
+                from scipy.stats import t
+                selected=records.load_document(run/'studies'/f'source-{selected_spatial_sites()}'/'summary.json')
+                nested=selected['spatial_check']; original={row['name']:row for row in selected['results']}; agreement={}
+                margin=next(g['check']['relative_limit'] for g in cfg['studies'] if g['kind']=='independent_positions')
+                for row in aggregate['results']:
+                    old=original[row['name']]; delta=row['value']-old['value']
+                    se=math.hypot(row['standard_error'],old['standard_error'])
+                    radius=float(t.ppf(.975,len(reports)-1)*se); interval=[delta-radius,delta+radius]
+                    limit=margin*abs(row['value'])
+                    agreement[row['name']]={'difference':delta,'standard_error':se,'confidence_interval_95':interval,
+                        'passed':interval[0]>-limit and interval[1]<limit,
+                        'regions':{h:{'independent_mean':value,'retained_mean':old['estimate']['means_by_stratum'][h],
+                                       'difference':value-old['estimate']['means_by_stratum'][h]} for h,value in row['estimate']['means_by_stratum'].items()},
+                        'uncertainty_method':'Independent layout variance plus retained hierarchical variance; conservative t critical value with three degrees of freedom. Area weights held fixed.'}
+                validation.update(nested=nested,retained_layout_agreement=agreement,
+                                  passed=validation['passed'] and nested['passed'] and all(a['passed'] for a in agreement.values()))
+            records.write_json(run/(identifier+'.json'),validation)
+        if not validation['passed']:
+            records.write_json(run/'queue_status.json',{'state':'needs_more_positions','stage':identifier,
+                               'reason':'Independent position precision or nested spatial interval failed; inspect region estimates before further transport.',
+                               'updated':time.time()},overwrite=True)
+            raise ValueError('source-position checks did not pass; retained results require spatial refinement')
+        records.write_json(run/(identifier+'-skipped.json'),{'reason':'analysis-only spatial check completed','passed':True},overwrite=True)
+        print('SKIP'); raise SystemExit(0)
+    if identifier=='source-3041' and selected_spatial_sites()==2653:
+        records.write_json(run/(identifier+'-skipped.json'),{'reason':'nested spatial intervals passed at 2653 sites'},overwrite=True)
+        print('SKIP'); raise SystemExit(0)
     sampling=dict(step['sampling'])
-    if 'sites' in step and step['kind'] in ('convergence','confirmation'): sampling['design']=step['sites']
+    if sampling.get('design')==2653 and step['kind']!='convergence': sampling['design']=selected_spatial_sites()
+    if 'sites' in step and step['kind']=='convergence': sampling['design']=step['sites']
+    if 'position_seed' in step:
+        sampling['design_file']=f"{identifier}_{sampling['design']}.json"
     if 'events_per_task' in step: sampling['events_per_task']=step['events_per_task']
     if 'bank' in step: sampling['seed_bank']=step['bank']
     raw=base_study(identifier,sampling)
+    if 'position_seed' in step: raw['sampling']['position_seed']=step['position_seed']
     kind=step['kind']
     if kind=='temperature_comparison':
         raw['fixed']['temperature_K']=step['temperature']; raw['parameters']['temperature']['value']=step['temperature']
-    elif kind in ('convergence','event_count_convergence'):
+    elif kind in ('convergence','independent_positions','event_count_convergence'):
         raw['candidates']=[candidate(name) for name in step['candidates']]
-        if kind=='event_count_convergence': raw['sampling']['seed_bank']+=list(step['events_per_task_values']).index(step['events_per_task']) if 'events_per_task_values' in step else index
     elif kind=='explicit_parameters':
         raw['candidates']=[{'name':f"C44-{v:g}GPa",'values':{step['parameter']:v}} for v in step['values_GPa']]
     elif kind=='morris':
@@ -358,8 +491,7 @@ if mode=='stage':
         raw['candidates']=[candidate(name) for name in step['anchors']]+[{key:value for key,value in point.items() if key in ('name','values')} for point in selected_finalists()]
     elif kind in ('explicit_tolerance','model_ranges'):
         finalists=selected_finalists()
-        confirmed=run/'studies/unused-stream-confirmation-4096/summary.json'
-        confirmation=records.load_document(confirmed if confirmed.is_file() else run/'studies/unused-stream-confirmation/summary.json')
+        confirmation=records.load_document(run/'finalist-validation.json')['independent_layouts']
         measured={row['name']:row for row in confirmation['results']}
         best=min(finalists,key=lambda p:measured[p['name']]['value'])
         if kind=='explicit_tolerance':
@@ -387,7 +519,8 @@ if mode=='stage':
                     if factor==1: continue
                     value=min(1.,max(0.,prepared['derived'][name]*factor))
                     cases.append({**copy.deepcopy(anchor),'name':f"{anchor['name']}:{name}:x{factor:g}",'macro':{'/main/detector_param/'+name:value},'tolerance':{'unclipped':prepared['derived'][name]*factor,'clipped':value!=prepared['derived'][name]*factor}})
-        cases=centers+cases[step['move_start']:step['move_start']+step['move_count']]
+        cases=centers if step.get('centers_only') else cases[step['move_start']:step['move_start']+step['move_count']]
+        raw['analysis']['comparisons']=False
         kept=[]; rejected=[]; study=scan.load_study(raw); names=set()
         for point in cases:
             if point['name'] in names: continue
@@ -396,7 +529,10 @@ if mode=='stage':
             except ValueError as exc:
                 rejected.append({'name':point['name'],'reason':str(exc),'status':'physically_infeasible','value':None}); continue
             kept.append(point)
-        raw['candidates']=kept; raw['provenance']={'infeasible_moves':rejected,'centers':[point['name'] for point in centers],'moves':[{'name':point['name'],**point.get('tolerance',{})} for point in kept if point['name'] not in {p['name'] for p in centers}],'selection':'fresh complete confirmation responses'}
+        raw['candidates']=kept; raw['provenance']={'center_study':step['center_study'],'infeasible_moves':rejected,'centers':[point['name'] for point in centers],'moves':[{'name':point['name'],**point.get('tolerance',{})} for point in kept if point['name'] not in {p['name'] for p in centers}],'selection':'fresh complete confirmation responses'}
+    if kind in ('explicit_tolerance','model_ranges') and not kept:
+        records.write_json(run/(identifier+'-skipped.json'),{'reason':'every declared move is physically infeasible','physical_moves':raw['provenance']},overwrite=True)
+        print('SKIP'); raise SystemExit(0)
     path=run/'definitions'/f'{identifier}.yaml'; path.parent.mkdir(exist_ok=True)
     text=yaml.safe_dump(raw,sort_keys=False)
     if path.exists() and path.read_text()!=text: raise ValueError('prepared study changed; use a new run directory')
@@ -420,51 +556,53 @@ elif mode=='record':
         receipt=verify_saved_archive(report); compact_study(output,report,receipt)
         print(records.canonical_json({'stage':step['id'],'already_archived':True})); raise SystemExit(0)
     if not report['complete']: raise ValueError('incomplete studies cannot become confirmed results')
-    if step['kind'] in ('convergence','confirmation'):
-        previous_id='source-512' if step.get('sites')==2361 and step['kind']=='convergence' else 'source-2361' if step.get('sites')==4096 and step['kind']=='convergence' else 'unused-stream-confirmation' if step.get('refinement') else None
-        previous=None
-        if previous_id: previous=records.load_document(run/'studies'/previous_id/'summary.json')
-        elif step['kind']=='confirmation':
-            coarse=scan.load_study(run/'definitions'/f"{step['id']}.yaml")
-            coarse['design']=records.load_document(run/'designs/stratified_512.json')
-            coarse['sampling']['sites']=512
-            design=analysis.analysis_design(coarse); points=[]
-            for row in report['results']:
-                blocks=records.load_result(output,candidate_id=row['candidate_id'])['results'][0]['blocks']
-                estimate=analysis.summarize([block for block in blocks if block['position']<512],design,bootstrap_draws=defaults['bootstrap_draws'])
-                points.append({**row,'estimate':estimate,'value':estimate['value'],'standard_error':estimate['standard_error']})
-            previous={'results':points}; del blocks
-        if previous:
-            old={r['name']:r for r in previous['results']}; fresh={r['name']:r for r in report['results']}
-            checks={r['name']:analysis.spatial_convergence(old[r['name']]['estimate'],r['estimate'],baseline_coarse=old['reference']['value'],baseline_fine=fresh['reference']['value'],**step.get('check',{})) for r in report['results']}
-            ranks=analysis.rank_stability(old,{r['name']:r for r in report['results']})
-            report['spatial_check']={'passed':all(c['passed'] for c in checks.values()) and ranks['stable_within_uncertainty'],'candidates':checks,'rank':ranks,'covariance':'coarse and fine share sites; covariance is omitted in the combined-error screen'}
-            records.write_json(output/'summary.json',report,overwrite=True)
+    if step['kind']=='convergence':
+        # Shared outputs define the nested contrast; no deterministic replay assumed.
+        n=2361 if step['sites']==2653 else 2653
+        coarse=records.load_document(run/'designs'/f'stratified_{n}.json')
+        coarse_design={**report['design'],'position_strata':coarse['stratum'],'sites_mm':coarse['sites_mm'],'design_hash':coarse['design_hash']}
+        checks={}
+        for row in report['results']:
+            blocks=records.load_result(output,candidate_id=row['candidate_id'])['results'][0]['blocks']
+            checks[row['name']]=analysis.nested_spatial_difference([b for b in blocks if b['position']<n],blocks,coarse_design,report['design'],
+                                      bootstrap_draws=defaults['bootstrap_draws'],relative_limit=step['check']['relative_limit'])
+            checks[row['name']]['maximum_site_leverage']=row['estimate']['maximum_site_leverage']
+            checks[row['name']]['passed'] &= row['estimate']['maximum_site_leverage']<=step['check']['leverage_limit']
+        report['spatial_check']={'passed':all(c['passed'] for c in checks.values()),'candidates':checks,
+                                'interpretation':'Nested-layout contrasts only; independent position layouts must also pass.'}
+        records.write_json(output/'summary.json',report,overwrite=True)
     elif step['kind']=='event_count_convergence':
-        # Increase N_p at fixed sites; independent random banks test source counts.
+        # More primaries reduce transport noise at fixed sites, not integration error.
         counts=next(group['events_per_task'] for group in cfg['studies'] if group['kind']=='event_count_convergence')
         ordinal=counts.index(step['events_per_task']); tests={}
-        if ordinal:
-            previous=records.load_document(run/'studies'/f'events-{counts[ordinal-1]}'/'summary.json')
-            old={row['name']:row for row in previous['results']}
-            for row in report['results']:
-                value=row['value']; relative=abs(value-old[row['name']]['value'])/value if value>0 else None
-                rse=row['standard_error']/value if value>0 else None
-                repeated=analysis.compare_repeated(row['estimate']['by_replica'],old[row['name']]['estimate']['by_replica'])
-                tests[row['name']]={'relative_shift':relative,'relative_standard_error':rse,'conditional_on_sites':repeated,'passed':relative is not None and relative<=step['check']['relative_limit'] and rse<=step['check']['relative_standard_error_limit']}
-        report['event_count_check']={'passed':bool(tests) and all(test['passed'] for test in tests.values()),'candidates':tests,'covariance':'Independent transport banks at common sites; repeated interval is conditional on the chosen sites. Area uncertainty remains in the hierarchical standard error.'}
+        previous=records.load_document(run/'studies'/f'events-{counts[ordinal-1]}'/'summary.json') if ordinal else None
+        old={row['name']:row for row in previous['results']} if previous else {}
+        for row in report['results']:
+            precision=analysis.transport_precision(row['estimate']['by_replica'])
+            rse=precision['relative_standard_error']
+            repeated=analysis.compare_repeated(row['estimate']['by_replica'],old[row['name']]['estimate']['by_replica'],relative_margin=step['check']['relative_limit']) if previous else None
+            tests[row['name']]={'transport':precision,'area_standard_error':row['standard_error'],
+                                'conditional_on_sites':repeated,
+                                'passed':previous is not None and repeated['equivalent_within_margin'] and rse is not None and rse<=step['check']['relative_standard_error_limit']}
+        report['event_count_check']={'passed':all(test['passed'] for test in tests.values()),'candidates':tests,
+                                    'interpretation':'Independent transport banks at fixed sites. Position uncertainty is reported separately.'}
         records.write_json(output/'summary.json',report,overwrite=True)
-    elif step['kind'] in ('explicit_tolerance','model_ranges'):
-        # D=b_move-b_center on matching (i,r), with the same W_h and w_e.
+    elif step['kind'] in ('explicit_tolerance','model_ranges') and not step.get('centers_only'):
+        # dJ uses matched (i,r); each center is restored once and reused across batches.
         definition=records.load_document(run/'definitions'/f"{step['id']}.yaml")
-        centers=definition['provenance']['centers']; lookup={row['name']:row for row in report['results']}; pairs=[]
-        for name in centers:
-            block=records.load_result(output,candidate_id=lookup[name]['candidate_id'])['results'][0]['blocks']
+        center_dir,center_report=restored_center(step['center_study'])
+        if center_report['design']!=report['design'] or center_report['streams']!=report['streams']:
+            raise ValueError('center and moves must have identical sites, primaries and random streams')
+        centers={row['name']:row for row in center_report['results']}; pairs=[]
+        for name,center in centers.items():
+            block=records.load_result(center_dir,candidate_id=center['candidate_id'])['results'][0]['blocks']
             for row in report['results']:
                 if not row['name'].startswith(name+':'): continue
                 moved=records.load_result(output,candidate_id=row['candidate_id'])['results'][0]['blocks']
-                pairs.append({'candidate':row['name'],'reference':name,**analysis.paired_difference(moved,block,report['design'],bootstrap_draws=defaults['bootstrap_draws'],objective=report['objective'])})
+                pairs.append({'candidate':row['name'],'reference':name,'center_study':step['center_study'],
+                              **analysis.paired_difference(moved,block,report['design'],bootstrap_draws=defaults['bootstrap_draws'],objective=report['objective'])})
         report['within_center_comparisons']=pairs; report['physical_moves']=definition['provenance']
+        report['center_archive']={key:center_report['archive'][key] for key in ('path','sha256','independent_copy')}
         records.write_json(output/'summary.json',report,overwrite=True)
     elif step['kind']=='pilot':
         with records.Results(output/'results.sqlite',create=False) as database:
@@ -478,7 +616,7 @@ elif mode=='record':
         required=sum(path.stat().st_size for path in output.rglob('*') if path.is_file())
         if shutil.disk_usage(archives).free<required+limits['minimum_free_disk_gb']*1024**3: raise ValueError('insufficient disk reserve to create a verified archive; retain raw files and free disk space before resuming')
         receipt=records.create_archive(output,None,archive,include_manifest=False)
-    independent=Path('/tmp')/('material-full-scale-archives-'+hashlib.sha256(str(run).encode()).hexdigest()[:16]); independent.mkdir(exist_ok=True)
+    independent=Path(records.load_document(run/'archive-location.json')['path']); independent.mkdir(parents=True,exist_ok=True)
     target=independent/archive.name
     if not target.exists():
         if shutil.disk_usage(independent).free<archive.stat().st_size+limits['minimum_free_disk_gb']*1024**3: raise ValueError('insufficient independent-copy disk reserve; retain raw files and resume after freeing space')
@@ -488,7 +626,7 @@ elif mode=='record':
         records.publish(temporary,target)
     if records.sha256_file(target)!=receipt['sha256']: raise ValueError('independent archive copy differs')
     assert archive.stat().st_dev!=target.stat().st_dev
-    receipt['independent_copy']=str(target); receipt['independent_copy_verified']=True
+    receipt['independent_copy']=str(target); receipt['independent_copy_verified']=True; receipt['persistent_copy_verified']=True
     receipt['summary_content_hash']=records.content_hash({key:value for key,value in report.items() if key not in ('archive','raw_files_present')})
     receipt['compressed_bytes']=archive.stat().st_size
     compact_study(output,report,receipt)
@@ -502,21 +640,24 @@ elif mode=='finish':
         elif not (run/(step['id']+'-skipped.json')).is_file(): raise ValueError('a declared study has no final record')
     if any(not report['complete'] for report in reports.values()): raise ValueError('all declared measured studies must finish')
     for report in reports.values(): verify_saved_archive(report)
-    confirmation=reports.get('unused-stream-confirmation-4096',reports['unused-stream-confirmation'])
+    confirmation=records.load_document(run/'finalist-validation.json')['independent_layouts']
     finalists=selected_finalists(); lookup={r['name']:r for r in confirmation['results']}
     methods={method:[lookup[p['name']]['value'] for p in finalists if p['name'].startswith(method+'-')] for method in ('bo_gp','cmaes')}
     comparison=analysis.compare_repeated(methods['bo_gp'],methods['cmaes'])
-    comparison['interpretation']='three independent optimizer seeds per method, different algorithm starts; Welch interval across confirmed finalist responses'
+    comparison['interpretation']='Exploratory variation across three optimizer seeds, conditional on four shared confirmation layouts; shared measurement uncertainty is not propagated by this Welch interval.'
+    layout_means={method:np.mean([lookup[p['name']]['estimate']['by_layout'] for p in finalists if p['name'].startswith(method+'-')],axis=0) for method in methods}
+    comparison['position_layout_difference']=analysis.compare_repeated(layout_means['bo_gp'],layout_means['cmaes'],paired=True)
+    comparison['position_layout_difference']['interpretation']='Paired across four independent layouts for these six fixed finalists; does not estimate variability from new optimization runs.'
     comparison['matched_seed_difference']=analysis.compare_repeated(methods['bo_gp'],methods['cmaes'],paired=True)
     reference=lookup['reference']
     result={'date':time.strftime('%Y-%m-%d'),'run_id':cfg['id'],'state':'complete','temperature_K':defaults['temperature_K'],'nb_gap_min_eV':defaults['nb_gap_min_eV'],'injection_area_mm2':64,'resources':limits,'source':records.load_document(run/'source-ready.json'),'studies':{},'method_comparison':comparison,'confirmed_finalists':[],'limitations':['SiC rates/dynamical fields are declared assumptions, not complete native measurements.','Interfaces are calibrated; factor studies test stated model uncertainty.','Junction-QP yield is not a calibrated logical-error probability.','Density sensitivity uses uniform Sobol sites and the legacy pooled nonlinear response; pooled standard error is not estimated.']}
     for identifier,report in reports.items():
-        result['studies'][identifier]={key:report[key] for key in ('kind','objective','sites','replicas','events_per_task','events_total_per_candidate','complete','search_counts','spatial_check','event_count_check','pilot_storage','sensitivity','comparisons','within_center_comparisons','physical_moves','streams','geometry','design') if key in report}
+        result['studies'][identifier]={key:report[key] for key in ('kind','objective','sites','replicas','events_per_task','events_total_per_candidate','complete','search_counts','spatial_check','event_count_check','center_archive','pilot_storage','sensitivity','comparisons','within_center_comparisons','physical_moves','streams','geometry','design') if key in report}
         result['studies'][identifier].update(candidates=len(report['results']),archive=report['archive'],results=[{key:row[key] for key in ('name','candidate_id','status','value','standard_error','units','parameters','estimate','historical','integrated_density','integrated_density_by_replica','inputs','trajectory','design_index','tolerance','reasons') if key in row} for row in report['results']])
     paired={row['candidate']:row for row in confirmation['comparisons']}
     for point in finalists:
         row=lookup[point['name']]
-        result['confirmed_finalists'].append({'name':row['name'],'search_candidate_id':point['selected_candidate_id'],'confirmation_candidate_id':row['candidate_id'],'value':row['value'],'standard_error':row['standard_error'],'relative_to_reference':row['value']/reference['value']-1,'paired_difference_from_reference':paired[row['name']],'parameters':row['parameters']})
+        result['confirmed_finalists'].append({'name':row['name'],'search_candidate_id':point['selected_candidate_id'],'confirmation_candidate_ids':[next(r['candidate_id'] for r in reports[f'unused-stream-confirmation-{k:02d}']['results'] if r['name']==row['name']) for k in range(1,5)],'value':row['value'],'standard_error':row['standard_error'],'relative_to_reference':paired[row['name']]['relative_to_b'],'paired_difference_from_reference':paired[row['name']],'parameters':row['parameters']})
     substrates=records.load_document(source/'legacy/catalog/substrates_raw.json')['accepted']
     candidates=[]; native=records.load_document(source/'legacy/stage4_material_pool.yaml')['g4cmp_substrates']
     for row in substrates:
@@ -524,7 +665,7 @@ elif mode=='finish':
         phonons=native.get(row.get('formula'),{})
         if phonons.get('verified'): features.update({name:phonons.get(field) for name,field in cfg['projection']['native_phonon_map'].items()})
         candidates.append({'id':row.get('material_id',row.get('mp_id',row.get('id'))),'formula':row.get('formula'),'features':features,'property_source':'Materials Project density/elasticity calculations','phonon_source':phonons.get('source') if phonons.get('verified') else None,'missing_native_lattice':not phonons.get('verified',False)})
-    definition=scan.load_study(run/'definitions'/f"{confirmation['id']}.yaml"); points={point['name']:point for point in scan.candidate_table(definition)}
+    definition=scan.load_study(run/'definitions/unused-stream-confirmation-01.yaml'); points={point['name']:point for point in scan.candidate_table(definition)}
     catalog=records.load_document(source/'legacy/material_catalog.yaml'); projections=[]
     for point in finalists:
         row=lookup[point['name']]; prepared=physics.prepare_values(definition,points[row['name']])
@@ -537,9 +678,20 @@ elif mode=='finish':
     result['projections']=projections
     result['projection']={**projections[0],'interpretation':'Substrate density and elasticity are DFT calculations; verified native phonon fields and curated film fields are joined separately. Coverage is ranked before distance. Every confirmed target is retained in projections; the figure shows the first target.'}
     event_report=reports['events-'+str(next(group['events_per_task'][-1] for group in cfg['studies'] if group['kind']=='event_count_convergence'))]
-    result['scientific_checks']={'source_spatial':reports.get('source-4096',reports['source-2361'])['spatial_check']['passed'],'finalist_spatial':confirmation['spatial_check']['passed'],'event_count':event_report['event_count_check']['passed']}
+    result['scientific_checks']={'source_spatial':records.load_document(run/'source-validation.json')['passed'],'finalist_spatial':records.load_document(run/'finalist-validation.json')['passed'],'event_count':event_report['event_count_check']['passed']}
     result['next_measurements']=['Obtain low-temperature SiC acoustic rates and native lattice fields.','Validate interface absorption against independent measurements.','Calibrate local QP density to the qubit observable.']
     if not all(result['scientific_checks'].values()): result['next_measurements'].insert(0,'Refine sites or primary counts for each failed convergence test before interpreting the corresponding ranking.')
+    result['skipped_studies']={step['id']:records.load_document(run/(step['id']+'-skipped.json')) for step in queue if (run/(step['id']+'-skipped.json')).is_file()}
+    result['position_validation']={name:records.load_document(run/(name+'.json')) for name in ('source-validation','finalist-validation')}
+    result['previous_studies']={}
+    for path in sorted((repo/cfg['previous_run']/'studies').glob('*/summary.json')):
+        previous=records.load_document(path)
+        if previous.get('archive'): verify_saved_archive(previous)
+        result['previous_studies'][path.parent.name]=previous
+    # Verify publication destination before changing tracked scientific reports.
+    publication=records.load_document(run/'publication.json')
+    if subprocess.check_output(['git','branch','--show-current'],cwd=repo,text=True).strip()!=publication['branch'] or subprocess.check_output(['git','remote','get-url','origin'],cwd=repo,text=True).strip()!=publication['remote']:
+        raise ValueError('publication branch or remote changed; retained results were not published')
     public=repo/'docs/results'; public.mkdir(parents=True,exist_ok=True)
     records.write_json(public/'full_scale_summary.json',result,overwrite=True)
     analysis.plot_result(confirmation,public/'full_scale_finalists.png','summary')
@@ -547,11 +699,12 @@ elif mode=='finish':
     analysis.plot_result(reports['density-morris'],public/'full_scale_density_morris.png','sensitivity')
     analysis.plot_result({'results':[{'name':p['name'],'value':lookup[p['name']]['value'],'standard_error':lookup[p['name']]['standard_error'],'units':reference['units']} for p in finalists]},public/'full_scale_methods.png','summary')
     analysis.plot_result(result['projection'],public/'full_scale_projection.png','projection')
-    block=['<!-- full-scale-start -->','## Fresh full-scale measurements','',f"Finished {result['date']} at 20 mK with the Nb gap restricted to at least 1.5384 meV. All declared simulations and archive checks finished. Convergence checks: `{result['scientific_checks']}`.",'',f"GP and CMA-ES each obtained 120 successful measurements for each of three optimizer seeds. Finalists were confirmed at {confirmation['sites']} spatial sites and {confirmation['replicas']} realizations on unused random streams. Algorithm starts differ.",'','| Confirmed target | Relative QP yield change | Standard error |','|---|---:|---:|']
-    block += [f"| {row['name']} | {100*row['relative_to_reference']:+.2f}% | {row['standard_error']:.3g} |" for row in result['confirmed_finalists']]
+    block=['<!-- full-scale-start -->','## Fresh full-scale measurements','',f"Finished {result['date']} at 20 mK with the Nb gap restricted to at least 1.5384 meV. All declared simulations and archive checks finished. Convergence checks: `{result['scientific_checks']}`.",'',f"GP and CMA-ES each obtained 120 successful measurements for each of three optimizer seeds. Finalists were confirmed on four independent layouts of {confirmation['sites']} spatial sites, each with {confirmation['replicas']} realizations on unused random streams. Algorithm starts differ.",'','| Confirmed target | Relative QP yield change | Paired standard error (percentage points) |','|---|---:|---:|']
+    block += [f"| {row['name']} | {100*row['relative_to_reference']:+.2f}% | {100*row['paired_difference_from_reference']['relative_change']['standard_error']:.3g} |" for row in result['confirmed_finalists']]
     block += ['','[Numerical records and archive checksums](docs/results/full_scale_summary.json).','', '![Confirmed targets](docs/results/full_scale_finalists.png)', '', '![Transport sensitivity](docs/results/full_scale_transport_morris.png)', '', '![Density sensitivity](docs/results/full_scale_density_morris.png)', '', 'A property target is not a fabricated material. SiC phonon rates remain assumed, and the interface model remains calibrated. Spatial and event-count checks are reported separately; unresolved optimizer differences remain unresolved.','<!-- full-scale-end -->']
     readme=repo/'README.md'; text=readme.read_text(); start=text.index('<!-- full-scale-start -->'); end=text.index('<!-- full-scale-end -->')+len('<!-- full-scale-end -->')
     readme.write_text(text[:start]+'\n'.join(block)+text[end:])
+    if (run/'references').exists(): shutil.rmtree(run/'references')
     records.write_json(run/'queue_status.json',{'state':'complete','studies':len(reports),'updated':time.time()},overwrite=True)
     print(records.canonical_json({'state':'complete','studies':len(reports),'method_comparison':comparison}))
 else:

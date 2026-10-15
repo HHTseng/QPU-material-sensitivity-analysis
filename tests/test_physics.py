@@ -229,6 +229,101 @@ class PhysicsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             physics.build_design(fixed, {**sampling, 'sites': 64}, previous=initial)
 
+    def test_explicit_spatial_allocation_appends_exact_nested_region_counts(self):
+        import records
+        fixed = records.load_document(ROOT / 'studies/reference.yaml')['fixed']
+        sampling = {'kind':'stratified', 'sites':2361, 'position_seed':20261014,
+                    'area_samples':65536, 'allocation':dict(zip(physics.REGIONS,[17,8,71,415,1850]))}
+        initial = physics.build_design(fixed,sampling)
+        # Deliberately reverse weight order: allocation is keyed by region.
+        initial['stratum_weights'] = dict(reversed(list(initial['stratum_weights'].items())))
+        original = json.dumps(initial,sort_keys=True)
+        previous = initial
+        for counts in ([68,64,256,415,1850],[136,128,512,415,1850]):
+            allocation = dict(zip(physics.REGIONS,counts))
+            extended = physics.build_design(fixed,{**sampling,'sites':sum(counts),'allocation':allocation},previous=previous)
+            self.assertEqual(extended['stratum_counts'],allocation)
+            self.assertEqual(extended['sites_mm'][:len(previous['sites_mm'])],previous['sites_mm'])
+            self.assertEqual(extended['stratum'][:len(previous['stratum'])],previous['stratum'])
+            self.assertEqual(extended['stratum_weights'],initial['stratum_weights'])
+            self.assertEqual(extended['electrode_weights'],initial['electrode_weights'])
+            self.assertEqual(len({tuple(p) for p in extended['sites_mm']}),sum(counts))
+            self.assertEqual(extended,physics.build_design(fixed,{**sampling,'sites':sum(counts),'allocation':allocation},previous=previous))
+            previous = extended
+        self.assertEqual(json.dumps(initial,sort_keys=True),original)
+
+    def test_explicit_spatial_allocation_validates_counts_and_existing_region_coverage(self):
+        import records
+        fixed = records.load_document(ROOT / 'studies/reference.yaml')['fixed']
+        allocation = dict(zip(physics.REGIONS,[17,8,8,8,23]))
+        sampling = {'kind':'stratified','sites':64,'position_seed':20261014,'area_samples':65536,'allocation':allocation}
+        initial = physics.build_design(fixed,sampling)
+        invalid = [None,{},list(allocation.values()),{k:v for k,v in allocation.items() if k!='S4_bulk'},
+                   {**allocation,'surface':0},{**allocation,'S4_bulk':24},
+                   {**allocation,'S4_bulk':-1}]
+        invalid += [{**allocation,'S4_bulk':v} for v in (23.,23.5,True,float('nan'))]
+        for requested in invalid:
+            for previous in (None,initial):
+                with self.subTest(allocation=requested,previous=previous is not None), self.assertRaises(ValueError):
+                    physics.build_design(fixed,{**sampling,'allocation':requested},previous=previous)
+        for counts in ([16,9,8,8,23],[16,24,8,8,24]):
+            with self.subTest(counts=counts), self.assertRaisesRegex(ValueError,'cannot remove earlier region sites'):
+                physics.build_design(fixed,{**sampling,'sites':sum(counts),'allocation':dict(zip(physics.REGIONS,counts))},previous=initial)
+        with self.assertRaisesRegex(ValueError,'invalid spatial allocation'):
+            physics.build_design(fixed,{**sampling,'allocation':{**allocation,'S1_le_0.05':0,'S4_bulk':31}})
+        surface = physics.build_design(fixed,{'kind':'sobol','sites':16,'position_seed':20261014})
+        with self.assertRaisesRegex(ValueError,'requires five physical regions'):
+            physics.build_design(fixed,sampling,previous=surface)
+
+    def test_independent_position_seeds_keep_explicit_allocation_and_area_weights(self):
+        import records
+        fixed = records.load_document(ROOT / 'studies/reference.yaml')['fixed']
+        allocation = dict(zip(physics.REGIONS,[68,64,256,415,1850]))
+        sampling = {'kind':'stratified','sites':2653,'area_samples':65536,'allocation':allocation}
+        designs = [physics.build_design(fixed,{**sampling,'position_seed':seed}) for seed in (101,202,303,404)]
+        for design in designs:
+            self.assertEqual(design['stratum_counts'],allocation)
+            self.assertEqual(design['stratum_weights'],designs[0]['stratum_weights'])
+        for i,left in enumerate(designs):
+            for right in designs[i+1:]:
+                for region in physics.REGIONS:
+                    self.assertNotEqual([p for p,h in zip(left['sites_mm'],left['stratum']) if h==region],
+                                        [p for p,h in zip(right['sites_mm'],right['stratum']) if h==region])
+        self.assertEqual(designs[0],physics.build_design(fixed,{**sampling,'position_seed':101}))
+
+    def test_recorded_area_weights_preserve_fresh_design_and_hash_without_area_draws(self):
+        import records
+        fixed = records.load_document(ROOT / 'studies/reference.yaml')['fixed']
+        sampling = {'kind':'stratified','sites':128,'position_seed':20261014,'area_samples':65536}
+        for allocation in (None,dict(zip(physics.REGIONS,[34,16,24,24,30]))):
+            current = {**sampling,**({'allocation':allocation} if allocation is not None else {})}
+            original = physics.build_design(fixed,current)
+            weights = dict(reversed(list(original['stratum_weights'].items())))
+            # Zero area draws is permitted when the area fractions are supplied.
+            cached = physics.build_design(fixed,{**current,'stratum_weights':weights,'area_samples':0})
+            self.assertEqual(cached,original)
+            self.assertEqual(records.content_hash(cached),records.content_hash(original))
+            independent = physics.build_design(fixed,{**current,'stratum_weights':weights,'area_samples':0,'position_seed':20261015})
+            self.assertEqual(independent['stratum_weights'],weights)
+            self.assertEqual(independent['stratum_counts'],original['stratum_counts'])
+            self.assertNotEqual(independent['sites_mm'],original['sites_mm'])
+
+    def test_recorded_area_weights_reject_invalid_fractions_and_changed_junction_area(self):
+        import records
+        fixed = records.load_document(ROOT / 'studies/reference.yaml')['fixed']
+        sampling = {'kind':'stratified','sites':64,'position_seed':20261014,'area_samples':65536}
+        weights = physics.build_design(fixed,sampling)['stratum_weights']
+        invalid = [None,{},list(weights.values()),{k:v for k,v in weights.items() if k!='S4_bulk'},
+                   {**weights,'surface':0.1},{**weights,'S4_bulk':weights['S4_bulk']+.1}]
+        invalid += [{**weights,'S4_bulk':v} for v in (0.,-.1,float('nan'),float('inf'),True,'0.5')]
+        invalid.append({**weights,'S0_junction':2*weights['S0_junction'],
+                        'S4_bulk':weights['S4_bulk']-weights['S0_junction']})
+        for supplied in invalid:
+            with self.subTest(weights=supplied), self.assertRaises(ValueError):
+                physics.build_design(fixed,{**sampling,'stratum_weights':supplied})
+        with self.assertRaisesRegex(ValueError,'exact junction area'):
+            physics.build_design({**fixed,'electrode_width_um':20.},{**sampling,'stratum_weights':weights})
+
     def test_recorded_spatial_geometry_matches_source_region_and_junctions(self):
         import records
         fixed = records.load_document(ROOT / 'studies/reference.yaml')['fixed']

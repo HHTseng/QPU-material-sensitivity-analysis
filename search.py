@@ -574,7 +574,7 @@ def ollama_proposals(state, space, count, options=None):
               'baseline': space['baseline'], 'constraints': space.get('constraints', {}),
               'measured': [{'point': p, 'value': value} for p, value in history],
               'physics': 'Born stability: C11>C12, C11+2*C12>0, C44>0. '
-                         'Scattering rate is scat*omega^4; decay rate is decay*omega^5. '
+                         'Scattering rate is scat*nu^4; decay rate is decay*nu^5, with nu=E/h in Hz. '
                          'The elastic tensor and crystal direction affect phonon focusing. '
                          'Boundary absorption and film pair breaking compete with junction absorption. '
                          'Do not claim yields for unmeasured points.',

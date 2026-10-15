@@ -179,7 +179,7 @@ parameters:
     valid_range:
     - 1.0e-50
     - 1.0e-35
-    source: Isotope/mass-defect scattering constant, rate ~ scat*omega^4. Shipped
+    source: Isotope/mass-defect scattering constant, rate ~ scat*nu^4, nu=E/h in Hz. Shipped
       G4CMP records span Al2O3 0.025e-42 .. Ge 3.67e-41 s3, a factor 1470; the box
       brackets that range.
     default: 2.43e-42
@@ -195,7 +195,7 @@ parameters:
     valid_range:
     - 1.0e-65
     - 1.0e-45
-    source: Anharmonic (three-phonon) decay constant, rate ~ decay*omega^5. Shipped
+    source: Anharmonic (three-phonon) decay constant, rate ~ decay*nu^5, nu=E/h in Hz. Shipped
       records span Si 7.41e-56 .. Ge 1.6456e-54 s4.
     default: 7.41e-56
     search_range:

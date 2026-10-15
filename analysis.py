@@ -177,6 +177,106 @@ def spatial_convergence(coarse, fine, *, baseline_coarse=None, baseline_fine=Non
             "ranking_checked": False}
 
 
+def nested_spatial_difference(coarse_blocks, fine_blocks, coarse_design, fine_design, *,
+                              same_random_streams=True, bootstrap_draws=1000,
+                              bootstrap_seed=23, relative_limit=.05, sigma_limit=2.):
+    """Estimate dJ=J_fine-J_coarse for nested, stratified source positions.
+
+    Shared sites are resampled jointly; their realizations are paired only when
+    explicitly declared to share streams. In region h the two means retain their
+    own denominators n_coarse,h and n_fine,h. The hierarchical interval describes
+    this nested-layout contrast, not independent position-layout uncertainty.
+    Passing requires interval equivalence globally and in every refined region;
+    a statistically resolved shift can still be smaller than the physical margin.
+    Requested matching seeds do not guarantee identical transport executions.
+    """
+    if not isinstance(bootstrap_draws, int) or bootstrap_draws < 2:
+        raise ValueError('at least two integer resampling draws required')
+    if not math.isfinite(relative_limit) or relative_limit <= 0 or not math.isfinite(sigma_limit) or sigma_limit <= 0:
+        raise ValueError('positive finite relative and sigma limits required')
+    a=prepare_counts(coarse_blocks,coarse_design); b=prepare_counts(fine_blocks,fine_design)
+    coarse_design=a['design']; fine_design=b['design']
+    if a['weighted'] is None or b['weighted'] is None:
+        raise ValueError('nested spatial comparison requires complete electrode counts')
+    if coarse_design['stratum_weights'] != fine_design['stratum_weights']:
+        raise ValueError('nested comparison requires the same physical regions and area weights')
+    if not np.array_equal(coarse_design['electrode_weights'],fine_design['electrode_weights']) or coarse_design['gun_energy_eV'] != fine_design['gun_energy_eV']:
+        raise ValueError('nested comparison requires the same electrode weights and source energy')
+    if same_random_streams and (not np.array_equal(coarse_design['replica_ids'],fine_design['replica_ids']) or coarse_design['events_per_task'] != fine_design['events_per_task']):
+        raise ValueError('shared streams require matching replica IDs and events per task')
+    identities=[]
+    for design in (coarse_design,fine_design):
+        ids=design.get('site_ids')
+        if ids is None:
+            sites=np.asarray(design.get('sites_mm',[]),dtype=float)
+            if sites.ndim != 2 or len(sites) != len(design['position_strata']) or not np.isfinite(sites).all():
+                raise ValueError('nested comparison requires explicit site_ids or finite sites_mm')
+            ids=[tuple(site) for site in sites]
+        if len(ids) != len(design['position_strata']) or len(set(ids)) != len(ids):
+            raise ValueError('site identities must be unique and match the position count')
+        identities.append(ids)
+    fine_index={site:i for i,site in enumerate(identities[1])}
+    if not set(identities[0]) <= set(fine_index):
+        raise ValueError('every coarse site must be present in the fine design')
+    shared=np.asarray([fine_index[site] for site in identities[0]],dtype=int)
+    if any(coarse_design['position_strata'][i] != fine_design['position_strata'][j] for i,j in enumerate(shared)):
+        raise ValueError('shared sites must retain their physical region')
+    estimates_a=summarize(a,diagnostics=False,uncertainty=False)
+    estimates_b=summarize(b,diagnostics=False,uncertainty=False)
+    coarse_value=estimates_a['value']; fine_value=estimates_b['value']
+    if fine_value <= 0:
+        raise ValueError('positive fine yield required for relative convergence')
+    rng=np.random.default_rng(bootstrap_seed)
+    region_draws=np.empty((bootstrap_draws,len(a['groups'])))
+    regions={}
+    fine_groups={label:positions for label,positions,_ in b['groups']}
+    for h,(label,positions,weight) in enumerate(a['groups']):
+        matched=shared[positions]; extra=np.asarray(sorted(set(fine_groups[label])-set(matched)),dtype=int)
+        ca=a['weighted'][positions]; fb=b['weighted'][matched]; added=b['weighted'][extra]
+        n_coarse=len(ca); n_fine=n_coarse+len(added)
+        for draw in range(bootstrap_draws):
+            sites=rng.integers(n_coarse,size=n_coarse)
+            replicas=rng.integers(ca.shape[1],size=(n_coarse,ca.shape[1]))
+            old=np.take_along_axis(ca[sites],replicas,axis=1).mean(axis=1)
+            if not same_random_streams:
+                replicas=rng.integers(fb.shape[1],size=(n_coarse,fb.shape[1]))
+            retained=np.take_along_axis(fb[sites],replicas,axis=1).mean(axis=1)
+            new_sum=float(retained.sum())
+            if len(added):
+                sites=rng.integers(len(added),size=len(added))
+                replicas=rng.integers(added.shape[1],size=(len(added),added.shape[1]))
+                new_sum+=float(np.take_along_axis(added[sites],replicas,axis=1).mean(axis=1).sum())
+            region_draws[draw,h]=new_sum/n_fine-float(old.mean())
+        old=estimates_a['means_by_stratum'][label]; new=estimates_b['means_by_stratum'][label]
+        interval=np.percentile(region_draws[:,h],[2.5,97.5]).tolist()
+        margin=relative_limit*abs(new)
+        regions[label]={'coarse_mean':old,'fine_mean':new,'difference':new-old,
+                        'standard_error':float(region_draws[:,h].std(ddof=1)),
+                        'confidence_interval_95':interval,'n_coarse':n_coarse,'n_fine':n_fine,
+                        'n_added':len(added),'area_weight':weight,'refinement_assessed':len(added) > 0,
+                        'relative_shift':abs(new-old)/abs(new) if new else (0. if old == 0 else None),
+                        'equivalent_within_margin':interval[0] > -margin and interval[1] < margin}
+    draws=region_draws@np.asarray([weight for _,_,weight in a['groups']])
+    difference=fine_value-coarse_value; se=float(draws.std(ddof=1))
+    interval=np.percentile(draws,[2.5,97.5]).tolist(); margin=relative_limit*fine_value
+    checks={'relative_shift':abs(difference)/fine_value <= relative_limit,
+            'within_difference_error':abs(difference) <= sigma_limit*se,
+            'confidence_interval_within_margin':interval[0] > -margin and interval[1] < margin,
+            'refined_regions_within_margin':all(row['equivalent_within_margin'] for row in regions.values() if row['refinement_assessed']),
+            'every_region':all(row['relative_shift'] is not None and row['relative_shift'] <= relative_limit for row in regions.values())}
+    ra=estimates_a['by_replica']; rb=estimates_b['by_replica']
+    transport=compare_repeated(rb,ra,paired=same_random_streams,relative_margin=relative_limit) if min(len(ra),len(rb)) >= 2 else {'status':'fewer than two realizations'}
+    transport['interpretation']='Transport uncertainty conditional on these sites; excludes source-position integration uncertainty.'
+    return {'coarse_value':coarse_value,'fine_value':fine_value,'difference':difference,
+            'standard_error':se,'confidence_interval_95':interval,'relative_shift':abs(difference)/fine_value,
+            'relative_difference':difference/fine_value,'equivalence_margin':margin,
+            'equivalent_within_margin':checks['confidence_interval_within_margin'],
+            'checks':checks,'passed':checks['confidence_interval_within_margin'] and checks['refined_regions_within_margin'],'regions':regions,
+            'same_random_streams':bool(same_random_streams),'fixed_site_transport_difference':transport,
+            'uncertainty_method':'paired site bootstrap with paired realizations' if same_random_streams else 'paired site bootstrap with independent realizations',
+            'limitation':'Sites are treated as exchangeable within each region, with fixed area weights. Independent randomized position layouts are required to assess integration uncertainty and layout bias.'}
+
+
 def sensitivity(samples, outcomes, names=None, *, problem=None, method="pearson", log_outcome=False, seed=7, num_levels=4):
     """Pearson correlations or Morris EE_j=[J(u+delta*e_j)-J(u)]/delta.
 
@@ -355,12 +455,33 @@ def compare_repeated(a, b, *, confidence=.95, relative_margin=.05, paired=False)
             'degrees_of_freedom':int(df) if paired else float(df) if np.isfinite(df) else None}
 
 
+def transport_precision(by_replica, *, confidence=.95):
+    """Conditional transport precision: SE(J)=sd(J_r)/sqrt(R), with fixed sites.
+
+    J_r is the complete area-weighted layout mean for realization r. Replicas
+    must use independent streams; this interval excludes position integration.
+    """
+    from scipy.stats import t
+    values=np.asarray(by_replica,dtype=float)
+    if values.ndim != 1 or len(values) < 2 or not np.isfinite(values).all():
+        raise ValueError('at least two finite independent replica means required')
+    if not 0 < confidence < 1:
+        raise ValueError('confidence must be in (0,1)')
+    mean=float(values.mean()); se=float(values.std(ddof=1)/math.sqrt(len(values)))
+    radius=float(t.ppf((1+confidence)/2,len(values)-1)*se)
+    return {'mean':mean,'standard_error':se,'relative_standard_error':se/abs(mean) if mean else None,
+            'confidence':confidence,'confidence_interval':[mean-radius,mean+radius],
+            'n_replicas':len(values),'degrees_of_freedom':len(values)-1,
+            'uncertainty_method':'Student-t interval across independent replicas at fixed source positions'}
+
+
 def analysis_design(study):
     design=study['design']; sampling=study['sampling']
     return {'position_strata':design['stratum'],'stratum_weights':design['stratum_weights'],
             'replica_ids':list(range(sampling['replicas'])),'events_per_task':sampling['events_per_task'],
             'gun_energy_eV':study['fixed']['gun_energy_eV'],'electrode_weights':design['electrode_weights'],
-            'design_hash':design['design_hash'],'injection_law':design.get('injection_law','uniform_surface')}
+            'design_hash':design['design_hash'],'injection_law':design.get('injection_law','uniform_surface'),
+            'sites_mm':design['sites_mm']}
 
 
 def score_output(result, prepared, task, *, time_resolved=False, score_hash=None):
@@ -448,7 +569,7 @@ def analyse_results(study, rows):
     complete=[row for row in rows if row['status']=='complete']
     objective=study['analysis']['objective']; design=analysis_design(study); comparisons=[]
     reference=rows[0] if rows and rows[0]['status']=='complete' else None
-    paired_requested=study['kind'] not in ('search','sensitivity') or (study['kind']=='search' and study['analysis'].get('diagnostics',False))
+    paired_requested=study['analysis'].get('comparisons',True) and (study['kind'] not in ('search','sensitivity') or (study['kind']=='search' and study['analysis'].get('diagnostics',False)))
     if reference is not None and paired_requested:
         for candidate in complete:
             if candidate is reference: continue
@@ -520,7 +641,7 @@ def read_analysis(path, output=None, settings=None):
     defaults={entry[0]:entry[1] for entry in records.load_document(ROOT/'parameters.yaml')['morris']['QPDE_params']}
     cache={}
     compact_rows=[]
-    paired_requested=study['kind'] not in ('search','sensitivity') or (study['kind']=='search' and study['analysis'].get('diagnostics',False))
+    paired_requested=study['analysis'].get('comparisons',True) and (study['kind'] not in ('search','sensitivity') or (study['kind']=='search' and study['analysis'].get('diagnostics',False)))
     for row in data['results']:
         if row.get('status')!='complete': continue
         compact='blocks' not in row
@@ -538,7 +659,9 @@ def read_analysis(path, output=None, settings=None):
             blocks.append(block)
         counts=prepare_counts(blocks,design); options=study['analysis']; diagnostics=bool(options.get('diagnostics',study['kind']!='search'))
         if not compact or paired_requested: row['blocks']=blocks
-        row['estimate']=summarize(counts,bootstrap_draws=int(options.get('bootstrap_draws',1000)),diagnostics=diagnostics)
+        row['estimate']=summarize(counts,bootstrap_draws=int(options.get('bootstrap_draws',1000)),
+            tail_bootstrap_draws=int(options.get('tail_bootstrap_draws',500)),diagnostics=diagnostics,
+            uncertainty=options['objective'] in ('device_junction_qps_per_eV','device_weighted_junction_qps_per_energy') or diagnostics)
         row['historical']=summarize(counts,objective='total_qps_per_primary',diagnostics=diagnostics)
         objective=options['objective']
         selected=row['estimate'] if objective in ('device_junction_qps_per_eV','device_weighted_junction_qps_per_energy') else row['historical']

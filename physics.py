@@ -502,10 +502,18 @@ def prepare_values(study, candidate=None):
 
 
 def build_design(fixed, sampling, *, recorded=None, previous=None):
-    """Uniform or stratified sites; previous retains every earlier site and stream."""
+    """Uniform or stratified sites; allocation fixes final counts, previous retains sites."""
     n,seed = sampling.get('sites',16),sampling.get('position_seed',20260727)
     if any(isinstance(v,bool) or not isinstance(v,int) for v in (n,seed)) or n<1:
         raise ValueError('positive integer site count and integer position seed required')
+    requested = sampling.get('allocation')
+    if 'allocation' in sampling:
+        if not isinstance(requested,dict) or set(requested)!=set(REGIONS):
+            raise ValueError('spatial allocation requires exactly the five physical-region keys')
+        if any(isinstance(v,bool) or not isinstance(v,int) or v<0 for v in requested.values()):
+            raise ValueError('spatial allocation counts must be nonnegative integers')
+        if sum(requested.values())!=n:
+            raise ValueError('spatial allocation counts must sum to sites')
     span = float(fixed.get('position_half_span_mm',4.)); z = float(sampling.get('z_mm',.259875))
     kind = sampling.get('kind','sobol'); design = None
     if previous is not None:
@@ -538,18 +546,30 @@ def build_design(fixed, sampling, *, recorded=None, previous=None):
                         if actual.shape!=np.shape(value) or not np.isfinite(actual).all() or not np.allclose(actual,value,rtol=0.,atol=1e-12):
                             raise ValueError(f'recorded {name} differs from study geometry')
     if design is None:
-        total = int(sampling.get('area_samples',8000000)); rng = np.random.default_rng(int(sampling.get('area_seed',0)))
-        if total<1: raise ValueError('area sample count must be positive')
-        count = np.zeros(5,dtype=np.int64)
-        for start in range(0,total,65536):
-            count += np.bincount(region_distances(rng.uniform(-span,span,(min(65536,total-start),2)),fixed),minlength=5)
         # W0=sum_e A_e/A_source; other region fractions W_h use uniform area draws.
         w0 = len(fixed['electrode_x_mm'])*fixed['electrode_width_um']*fixed['electrode_height_um']*1e-6/(2*span)**2
-        weights = np.r_[w0,count[1:]/count[1:].sum()*(1-w0)]
+        if 'stratum_weights' in sampling:
+            saved_weights = sampling['stratum_weights']
+            if not isinstance(saved_weights,dict) or set(saved_weights)!=set(REGIONS):
+                raise ValueError('spatial weights require exactly the five physical-region keys')
+            if any(isinstance(v,bool) or not isinstance(v,(int,float)) or not math.isfinite(v) or v<=0 for v in saved_weights.values()):
+                raise ValueError('spatial weights must be finite positive numbers')
+            weights = np.array([saved_weights[h] for h in REGIONS],dtype=float)
+            if not math.isclose(float(weights.sum()),1.,rel_tol=0.,abs_tol=1e-12):
+                raise ValueError('spatial weights must sum to one')
+            if not math.isclose(float(weights[0]),w0,rel_tol=1e-12,abs_tol=0.):
+                raise ValueError('junction spatial weight differs from exact junction area')
+        else:
+            total = int(sampling.get('area_samples',8000000)); rng = np.random.default_rng(int(sampling.get('area_seed',0)))
+            if total<1: raise ValueError('area sample count must be positive')
+            count = np.zeros(5,dtype=np.int64)
+            for start in range(0,total,65536):
+                count += np.bincount(region_distances(rng.uniform(-span,span,(min(65536,total-start),2)),fixed),minlength=5)
+            weights = np.r_[w0,count[1:]/count[1:].sum()*(1-w0)]
         floor = np.array([len(fixed['electrode_x_mm']),8,8,8,8]); remaining = n-int(floor.sum())
         if remaining<0: raise ValueError('site count below spatial-region minimum')
-        if sampling.get('allocation'):
-            target = np.array([sampling['allocation'][h] for h in REGIONS],dtype=int)
+        if requested is not None:
+            target = np.array([requested[h] for h in REGIONS],dtype=int)
         else:
             sigma = np.array([sampling.get('region_sd',{}).get(h,1.) for h in REGIONS])
             if not np.isfinite(sigma).all() or np.any(sigma<0) or weights@sigma<=0:
@@ -564,16 +584,24 @@ def build_design(fixed, sampling, *, recorded=None, previous=None):
     sites = design['sites_mm']; labels = design.get('stratum',design.get('position_strata'))
     weights = design['stratum_weights']; regions = list(weights)
     if labels is None or len(labels)!=len(sites): raise ValueError('invalid recorded site labels')
+    if requested is not None:
+        if set(regions)!=set(REGIONS):
+            raise ValueError('spatial allocation requires five physical regions')
+        target = np.array([requested[h] for h in regions],dtype=int)
+        if any(labels.count(h)>requested[h] for h in regions):
+            raise ValueError('spatial allocation cannot remove earlier region sites')
     if len(sites)<n:
         if set(regions) not in ({'surface'},set(REGIONS)):
             raise ValueError('refinement requires surface or five physical regions')
         counts = np.array([labels.count(h) for h in regions]); seen = {tuple(p) for p in sites}
         if len(seen)!=len(sites): raise ValueError('initial design contains repeated sites')
-        sigma = np.array([sampling.get('region_sd',{}).get(h,1.) for h in regions])
-        allocation = np.array([weights[h] for h in regions])*sigma
-        if not np.isfinite(allocation).all() or np.any(allocation<0) or allocation.sum()<=0:
-            raise ValueError('region sampling spreads must be finite and nonnegative')
-        allocation /= allocation.sum(); streams,buffers,cursors = {},{},{}
+        if target is None:
+            sigma = np.array([sampling.get('region_sd',{}).get(h,1.) for h in regions])
+            allocation = np.array([weights[h] for h in regions])*sigma
+            if not np.isfinite(allocation).all() or np.any(allocation<0) or allocation.sum()<=0:
+                raise ValueError('region sampling spreads must be finite and nonnegative')
+            allocation /= allocation.sum()
+        streams,buffers,cursors = {},{},{}
         for h,name in enumerate(regions):
             sub_seed = seed if name=='surface' else (seed*1000003+REGIONS.index(name))%(2**31-1)
             streams[name] = np.random.default_rng(sub_seed) if name=='S0_junction' else qmc.Sobol(d=2,scramble=True,seed=sub_seed)

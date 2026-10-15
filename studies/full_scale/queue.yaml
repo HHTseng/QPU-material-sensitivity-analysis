@@ -1,6 +1,7 @@
 schema: material-scan-full-scale-queue-1
-id: fresh-full-scale-20261014
-description: Fresh transport outputs; previous simulations are not reused.
+id: revised-full-scale-20261014
+description: Retain complete recorded transport evidence and add spatial, search, and model checks.
+previous_run: material_scan_data/full_scale_20261014
 
 defaults:
   temperature_K: 0.020
@@ -13,14 +14,22 @@ defaults:
   objective: device_junction_qps_per_eV
   seed_base: 20261015
   bootstrap_draws: 2000
-  design_counts: [128, 512, 2361, 4096]
+  design_counts: [128, 512, 2653, 3041]
+  allocations:
+    '128': [34, 16, 24, 24, 30]
+    '512': [68, 64, 128, 128, 124]
+    '2653': [68, 64, 256, 415, 1850]
+    '3041': [136, 128, 512, 415, 1850]
   position_seed: 20261015
+  independent_position_seeds: [20261101, 20261102, 20261103, 20261104]
+  confirmation_position_seeds: [20261201, 20261202, 20261203, 20261204]
   area_seed: 0
   area_samples: 8000000
-  design_note: Generate fresh nested source sites; previous geometry illustrations retain their own recorded input definitions.
+  design_note: Region counts are ordered S0, S1, S2, S3, S4. Extend the recorded 2361 sites to 2653 and then 3041 without changing area weights. Generate independent layouts from their own position seeds.
   source_note: The chip is 10x10 mm2; the declared injection region is 8x8 mm2.
 
 execution:
+  independent_archive_root: /data/htseng/material-scan-archives
   max_cpu_fraction: 0.5
   max_memory_fraction: 0.5
   workers: 94
@@ -95,22 +104,25 @@ projection:
   missing_data: Report missing rates and native lattice fields; never impute them or label SiC native.
 
 studies:
-  - id: temperature-reference
-    kind: temperature_comparison
-    temperatures_K: [0.0, 0.020]
-    sampling: {design: 2361, replicas: 8, events_per_task: 62500, seed_bank: 101}
   - id: source-convergence
     kind: convergence
     candidates: [reference, c44-1gpa, sic]
-    sites: [512, 2361]
-    sampling: {replicas: 8, events_per_task: 62500, seed_bank: 102}
-    check: {relative_limit: 0.05, sigma_limit: 2.0, leverage_limit: 0.10}
-    refine_if_failed: {sites: 4096, retain_existing_sites: true}
+    base_design: 2361
+    sites: [2653, 3041]
+    sampling: {replicas: 8, events_per_task: 62500, first_seed_bank: 1101}
+    check: {relative_limit: 0.05, relative_standard_error_limit: 0.02, leverage_limit: 0.10}
+    note: Reuse the recorded 2361-site base and temperature comparisons. Require the confidence interval for each spatial change to fit inside the relative margin and check area-weighted precision.
+  - id: source-independent
+    kind: independent_positions
+    candidates: [reference, c44-1gpa, sic]
+    sampling: {design: 2653, replicas: 8, events_per_task: 62500, first_seed_bank: 1103}
+    check: {relative_limit: 0.05, relative_standard_error_limit: 0.02}
+    note: Use the four independent position seeds in defaults at the selected converged size, 2653 or 3041, with separate transport banks.
   - id: c44-boundary
     kind: explicit_parameters
     values_GPa: [0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 40.0, 79.5, 120.0, 200.0, 300.0, 600.0]
     parameter: sub_c44
-    sampling: {design: 2361, replicas: 8, events_per_task: 62500, seed_bank: 103}
+    sampling: {design: 2653, replicas: 8, events_per_task: 62500, seed_bank: 1110}
     note: Soft-boundary values are model checks; no matching compound is asserted.
   - id: material-transport-morris
     kind: morris
@@ -120,7 +132,7 @@ studies:
     levels: 4
     seed: 41
     objective: device_junction_qps_per_eV
-    sampling: {design: 128, replicas: 8, events_per_task: 62500, seed_bank: 104}
+    sampling: {design: 128, replicas: 8, events_per_task: 62500, seed_bank: 1111}
   - id: density-morris
     kind: morris
     dimensions: 6
@@ -129,7 +141,7 @@ studies:
     levels: 4
     seed: 42
     objective: integrated_density
-    sampling: {kind: sobol, sites: 512, replicas: 8, events_per_task: 62500, position_seed: 20261015, seed_bank: 105}
+    sampling: {kind: sobol, sites: 512, replicas: 8, events_per_task: 62500, position_seed: 20261015, seed_bank: 1112}
     note: Equal-site pooled ODE under uniform 8x8 mm2 injection; this is not area-weighted stratified density evolution.
   - id: linked-materials
     kind: materials
@@ -137,7 +149,7 @@ studies:
     top_films: [Nb, Ta, Ti]
     bottom_films: [Cu, Au]
     nb_gap_min_eV: null
-    sampling: {design: 2361, replicas: 8, events_per_task: 62500, seed_bank: 106}
+    sampling: {design: 2653, replicas: 8, events_per_task: 62500, seed_bank: 1113}
     note: All 18 linked cases are compared; Ta/Ti do not satisfy the selected Nb-gap search restriction.
   - id: gp-cma-comparison
     kind: search_comparison
@@ -148,36 +160,38 @@ studies:
     maximum_attempts: 360
     cma_population: 12
     gp_initial_points: 36
-    sampling: {design: 512, replicas: 8, events_per_task: 31250, first_seed_bank: 201}
+    sampling: {design: 512, replicas: 8, events_per_task: 31250, first_seed_bank: 1201}
     matching: Same physical limits, sites, random-stream banks and successful measurement count for each method pair.
     starts: GP uses 36 Sobol points; CMA uses its Gaussian initial population of 12. The initial observations differ by algorithm.
   - id: unused-stream-confirmation
     kind: confirmation
     finalist_records: 6
     anchors: [reference, native-Si-Nb-Cu, sic]
-    sampling: {design: 2361, replicas: 16, events_per_task: 62500, seed_bank: 901}
-    refine_if_failed: {sites: 4096, retain_existing_sites: true}
+    sampling: {design: 2653, replicas: 16, events_per_task: 62500, first_seed_bank: 1901}
     selection: Use fresh complete search responses; ties remain unresolved and missing outputs cannot win.
+    note: Confirm all finalists and anchors on the four confirmation position seeds in defaults, using the selected converged size and four unused transport banks.
   - id: physical-tolerance
     kind: explicit_tolerance
     candidate_limit: 2
     parameters: [sub_c44, sub_c11, sub_c12, topfilm_gap, topfilm_ph_lifetime, bot_ph_lifetime]
     physical_fraction: [0.03, 0.10]
     candidates: confirmed_finalists
-    sampling: {design: 2361, replicas: 16, events_per_task: 62500, seed_bank: 902}
+    center_study: physical-tolerance-centers
+    sampling: {design: 2653, replicas: 16, events_per_task: 62500, seed_bank: 1905}
     note: Use x*(1-f) and x*(1+f); these fractions are not fractions of search-coordinate intervals.
   - id: sic-rates-and-interfaces
     kind: model_ranges
     candidates: [reference, sic, confirmed_best]
     film_lifetime_factors: [0.5, 1.0, 2.0]
     interface_absorption_factors: [0.8, 1.0, 1.2]
-    sampling: {design: 2361, replicas: 16, events_per_task: 62500, seed_bank: 903}
+    center_study: sic-rates-and-interfaces-centers
+    sampling: {design: 2653, replicas: 16, events_per_task: 62500, seed_bank: 1906}
     note: Vary each lifetime/interface separately; probability clipping and every assumed range must be reported. This tests model uncertainty, not an independently validated interface theory.
   - id: event-count-convergence
     kind: event_count_convergence
     candidates: [reference, c44-1gpa]
     events_per_task: [31250, 125000, 500000]
-    sampling: {design: 512, replicas: 8, first_seed_bank: 107}
+    sampling: {design: 512, replicas: 8, first_seed_bank: 1107}
     check: {relative_limit: 0.05, relative_standard_error_limit: 0.02}
     streams: Use independent seed banks for different primary counts; no event-wise pairing is claimed.
     note: Common sites retain spatial covariance. If error remains dominated by spatial variation, add sites rather than claiming more primaries resolve it.

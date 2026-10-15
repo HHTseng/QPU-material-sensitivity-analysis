@@ -635,7 +635,7 @@ def candidate_table(study):
         candidate_count = 2 * trajectories
         baseline = study['space']['baseline']
         while True:
-            raw = np.round(sample(problem, candidate_count, num_levels=levels, seed=seed), 6)
+            raw = sample(problem, candidate_count, num_levels=levels, seed=seed)
             paths = raw.reshape(candidate_count, length, len(names))
             stiffness = []
             for command, canonical in (('stiffness 1 1', 'sub_c11'), ('stiffness 1 2', 'sub_c12'),
