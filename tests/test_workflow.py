@@ -206,6 +206,177 @@ class RecordsTests(unittest.TestCase):
                 list(records.read_hits(path))
 
 
+class HitHistogramTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory(prefix="surface hit counts ")
+        self.root = Path(self.directory.name)
+
+    def tearDown(self):
+        self.directory.cleanup()
+
+    def test_saved_measurements_count_records_in_each_file(self):
+        from figures.plot import count_hit_files
+        folder = ROOT / "tests/fixtures/random_trial_9a3f0ab28d9d/hits"
+        expected = [[2, 1, 4, 1, 3, 1, 0, 1, 1, 1, 1, 7, 4, 4, 2, 8],
+                    [0, 0, 12, 0, 13, 0, 0, 4, 3, 0, 2, 17, 8, 8, 4, 1]]
+        report = count_hit_files(sorted(folder.glob("*_hitsfile.txt")))
+        measured = {Path(row["path"]).name: row["surface_hit_records"] for row in report["files"]}
+        for replica, counts in enumerate(expected):
+            for site, count in enumerate(counts):
+                self.assertEqual(measured[f"stage4_property_v1_rand_9a3f0ab28d9d_r{replica}_p{site}_hitsfile.txt"], count)
+        self.assertEqual(report["n_files"], 32)
+        self.assertEqual(report["surface_hit_records"], 113)
+        self.assertEqual(report["zero_hit_files"], 7)
+        self.assertEqual((report["min_records"], report["max_records"]), (0, 17))
+        self.assertAlmostEqual(report["mean_records"], 113 / 32)
+        self.assertEqual(report["median_records"], 2)
+
+    def test_records_include_both_surfaces_and_zero_deposited_energy(self):
+        from figures.plot import count_hit_files
+        path = self.root / "hits.csv"
+        with path.open("w", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(records.HIT_COLUMNS)
+            writer.writerows([[.00191, 0, 0, .0002625, 100],
+                              [.00191, 0, 0, -.0002625, 200],
+                              [0, 0, 0, .0002625, 300]])
+        empty = self.root / "no hits.csv"
+        empty.write_text(",".join(records.HIT_COLUMNS) + "\n")
+        alias = self.root / "alias.csv"
+        alias.symlink_to(path)
+        report = count_hit_files([path, alias, path, empty])
+        self.assertEqual(report["n_files"], 2)
+        self.assertEqual(report["surface_hit_records"], 3)
+        self.assertEqual(report["zero_hit_files"], 1)
+        self.assertEqual({row["path"] for row in report["files"]}, {str(path.resolve()), str(empty.resolve())})
+
+    def test_missing_empty_and_malformed_files_are_absent_measurements(self):
+        from figures.plot import count_hit_files
+        with self.assertRaises((ValueError, FileNotFoundError)):
+            count_hit_files([self.root / "missing.csv"])
+        path = self.root / "bad.csv"
+        header = ",".join(records.HIT_COLUMNS) + "\n"
+        for text in ("", "wrong,header\n", header + "nan,0,0,0,1\n", header + "1,0\n"):
+            with self.subTest(text=text):
+                path.write_text(text)
+                with self.assertRaises(ValueError):
+                    count_hit_files([path])
+        with self.assertRaises(ValueError):
+            count_hit_files([])
+
+    def test_large_file_count_includes_every_chunk(self):
+        from figures.plot import count_hit_files
+        path = self.root / "large.csv"
+        expected = 65539
+        path.write_text(",".join(records.HIT_COLUMNS) + "\n" + "1,0,0,0,1\n" * expected)
+        report = count_hit_files([path])
+        self.assertEqual(report["surface_hit_records"], expected)
+        self.assertEqual(report["files"][0]["surface_hit_records"], expected)
+
+    def test_changing_file_cannot_enter_a_completed_file_histogram(self):
+        from unittest.mock import patch
+        from figures.plot import count_hit_files
+        path = self.root / "changing.csv"
+        path.write_text(",".join(records.HIT_COLUMNS) + "\n1,0,0,0,1\n")
+        read_hits = records.read_hits
+        def changing_hits(source, *args, **kwargs):
+            yield from read_hits(source, *args, **kwargs)
+            with Path(source).open("a") as handle:
+                handle.write("1,0,0,0,2\n")
+        with patch.object(records, "read_hits", side_effect=changing_hits):
+            with self.assertRaises((ValueError, RuntimeError)):
+                count_hit_files([path])
+
+    def test_histogram_and_command_line_keep_zero_hit_files(self):
+        from figures.plot import count_hit_files, plot_hit_histogram
+        folder = ROOT / "tests/fixtures/random_trial_9a3f0ab28d9d/hits"
+        files = sorted(folder.glob("*_hitsfile.txt"))
+        report = count_hit_files(files)
+        figure = plot_hit_histogram(report, self.root / "histogram.png", bins=8, log_x=True)
+        self.assertEqual(Path(figure).read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
+        self.assertGreater(Path(figure).stat().st_size, 1000)
+        output = self.root / "command histogram.png"
+        table = self.root / "counts.csv"
+        process = subprocess.run([sys.executable, str(ROOT / "figures/plot.py"), "hits",
+                                  *map(str, files), "--output", str(output), "--counts", str(table),
+                                  "--bins", "8"], cwd=self.root, capture_output=True, text=True, timeout=30)
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertTrue(output.is_file())
+        with table.open(newline="") as handle:
+            rows = list(csv.DictReader(handle))
+        self.assertEqual(len(rows), 32)
+        self.assertEqual(sum(int(row["surface_hit_records"]) for row in rows), 113)
+        self.assertEqual(sum(int(row["surface_hit_records"]) == 0 for row in rows), 7)
+
+    def test_study_directory_excludes_live_and_failed_outputs_and_checks_saved_hashes(self):
+        study = self.root / "running study"
+        study.mkdir()
+        output = self.root / "study histogram.png"
+        table = self.root / "study counts.csv"
+        command = [sys.executable, str(ROOT / "figures/plot.py"), "hits", str(study),
+                   "--output", str(output), "--counts", str(table)]
+        with records.Results(study / "results.sqlite") as database:
+            database.plan("study", "candidate", {}, [{"task_id": name} for name in ("zero", "measured", "live", "failed")])
+            for name, number in (("zero", 0), ("measured", 3), ("live", 20), ("failed", 20)):
+                directory = study / "tasks" / name / "attempt"
+                directory.mkdir(parents=True)
+                path = directory / "hits.csv"
+                path.write_text(",".join(records.HIT_COLUMNS) + "\n" + "1,0,0,0,1\n" * number)
+                witness = directory / "complete"
+                witness.touch()
+                token = database.start(name)
+                if name != "live":
+                    database.finish(name, token, "failed" if name == "failed" else "complete", {
+                        "qps": [number], "output": str(path), "sha256": records.sha256_file(path),
+                        "paths": {"witness": str(witness)}})
+            process = subprocess.run(command, cwd=self.root, capture_output=True, text=True, timeout=30)
+            self.assertEqual(process.returncode, 0, process.stderr)
+            with table.open(newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(sorted(int(row["surface_hit_records"]) for row in rows), [0, 3])
+            path = study / "tasks/measured/attempt/hits.csv"
+            with path.open("a") as handle:
+                handle.write("1,0,0,0,2\n")
+            changed = subprocess.run(command, cwd=self.root, capture_output=True, text=True, timeout=30)
+            self.assertNotEqual(changed.returncode, 0)
+            self.assertIn("checksum", changed.stderr.lower())
+
+    def test_unfinished_raw_attempt_is_excluded_until_post_transport_marker(self):
+        path = self.root / "tasks" / "task" / "attempt" / "hits.csv"
+        path.parent.mkdir(parents=True)
+        path.write_text(",".join(records.HIT_COLUMNS) + "\n1,0,0,0,1\n")
+        output = self.root / "attempt.png"
+        command = [sys.executable, str(ROOT / "figures/plot.py"), "hits", str(path.parent),
+                   "--output", str(output)]
+        pending = subprocess.run(command, cwd=self.root, capture_output=True, text=True, timeout=30)
+        self.assertNotEqual(pending.returncode, 0)
+        self.assertFalse(output.exists())
+        (path.parent / "complete").touch()
+        completed = subprocess.run(command, cwd=self.root, capture_output=True, text=True, timeout=30)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertTrue(output.is_file())
+
+    def test_command_line_rejects_destructive_output_paths_and_zero_bins(self):
+        source = self.root / "measured.csv"
+        source.write_text(",".join(records.HIT_COLUMNS) + "\n1,0,0,0,1\n")
+        checksum = records.sha256_file(source)
+        output = self.root / "histogram.png"
+        alias = self.root / "alias.csv"
+        alias.symlink_to(source)
+        cases = [["--output", str(output), "--counts", str(source)],
+                 ["--output", str(output), "--counts", str(alias)],
+                 ["--output", str(output), "--counts", str(output)],
+                 ["--output", str(output), "--bins", "0"]]
+        for arguments in cases:
+            with self.subTest(arguments=arguments):
+                process = subprocess.run([sys.executable, str(ROOT / "figures/plot.py"), "hits", str(source),
+                                          *arguments], cwd=self.root, capture_output=True, text=True, timeout=30)
+                self.assertNotEqual(process.returncode, 0)
+                self.assertEqual(records.sha256_file(source), checksum)
+                self.assertFalse(output.exists())
+
+
 class PreservationTests(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
@@ -2003,7 +2174,7 @@ if [[ "$mode" == execute ]]; then
         run=self.root/'final queue'; source=run/'source'; source.mkdir(parents=True)
         for name in ('scan.py','physics.py','analysis.py','records.py','search.py','parameters.yaml'):
             shutil.copy2(ROOT/name,source/name)
-        for name in ('legacy','studies'):
+        for name in ('legacy','studies','figures'):
             shutil.copytree(ROOT/name,source/name,ignore=shutil.ignore_patterns('.env','*.env','__pycache__'))
         records.write_json(run/'source-ready.json',{'test':'synthetic measurements; no physical conclusion'})
         public=self.root/'public'; public.mkdir()

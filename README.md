@@ -6,7 +6,7 @@ sensitivity studies, linked-material comparisons, continuous-property searches,
 confirmation, spatial refinement, and tolerance checks. Geant4/G4CMP supplies
 phonon transport; measured simulation outputs supply every search response.
 
-![Illustration of phonon propagation and absorption in a layered device](device_stack.png)
+![Illustration of phonon propagation and absorption in a layered device](figures/device_stack.png)
 
 The supplied illustration shows the goal: redirect and absorb substrate phonons
 before they create quasiparticles in junction regions. Paths, layer spacing,
@@ -33,7 +33,7 @@ where $\Delta_{\rm Al}=191\,\mu\mathrm{eV}$ in the reference. The separately nam
 Studies record which response they use. Density sensitivity instead integrates
 the stated quasiparticle evolution equations and retains its own response units.
 
-![Reference boundary geometry and phonon paths](docs/figures/device_stack.png)
+![Reference boundary geometry and phonon paths](figures/device_geometry.png)
 
 The reference uses a 525 μm Si substrate, 75 nm Nb upper film, 1 μm Cu bottom
 film, and seventeen 120 nm Al junction collection regions. Each collection
@@ -50,7 +50,7 @@ $\widehat\mu_h$ must be multiplied by their true area fractions $W_h$:
 $\widehat J=\sum_h W_h\widehat\mu_h$. An equal average over these sites gives
 the wrong spatial integral.
 
-![Actual recorded spatial sites and region areas](docs/figures/spatial_sampling.png)
+![Actual recorded spatial sites and region areas](figures/spatial_sampling.png)
 
 Matched comparisons retain the same sites, source counts, region weights, and
 random streams. Repeated realizations provide uncertainty in the difference.
@@ -58,6 +58,39 @@ Software equivalence requires the entire stated confidence interval to lie
 inside a margin chosen before comparison. An unresolved difference alone does
 not demonstrate equivalence. A complete, header-only hit file is a physical
 zero; failed, timed-out, or incomplete simulations have no measured response.
+
+## Surface-hit records
+
+For file $f$, let $H_f$ be the number of valid surface-hit rows. The histogram
+shows how many files have each count $H_f$. These rows record deposited energy
+and the final phonon position and time. A row is a recorded hit, rather than
+a unique injected phonon or the junction-QP response defined above.
+
+![Surface-hit records per file in the historical test data](figures/surface_hits_histogram.png)
+
+This historical checking example contains **32 files and 113 surface-hit
+records**, including **7 complete files with zero records**, at 125,000 primary
+phonons per file. It includes both substrate surfaces: 78 records on the upper
+surface and 35 on the lower surface. The plot describes these recorded files;
+it does not establish spatial convergence or a material ranking.
+
+```bash
+conda run -n G4CMP python figures/plot.py hits tests/fixtures/random_trial_9a3f0ab28d9d/hits \
+  --output figures/surface_hits_histogram.png \
+  --counts figures/surface_hits_counts.csv
+conda run -n G4CMP python figures/draw.py
+```
+
+The [per-file counts](figures/surface_hits_counts.csv) retain the inputs to this
+histogram. The [verification record](verification/hit_figures_checks.json)
+records **160 passing tests**, including the hit-file and plotting checks.
+A recorded study directory selects only completed tasks and checks
+their saved file checksums. Direct raw-file input should contain completed
+measurements; task directories also require the post-transport completion marker.
+The drawings use the [recorded spatial sites](figures/spatial_sites.json)
+and current reference dimensions. `draw.py --design FILE --output-dir DIRECTORY`
+selects another saved design or destination. Both figure scripts and the supplied
+`device_stack.png` are under `figures/`; full-scale result plots also go there.
 
 ## Run and verify
 
@@ -72,7 +105,7 @@ conda run -n G4CMP python scan.py run studies/reference-eight.yaml \
 conda run -n G4CMP python scan.py analyse \
   material_scan_data/experiments/reference-eight --output /tmp/reference-analysis.json
 conda run -n G4CMP python scan.py plot \
-  material_scan_data/experiments/reference-eight --kind summary --output /tmp/reference.png
+  material_scan_data/experiments/reference-eight --kind summary --output figures/reference_summary.png
 conda run -n G4CMP python -m unittest discover -s tests -v
 ```
 
@@ -205,7 +238,7 @@ position study; this timing range assumes the declared checks pass.
 
 ## Calculation and source files
 
-![Scientific calculation and verification](docs/figures/workflow.png)
+![Scientific calculation and verification](figures/workflow.png)
 
 ```mermaid
 flowchart LR
@@ -223,9 +256,11 @@ flowchart LR
 |---|---|
 | [`scan.py`](scan.py) | Study loading, candidate tables, simulation tasks, execution and commands |
 | [`physics.py`](physics.py) | Property maps, physical checks, elasticity, interfaces, sites, QPs and density evolution |
-| [`analysis.py`](analysis.py) | Scoring, area weights, uncertainty, sensitivity, convergence, projection and figures |
+| [`analysis.py`](analysis.py) | Scoring, area weights, uncertainty, sensitivity, convergence and projection |
 | [`search.py`](search.py) | Random, Sobol, Gaussian-process and CMA-ES search; optional TPE and Ollama |
 | [`records.py`](records.py) | Input records, hit reading, SQLite results, archives and recovery |
+| [`figures/plot.py`](figures/plot.py) | Hit-file counts and plots of recorded results |
+| [`figures/draw.py`](figures/draw.py) | Device schematic, recorded spatial sites and workflow diagram |
 | [`run_all.sh`](run_all.sh) | Sequential full-scale studies, resource checks, verified preservation and final report |
 | [`tests/`](tests/) | Two test files and small numerical fixtures |
 
@@ -245,8 +280,10 @@ interval, [−1.39%, +1.13%], lies within the predefined ±5% margin.
 
 At the original queue launch, the five core modules including restart, memory and archive
 checks contained 4,466 lines and 128 functions/methods. The Bash driver added
-555 lines. There are eight active scripts including the two test files; the
-extra lines support long runs and preservation rather than another code layer.
+555 lines. That version had eight active scripts including the two test files.
+The current layout has **ten scripts**: five scientific modules, two figure
+scripts, one Bash driver and two test files. Plotting now lives in
+[`figures/`](figures/) together with images and their recorded inputs.
 
 Short code annotations use $x$ for physical properties, $u\in[0,1]^d$ for
 normalized coordinates, and $N_{ire}$ for summed QPs at site $i$, realization
@@ -260,8 +297,8 @@ have different scopes and cannot be added into a whole-run gain. Software
 agreement does not establish new material predictions or a measured transport
 speedup. The line count exceeds the earlier estimate because the explicit
 verification and preservation checks remain.
-The figures above use the [recorded source data](docs/figures/provenance.json);
-their [SVG originals](docs/figures/) are also available.
+The figures above use the [recorded source data](figures/provenance.json);
+their [SVG originals](figures/) are also available.
 
 Scientific definitions, earlier measurements, and data instructions remain in
 [`material_scan/docs/`](material_scan/docs/). Historical source is preserved in

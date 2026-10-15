@@ -24,4 +24,5 @@ catalog = ["mp-api"]
 tpe = ["optuna"]
 
 [tool.setuptools]
+packages = ["figures"]
 py-modules = ["scan", "physics", "analysis", "search", "records"]

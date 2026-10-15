@@ -1,0 +1,11 @@
+{
+  "n_files": 32,
+  "surface_hit_records": 113,
+  "zero_hit_files": 7,
+  "min_records": 0,
+  "max_records": 17,
+  "mean_records": 3.53125,
+  "median_records": 2.0,
+  "figure": "figures/surface_hits_histogram.png",
+  "counts_csv": "figures/surface_hits_counts.csv"
+}

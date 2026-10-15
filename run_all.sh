@@ -326,6 +326,8 @@ if mode in ('check','prepare'):
         source.mkdir()
         for name in ('scan.py','physics.py','analysis.py','records.py','search.py','run_all.sh','parameters.yaml'):
             shutil.copy2(repo/name,source/name)
+        (source/'figures').mkdir()
+        shutil.copy2(repo/'figures/plot.py',source/'figures/plot.py')
         for name in ('legacy','studies'):
             shutil.copytree(repo/name,source/name,ignore=shutil.ignore_patterns('.env','*.env','__pycache__','*.pyc'))
         for name in ('bin','lib','geant4-data'): (source/name).mkdir()
@@ -351,7 +353,7 @@ if mode in ('check','prepare'):
         assert frozen['executable_sha256']==build['executable_sha256']
         assert set(frozen['libraries'].values())==set(build['libraries'].values())
         inventory={str(path.relative_to(source)):records.sha256_file(path) for path in sorted(source.rglob('*')) if path.is_file()}
-        records.write_json(run/'source-ready.json',{'original_build':build,'frozen_build':frozen,'files_sha256':inventory,'source_sha256':{name:inventory[name] for name in ('scan.py','physics.py','analysis.py','records.py','search.py','run_all.sh','parameters.yaml')},'created':time.time()})
+        records.write_json(run/'source-ready.json',{'original_build':build,'frozen_build':frozen,'files_sha256':inventory,'source_sha256':{name:inventory[name] for name in ('scan.py','physics.py','analysis.py','records.py','search.py','run_all.sh','parameters.yaml','figures/plot.py')},'created':time.time()})
         for path in source.rglob('*'):
             if path.is_file(): path.chmod(0o555 if path==source/'bin/Main' else 0o444)
     records.write_json(run/'resources.json',limits)
@@ -405,7 +407,7 @@ if mode in ('check','prepare'):
         else: queue.append(group)
     records.write_json(run/'queue.json',queue)
     records.write_json(run/'queue_status.json',{'state':'prepared','stages':len(queue),'updated':time.time()},overwrite=True)
-    records.write_json(run/'publication.json',{'branch':subprocess.check_output(['git','branch','--show-current'],cwd=repo,text=True).strip(),'remote':subprocess.check_output(['git','remote','get-url','origin'],cwd=repo,text=True).strip(),'files':['README.md','docs/results/full_scale_summary.json','docs/results/full_scale_finalists.png','docs/results/full_scale_transport_morris.png','docs/results/full_scale_density_morris.png','docs/results/full_scale_methods.png','docs/results/full_scale_projection.png']})
+    records.write_json(run/'publication.json',{'branch':subprocess.check_output(['git','branch','--show-current'],cwd=repo,text=True).strip(),'remote':subprocess.check_output(['git','remote','get-url','origin'],cwd=repo,text=True).strip(),'files':['README.md','docs/results/full_scale_summary.json','figures/full_scale_finalists.png','figures/full_scale_transport_morris.png','figures/full_scale_density_morris.png','figures/full_scale_methods.png','figures/full_scale_projection.png']})
     print(records.canonical_json({'prepared_studies':len(queue),'source':str(source),'resources':limits}))
     raise SystemExit(0)
 
@@ -693,15 +695,16 @@ elif mode=='finish':
     if subprocess.check_output(['git','branch','--show-current'],cwd=repo,text=True).strip()!=publication['branch'] or subprocess.check_output(['git','remote','get-url','origin'],cwd=repo,text=True).strip()!=publication['remote']:
         raise ValueError('publication branch or remote changed; retained results were not published')
     public=repo/'docs/results'; public.mkdir(parents=True,exist_ok=True)
+    figure_dir=repo/'figures'; figure_dir.mkdir(parents=True,exist_ok=True)
     records.write_json(public/'full_scale_summary.json',result,overwrite=True)
-    analysis.plot_result(confirmation,public/'full_scale_finalists.png','summary')
-    analysis.plot_result(reports['material-transport-morris'],public/'full_scale_transport_morris.png','sensitivity')
-    analysis.plot_result(reports['density-morris'],public/'full_scale_density_morris.png','sensitivity')
-    analysis.plot_result({'results':[{'name':p['name'],'value':lookup[p['name']]['value'],'standard_error':lookup[p['name']]['standard_error'],'units':reference['units']} for p in finalists]},public/'full_scale_methods.png','summary')
-    analysis.plot_result(result['projection'],public/'full_scale_projection.png','projection')
+    analysis.plot_result(confirmation,figure_dir/'full_scale_finalists.png','summary')
+    analysis.plot_result(reports['material-transport-morris'],figure_dir/'full_scale_transport_morris.png','sensitivity')
+    analysis.plot_result(reports['density-morris'],figure_dir/'full_scale_density_morris.png','sensitivity')
+    analysis.plot_result({'results':[{'name':p['name'],'value':lookup[p['name']]['value'],'standard_error':lookup[p['name']]['standard_error'],'units':reference['units']} for p in finalists]},figure_dir/'full_scale_methods.png','summary')
+    analysis.plot_result(result['projection'],figure_dir/'full_scale_projection.png','projection')
     block=['<!-- full-scale-start -->','## Fresh full-scale measurements','',f"Finished {result['date']} at 20 mK with the Nb gap restricted to at least 1.5384 meV. All declared simulations and archive checks finished. Convergence checks: `{result['scientific_checks']}`.",'',f"GP and CMA-ES each obtained 120 successful measurements for each of three optimizer seeds. Finalists were confirmed on four independent layouts of {confirmation['sites']} spatial sites, each with {confirmation['replicas']} realizations on unused random streams. Algorithm starts differ.",'','| Confirmed target | Relative QP yield change | Paired standard error (percentage points) |','|---|---:|---:|']
     block += [f"| {row['name']} | {100*row['relative_to_reference']:+.2f}% | {100*row['paired_difference_from_reference']['relative_change']['standard_error']:.3g} |" for row in result['confirmed_finalists']]
-    block += ['','[Numerical records and archive checksums](docs/results/full_scale_summary.json).','', '![Confirmed targets](docs/results/full_scale_finalists.png)', '', '![Transport sensitivity](docs/results/full_scale_transport_morris.png)', '', '![Density sensitivity](docs/results/full_scale_density_morris.png)', '', 'A property target is not a fabricated material. SiC phonon rates remain assumed, and the interface model remains calibrated. Spatial and event-count checks are reported separately; unresolved optimizer differences remain unresolved.','<!-- full-scale-end -->']
+    block += ['','[Numerical records and archive checksums](docs/results/full_scale_summary.json).','', '![Confirmed targets](figures/full_scale_finalists.png)', '', '![Transport sensitivity](figures/full_scale_transport_morris.png)', '', '![Density sensitivity](figures/full_scale_density_morris.png)', '', 'A property target is not a fabricated material. SiC phonon rates remain assumed, and the interface model remains calibrated. Spatial and event-count checks are reported separately; unresolved optimizer differences remain unresolved.','<!-- full-scale-end -->']
     readme=repo/'README.md'; text=readme.read_text(); start=text.index('<!-- full-scale-start -->'); end=text.index('<!-- full-scale-end -->')+len('<!-- full-scale-end -->')
     readme.write_text(text[:start]+'\n'.join(block)+text[end:])
     if (run/'references').exists(): shutil.rmtree(run/'references')
