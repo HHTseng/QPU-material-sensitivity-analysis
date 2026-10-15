@@ -1,4 +1,8 @@
-"""Elastic waves, calibrated interfaces, and junction quasiparticles; SI except noted."""
+"""Elastic waves, calibrated interfaces and junction QPs; SI except noted.
+
+x: physical properties; u: normalized coordinates; g: identity or logarithm.
+q_k=round(E_k/Delta_Al) per hit; N[e] sums q_k over junction e in one task.
+"""
 
 from functools import lru_cache
 import math
@@ -37,7 +41,10 @@ def fibonacci_sphere(n_points=10_000):
 
 
 def acoustic_velocities(C, rho, direction, units="GPa"):
-    """Christoffel modes for one direction; speeds m/s, density kg/m³."""
+    """Gamma_ik=C_ijkl*n_j*n_l; eigenvalues rho*v_a^2, unit direction n.
+
+    C uses Voigt notation; Gamma in Pa, rho in kg/m^3 and mode speeds in m/s.
+    """
     if not math.isfinite(rho) or rho <= 0 or units not in ("Pa", "MPa", "GPa"):
         raise ValueError("positive finite density and stiffness units Pa/MPa/GPa required")
     n = np.asarray(direction, dtype=float)
@@ -69,7 +76,10 @@ def acoustic_velocities(C, rho, direction, units="GPa"):
 
 @lru_cache(maxsize=4096)
 def derive_cubic_sound_speeds(c11, c12, c44, density=2330.0):
-    """Spherical mean (vL,vT) in m/s; stiffness inputs in GPa, 10,000 directions."""
+    """Means <v_L>_n and <(v_T1+v_T2)/2>_n over 10,000 unit directions n.
+
+    Cubic stiffness inputs are GPa; mean speeds are m/s.
+    """
     if not all(math.isfinite(v) for v in (c11, c12, c44, density)) or density <= 0:
         raise ValueError("stiffness and density must be finite; density must be positive")
     if not (c11 - c12 > 0 and c11 + 2 * c12 > 0 and c44 > 0):
@@ -118,7 +128,10 @@ def miller_to_sphere(miller):
 def qp_counts(energy_deposited_eV, end_x_m, end_y_m, end_z_m, final_time_ns,
               gap_eV, electrode_x_mm, electrode_y_mm, chip_surface_z_m, *,
               time_resolved=False, snapshot_count=QP_SNAPSHOT_COUNT, snapshot_max_ns=QP_SNAPSHOT_MAX_NS):
-    """Surface hits -> electrode counts; optional time bins preserve all legacy ties."""
+    """Positive sensor-surface hits -> N[e]=sum_{k->e} round(E_k/Delta_Al).
+
+    Energies are eV; optional N[e,j] bins arrival times t_j in ns. Ties use first.
+    """
     if not math.isfinite(gap_eV) or gap_eV <= 0 or not math.isfinite(chip_surface_z_m):
         raise ValueError("positive finite gap and finite sensor surface required")
     xy = tuple(np.asarray(v, dtype=float) for v in (electrode_x_mm, electrode_y_mm))
@@ -154,7 +167,10 @@ def calculate_xqps(snapshot_times_ns, qps_by_electrode_time, aluminum_gap_hz,
                    qubit_frequency_hz, recombination, loss_rate, injection_scale,
                    pulse_time_us, cooper_pairs_per_um3, electrode_height_um,
                    electrode_width_um, film_thickness_um, simulated_primaries):
-    """Retained explicit Euler density evolution; times μs, decoherence MHz."""
+    """z=n_qp/n_cp: dz/dt=-r*z^2-s*z+g; explicit Euler, t in us.
+
+    r=recombination, s=loss_rate; Gamma=2*sqrt(2*Delta_Hz*f_q)*z in Hz; return MHz.
+    """
     snapshots, qps = np.asarray(snapshot_times_ns, dtype=float), np.asarray(qps_by_electrode_time, dtype=float)
     if snapshots.ndim != 1 or snapshots.size < 2 or not np.isfinite(snapshots).all() or np.any(np.diff(snapshots) <= 0):
         raise ValueError("snapshot times must be finite and strictly increasing")
@@ -169,6 +185,7 @@ def calculate_xqps(snapshot_times_ns, qps_by_electrode_time, aluminum_gap_hz,
     dt = float(np.mean(np.diff(snapshots))) * .001
     extension = int(np.round(float(pulse_time_us) / dt))
     time_us = np.linspace(.001 * snapshots[0], .001 * snapshots[-1] + float(pulse_time_us), snapshots.size + extension)
+    # density=z[e,j], generation=g[e,j]; qps=N[e,j] summed over primaries.
     generation = np.zeros((qps.shape[0], time_us.size))
     density = np.zeros_like(generation)
     factor = 2. * math.sqrt(2. * aluminum_gap_hz * qubit_frequency_hz) * 1e-6
@@ -252,6 +269,7 @@ def search_space(parameters=None, *, kind='search', constraints=None, table=None
 
 
 def to_unit(point, space):
+    """x -> u in [0,1]^d: u_j=(g(x_j)-g(lo_j))/(g(hi_j)-g(lo_j))."""
     values = np.array([point[name] for name in space['names']], dtype=float)
     lo, hi = np.asarray(space['low']), np.asarray(space['high'])
     logarithmic = np.array([s == 'log' for s in space['scales']])
@@ -262,6 +280,7 @@ def to_unit(point, space):
 
 
 def from_unit(u, space):
+    """u -> x: x_j=g^-1(g(lo_j)+u_j*(g(hi_j)-g(lo_j))); fixed fields retained."""
     u = np.asarray(u, dtype=float)
     if u.shape != (len(space['names']),) or not np.isfinite(u).all():
         raise ValueError('coordinate dimensions or values are invalid')
@@ -304,7 +323,10 @@ def region_distances(xy, fixed):
 
 
 def resolve_all_interfaces(substrate, junction_film, top_film, bottom_film, si_reference):
-    """A = clip(A_Si T/T_Si,0,1), T=4 Z₁Z₂/(Z₁+Z₂)²; calibrated model."""
+    """A=clip(A_Si*T/T_Si,0,1), T=4*Z1*Z2/(Z1+Z2)^2; calibrated model.
+
+    Z=rho*v; the substrate uses v=(v_L+2*v_T)/3, films use their scalar v.
+    """
     for record in (substrate, si_reference):
         rho, vl, vt = (float(record[k]) for k in ('density_kg_m3','vsound_m_s','vtrans_m_s'))
         if not all(math.isfinite(v) and v > 0 for v in (rho, vl, vt)) or vt >= vl:
@@ -356,6 +378,7 @@ def validate_values(point, space, exact=False, *, films=None):
     energy = float(space.get('gun_energy_eV',.01)); cutoff = float(space.get('cutoff_eV',38.2e-6))
     if not all(math.isfinite(v) and v>0 for v in (density,gap_j,energy,cutoff)) or not cutoff < 2*gap_j <= energy:
         raise ValueError('require positive density and cutoff < 2*junction_gap <= gun_energy')
+    # B=sub_scat, A=sub_decay: rates B*nu^4 and A*nu^5, nu=E/h in Hz.
     for name in ('sub_scat','sub_decay','sub_decayTT','temperature'):
         if name in p and p[name]<0: raise ValueError(f'{name} must be non-negative')
     for name in ('topfilm_gap','topfilm_ph_lifetime','bot_ph_lifetime','sub_lattice_a'):
@@ -406,7 +429,7 @@ def validate_values(point, space, exact=False, *, films=None):
 
 
 def prepare_values(study, candidate=None):
-    """Loaded material records + candidate -> physical values and derived fields."""
+    """x -> checked material, G4CMP lattice and calibrated boundary inputs."""
     candidate = candidate or {}; values = dict(study['space']['baseline'])
     changes = candidate.get('values',{k:v for k,v in candidate.items() if k not in
         ('name','materials','realization','macro','config','ode','inputs','trajectory','fixed','design_index','transport_group','problem','parameter_specs','tolerance')})
@@ -520,6 +543,7 @@ def build_design(fixed, sampling, *, recorded=None, previous=None):
         count = np.zeros(5,dtype=np.int64)
         for start in range(0,total,65536):
             count += np.bincount(region_distances(rng.uniform(-span,span,(min(65536,total-start),2)),fixed),minlength=5)
+        # W0=sum_e A_e/A_source; other region fractions W_h use uniform area draws.
         w0 = len(fixed['electrode_x_mm'])*fixed['electrode_width_um']*fixed['electrode_height_um']*1e-6/(2*span)**2
         weights = np.r_[w0,count[1:]/count[1:].sum()*(1-w0)]
         floor = np.array([len(fixed['electrode_x_mm']),8,8,8,8]); remaining = n-int(floor.sum())
@@ -530,6 +554,7 @@ def build_design(fixed, sampling, *, recorded=None, previous=None):
             sigma = np.array([sampling.get('region_sd',{}).get(h,1.) for h in REGIONS])
             if not np.isfinite(sigma).all() or np.any(sigma<0) or weights@sigma<=0:
                 raise ValueError('region sampling spreads must be finite and nonnegative')
+            # Allocate added sites as n_h proportional to W_h*sigma_h.
             shares = remaining*weights*sigma/(weights@sigma); target = floor+np.floor(shares).astype(int)
             for h in np.argsort(-(shares-np.floor(shares)))[:n-int(target.sum())]: target[h] += 1
         if target.sum()!=n or np.any(target<floor): raise ValueError('invalid spatial allocation')

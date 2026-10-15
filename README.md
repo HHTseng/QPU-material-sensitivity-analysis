@@ -149,7 +149,17 @@ study completed eight million primaries at 128 sites and two realizations in
 33.0 s: $\widehat J=0.0022550\pm0.0001919$ weighted junction QPs/eV (standard
 error). Both archive copies passed verification. This small pilot checks the
 workflow; it does not establish spatial convergence or a material improvement.
-The queue has advanced to the full-scale temperature comparison.
+By October 14, 20:10 EDT, the pilot, both temperature studies and the 512-site
+comparison had finished. The 2,361-site comparison is running.
+
+The current planning estimate is **3–5 more weeks, approximately November 4–18**,
+with a central estimate near November 10. About 620 billion primary phonons
+remain before conditional skips and duplicate reuse. The calculation uses
+$T_{\rm rem}=M_{\rm rem}(1+\epsilon)/v$: $M_{\rm rem}$ remaining primaries,
+$v=0.25$–$0.40$ million primaries/s, and $\epsilon=0.10$–$0.20$ for additional
+processing. The [timing record](verification/full_scale_eta_20261014.json)
+contains the observed rates and assumptions. This is a conditional planning
+range; future property settings, retries and interruptions can take longer.
 
 Full-scale results are pending. The software comparisons below are completed
 tests; they are separate from these fresh physical measurements. The
@@ -197,10 +207,16 @@ interval, [−1.39%, +1.13%], lies within the predefined ±5% margin.
 | Project import connections | 13 | 7 |
 | Lines, including blanks | 4,391 | 4,300 |
 
-With the later restart, memory and archive checks, the five core modules now
-contain 4,466 lines and 128 functions/methods. The full-scale Bash driver adds
+At the queue launch, the five core modules including restart, memory and archive
+checks contained 4,466 lines and 128 functions/methods. The Bash driver added
 555 lines. There are eight active scripts including the two test files; the
 extra lines support long runs and preservation rather than another code layer.
+
+Short code annotations use $x$ for physical properties, $u\in[0,1]^d$ for
+normalized coordinates, and $N_{ire}$ for summed QPs at site $i$, realization
+$r$, and junction $e$. Thus $Q_{ire}=N_{ire}/N_p$ per primary, with $N_p$
+primaries per task. The junction weights $w_e$ and area fractions $W_h$ retain
+the definitions above. Density evolution uses $z_e=n_{{\rm qp},e}/n_{\rm cp}$.
 
 Measured medians give 13.0× faster task preparation, 2.9× faster density
 evolution, and 1.26× faster complete reference reanalysis. These measurements

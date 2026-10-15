@@ -406,7 +406,10 @@ def fetch_catalog(destination, ids=None, max_results=50, api_key=None):
 
 
 class Results:
-    """One parent process writes; opening with create=False is read-only."""
+    """One parent writer; create=False is read-only.
+
+    Measured J(x) requires every declared site/realization task (i,r) to finish.
+    """
 
     def __init__(self, path, create=True):
         self.path = Path(path).resolve()
@@ -725,6 +728,7 @@ class Results:
         return value
 
     def observation(self, candidate_id, value, analysis=None, kind="measured", tasks=None, verified=None):
+        """Store J(x) and SE(J) with complete tasks; censored records have no yield."""
         self._write()
         if kind not in ("measured", "physical_zero", "right_censored", "non_observation"):
             raise ValueError("unknown observation kind")

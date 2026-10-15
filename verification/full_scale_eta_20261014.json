@@ -1,0 +1,123 @@
+{
+  "as_of_local": "2026-10-14T20:10:30.048179-04:00",
+  "timezone": "America/New_York",
+  "state": {
+    "driver_pid": 781784,
+    "driver_starttime": 262912315,
+    "index": 4,
+    "stage": "source-2361",
+    "state": "running",
+    "updated": 1792019314.7085006
+  },
+  "active_study": {
+    "id": "source-2361",
+    "tasks_by_status": {
+      "complete": 19759,
+      "planned": 36717,
+      "running": 188
+    },
+    "recent_tasks_per_s_by_window_s": {
+      "300": 4.78,
+      "900": 4.783333333333333,
+      "1800": 4.782222222222222
+    },
+    "events_per_task": 62500
+  },
+  "completed_studies": [
+    {
+      "id": "pilot",
+      "primaries": 8000000,
+      "calculation_wall_s": 33.04313363600522,
+      "aggregate_primaries_per_s": 242107.78820574254,
+      "approx_archive_and_cleanup_s": 2.138750175945461
+    },
+    {
+      "id": "temperature-0K",
+      "primaries": 1180500000,
+      "calculation_wall_s": 3025.5935257407837,
+      "aggregate_primaries_per_s": 390171.3795844296,
+      "approx_archive_and_cleanup_s": 96.96718039782718
+    },
+    {
+      "id": "temperature-0.02K",
+      "primaries": 1180500000,
+      "calculation_wall_s": 3904.389228041284,
+      "aggregate_primaries_per_s": 302352.02769274666,
+      "approx_archive_and_cleanup_s": 76.70940119493753
+    },
+    {
+      "id": "source-512",
+      "primaries": 768000000,
+      "calculation_wall_s": 2602.0915646133944,
+      "aggregate_primaries_per_s": 295147.1848432457,
+      "approx_archive_and_cleanup_s": 50.77477411646396
+    }
+  ],
+  "nominal_remaining_primaries": 619173562500,
+  "nominal_remaining_primaries_by_kind": {
+    "convergence": 8450562500,
+    "event_count_convergence": 5376000000,
+    "explicit_parameters": 14166000000,
+    "morris": 34816000000,
+    "materials": 21249000000,
+    "search": 92160000000,
+    "confirmation": 58113000000,
+    "explicit_tolerance": 169992000000,
+    "model_ranges": 214851000000
+  },
+  "nominal_completed_primaries": 4371937500,
+  "model": "T_remaining = M_remaining / v * (1 + epsilon); M counts primary phonons, v is aggregate primary phonons/s, epsilon is extra processing allowance.",
+  "scenarios": [
+    {
+      "name": "faster",
+      "aggregate_primaries_per_s": 400000.0,
+      "extra_processing_fraction": 0.15,
+      "remaining_days": 20.60328694661458,
+      "finish_local": "2026-11-04T09:39:14.040367-05:00"
+    },
+    {
+      "name": "central",
+      "aggregate_primaries_per_s": 300000.0,
+      "extra_processing_fraction": 0.1,
+      "remaining_days": 26.276655815972223,
+      "finish_local": "2026-11-10T01:48:53.110679-05:00"
+    },
+    {
+      "name": "slower",
+      "aggregate_primaries_per_s": 250000.0,
+      "extra_processing_fraction": 0.2,
+      "remaining_days": 34.39853125,
+      "finish_local": "2026-11-18T04:44:23.148179-05:00"
+    }
+  ],
+  "interpretation": "A conditional planning range, not a statistical confidence interval or guaranteed deadline.",
+  "assumptions": [
+    "94 transport workers and the current CPU affinity remain available.",
+    "Both optional 4096-site refinements run; all declared tolerance moves are feasible.",
+    "Searches obtain 120 successful responses per method and seed; extra failed-attempt work is excluded.",
+    "Density Morris reuses transport for ODE-only changes within each trajectory.",
+    "Future physical-property settings have transport costs comparable to the measured reference, C44=1 GPa and SiC-derived cases.",
+    "Processing allowances are 10-20 percent; completed full-scale archive/cleanup overhead is about 2-3 percent."
+  ],
+  "unknowns": [
+    "Optimizer and film-property transport costs have not yet been measured.",
+    "Conditional skips, physical duplicate reuse and infeasible moves reduce nominal work.",
+    "Slow or timed-out tasks, retries, resource pauses and downtime extend the estimate."
+  ],
+  "annotation_verification": {
+    "base_revision": "829fec6ef0c6273ca0a8052b4cc1fc7b17328ed7",
+    "files": [
+      "physics.py",
+      "analysis.py",
+      "search.py",
+      "scan.py",
+      "records.py",
+      "run_all.sh"
+    ],
+    "only_comments_and_docstrings_changed": true,
+    "tests_passed": 128,
+    "test_wall_s": 57.255,
+    "bash_syntax_passed": true,
+    "frozen_runtime_source_unchanged": true
+  }
+}

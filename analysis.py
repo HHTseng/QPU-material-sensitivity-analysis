@@ -1,4 +1,8 @@
-"""Explicit weighted statistics and comparisons of complete simulation arrays."""
+"""Area-weighted QP yields and uncertainty from complete simulation arrays.
+
+i=site, r=realization, e=junction, h=surface region; N[i,r,e] sums hit QPs.
+Q=N/N_p per primary; w_e junction weights, W_h area fractions, E_g source eV.
+"""
 
 import math
 import copy
@@ -15,6 +19,7 @@ import numpy as np
 
 
 def prepare_counts(blocks, design=None):
+    """N[i,r,e] -> b[i,r]=sum_e w_e*N[i,r,e]/(N_p*E_g), weighted QPs/eV."""
     if isinstance(blocks,dict) and 'groups' in blocks and 'totals' in blocks: return blocks
     require_electrodes=False
     labels = tuple(str(v) for v in design["position_strata"])
@@ -90,6 +95,7 @@ def _tail_mean(pairs, probability=.05):
 
 
 def _resample(regions, draws, seed, tail=False):
+    """SE(J)=sd(J*): resample sites within h, then realizations within each site."""
     if not isinstance(draws, int) or draws < 2:
         raise ValueError("at least two integer resampling draws required")
     rng = np.random.default_rng(seed)
@@ -111,7 +117,7 @@ def _resample(regions, draws, seed, tail=False):
 
 def paired_difference(blocks_a, blocks_b, design, *, bootstrap_draws=1000, bootstrap_seed=23,
                       objective='device_junction_qps_per_eV'):
-    """A − B with matched sites, replicas and declared weights before resampling."""
+    """D[i,r]=b_A-b_B; dJ=sum_h W_h*mean_{i in h,r}(D), with matched streams."""
     a=prepare_counts(blocks_a,design); b=prepare_counts(blocks_b,design)
     historical=objective in ('total_qps_per_primary','total_QPs_per_primary','junction_qps_per_primary')
     if historical:
@@ -172,7 +178,10 @@ def spatial_convergence(coarse, fine, *, baseline_coarse=None, baseline_fine=Non
 
 
 def sensitivity(samples, outcomes, names=None, *, problem=None, method="pearson", log_outcome=False, seed=7, num_levels=4):
-    """Pearson correlations or Morris μ, μ*, σ; failed outcomes remain absent."""
+    """Pearson correlations or Morris EE_j=[J(u+delta*e_j)-J(u)]/delta.
+
+    u is normalized, e_j a unit vector; mu=mean(EE), mu_star=mean(abs(EE)), sigma=sd(EE).
+    """
     X, y = np.asarray(samples, dtype=float), np.asarray(outcomes, dtype=float)
     if X.ndim != 2 or y.shape != (X.shape[0],) or not np.isfinite(X).all() or not np.isfinite(y).all():
         raise ValueError("finite sample matrix and matching complete outcome vector required")
@@ -241,7 +250,10 @@ def curve_distance(sim_t, sim_dg, x_data, y_data, dy_data=None, normalize='none'
 
 
 def project_materials(target, candidates, feature_spec, weights=None, top=10):
-    """Order measured candidates by coverage, then distance within that coverage."""
+    """Rank materials by coverage, then D^2=sum_j a_j*z_j^2/sum_j a_j.
+
+    z_j=[g(m_j)-g(x_j)]/s_j; a_j weights, g=id/log, s_j robust catalog scale.
+    """
     weights=weights or {}; scales={}; rows=[]
     for name,mode in feature_spec.items():
         if mode not in ('log','linear'): raise ValueError(f'unknown feature scale {mode!r}')
@@ -310,7 +322,10 @@ def pareto_front(rows, keys, lower_is_better=None):
 
 
 def compare_repeated(a, b, *, confidence=.95, relative_margin=.05, paired=False):
-    """Student-t interval for matched or independent outcomes; equivalence needs a margin."""
+    """dJ=mean(a)-mean(b); Student-t interval dJ +/- t*SE(dJ).
+
+    Equivalence requires the entire interval inside +/- relative_margin*abs(mean(b)).
+    """
     from scipy.stats import t
     a, b = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
     if a.ndim != 1 or b.ndim != 1 or min(len(a), len(b)) < 2 or not np.isfinite(a).all() or not np.isfinite(b).all():
@@ -349,6 +364,7 @@ def analysis_design(study):
 
 
 def score_output(result, prepared, task, *, time_resolved=False, score_hash=None):
+    """Hit chunks -> N[i,r,e]; retain N[e,j] time bins only when requested."""
     fixed=prepared['fixed']; totals=np.zeros(len(fixed['electrode_x_mm'])); n_hits=0; matrix=None
     surface=fixed['setSubThickness_um']*1e-6/2
     gap=fixed['setTopGap']
@@ -374,7 +390,10 @@ def score_output(result, prepared, task, *, time_resolved=False, score_hash=None
 
 
 def density_response(blocks, prepared, defaults=None, cache=None, *, from_hits=False):
-    """Stream pooled and realization time sums; retain the nonlinear pooled ODE."""
+    """S=sum_e integral Gamma_e(t) dt, in MHz*us, from the pooled QP source.
+
+    Evolve pooled and per-realization sources separately; the ODE is nonlinear.
+    """
     ode=dict(defaults or {row[0]:row[1] for row in records.load_document(ROOT/'parameters.yaml')['morris']['QPDE_params']})
     ode.update(prepared.get('ode',{})); fixed=prepared['fixed']
     if not blocks: raise ValueError('density evolution needs complete simulation blocks')
@@ -768,7 +787,10 @@ def export_presentation(figures, output, title="Material-property study"):
 def summarize(blocks, design=None, *, objective='device_junction_qps_per_eV', diagnostics=True,
               uncertainty=True, bootstrap_draws=1000, bootstrap_seed=7,
               tail_bootstrap_draws=500, tail_bootstrap_seed=11, robustness=1., alpha=1., beta=1.):
-    """One selected response and its error from Q[site, replica, electrode]."""
+    """J=sum_h W_h*mean_{i in h,r}(b[i,r]); report J and hierarchical SE(J).
+
+    Historical unweighted QP counts retain their separately named responses.
+    """
     data=prepare_counts(blocks,design); design=data['design']; totals=data['totals'].T
     events=design['events_per_task']; historical=objective in ('total_qps','total_qps_per_primary','total_QPs_per_primary',
         'junction_qps_per_primary','robust_mean_plus_se','max_electrode_qps_per_primary','weighted_sum')

@@ -1,4 +1,7 @@
-"""Search in normalized parameter coordinates, with measured observation errors."""
+"""Search physical properties x through normalized u in [0,1]^d.
+
+J: selected measured response; y=log(max(J,J_floor)) by default; s_y its error.
+"""
 
 import copy
 import json
@@ -14,7 +17,7 @@ from physics import from_unit, to_unit, validate_values
 
 
 class GaussianProcess:
-    """Matern-5/2 Gaussian process; noise_var is the measured variance."""
+    """Matern-5/2 GP for y(u); noise_var=s_y^2 is measured response variance."""
 
     def __init__(self, jitter=1e-08, sphere_columns=None):
         self.jitter = jitter
@@ -63,6 +66,7 @@ class GaussianProcess:
         return (math.exp(log_sf2), np.exp(log_ell), math.exp(log_sn2))
 
     def _build(self, theta):
+        # K_ab=k(u_a,u_b)+delta_ab*(s_y[a]^2+s_n^2+jitter), standardized y.
         (sf2, ell, sn2) = self._unpack(theta)
         (m, r) = self._matern(self.X, self.X, ell)
         K = sf2 * m
@@ -102,6 +106,7 @@ class GaussianProcess:
         y = np.asarray(y, dtype=float)
         self.y_mean = float(y.mean())
         self.y_std = float(y.std()) or 1.0
+        # Fit standardized y; measured variances must use the same squared scale.
         self.y = (y - self.y_mean) / self.y_std
         d = self.X.shape[1]
         if noise_var is None:
@@ -139,6 +144,10 @@ class GaussianProcess:
         return self
 
     def predict(self, Xs, return_std=True):
+        """Condition standardized y: mu=k_* K^-1 y, v=k_**-k_* K^-1 k_*^T.
+
+        Return mean and latent standard deviation on the original y scale.
+        """
         (sf2, ell, sn2) = self._unpack(self.theta)
         Xs = np.atleast_2d(np.asarray(Xs, dtype=float))
         (m, _) = self._matern(Xs, self.X, ell)
@@ -188,7 +197,7 @@ class GaussianProcess:
 
 
 class CMAES:
-    """CMA-ES mean, covariance, evolution paths, and restart parameters."""
+    """Gaussian steps u_raw=m+sigma*L*z, z~N(0,I), L*L^T=Cov."""
 
     def __init__(self, dimension, options=None):
         options = options or {}
@@ -242,6 +251,7 @@ class CMAES:
         w = self.w[:mu] / self.w[:mu].sum()
         old_mean = self.mean.copy()
         selected = U[order[:mu]]
+        # m_new=sum_a w_a*u_(a), where (a) ranks measured y from lowest to highest.
         self.mean = w @ selected
         y_w = (self.mean - old_mean) / self.sigma
         try:
@@ -270,7 +280,7 @@ class CMAES:
 
 
 def expected_improvement(mu, sigma, best, xi=0.0):
-    """Expected decrease below best for a normally distributed prediction."""
+    """EI=E[max(y_best-y-xi,0)]; y~N(mu,sigma^2), lower y is preferred."""
     sigma = np.maximum(sigma, 1e-12)
     improvement = best - mu - xi
     z = improvement / sigma
@@ -703,6 +713,7 @@ def update(method, state, point, value, se=None, rejected_reason=None, proposal_
         if transform not in ('log', 'identity'):
             raise ValueError('response transform must be log or identity')
         identity = transform == 'identity'
+        # Log response: y=log(max(J,J_floor)), s_y approximately SE(J)/max(J,J_floor).
         y = float(value) if identity else math.log(max(float(value), floor))
         sigma = (float(se) if identity else float(se) / max(float(value), floor)) if se is not None else None
         state['U'].append(to_unit(point, space))

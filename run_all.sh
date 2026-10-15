@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+# Each stage fixes x, sites i, realizations r and N_p primaries per (i,r).
 
 mode=status
 if (( $# > 0 )); then mode=$1; fi
@@ -197,6 +198,7 @@ def verify_saved_archive(report):
     return receipt
 
 def compact_study(output,report,receipt):
+    # Two verified archives retain N[i,r,e] before working outputs are cleared.
     report.update(raw_files_present=False,archive=receipt)
     records.write_json(output/'archive.json',receipt)
     records.write_json(output/'summary.json',report,overwrite=True)
@@ -439,6 +441,7 @@ elif mode=='record':
             report['spatial_check']={'passed':all(c['passed'] for c in checks.values()) and ranks['stable_within_uncertainty'],'candidates':checks,'rank':ranks,'covariance':'coarse and fine share sites; covariance is omitted in the combined-error screen'}
             records.write_json(output/'summary.json',report,overwrite=True)
     elif step['kind']=='event_count_convergence':
+        # Increase N_p at fixed sites; independent random banks test source counts.
         counts=next(group['events_per_task'] for group in cfg['studies'] if group['kind']=='event_count_convergence')
         ordinal=counts.index(step['events_per_task']); tests={}
         if ordinal:
@@ -452,6 +455,7 @@ elif mode=='record':
         report['event_count_check']={'passed':bool(tests) and all(test['passed'] for test in tests.values()),'candidates':tests,'covariance':'Independent transport banks at common sites; repeated interval is conditional on the chosen sites. Area uncertainty remains in the hierarchical standard error.'}
         records.write_json(output/'summary.json',report,overwrite=True)
     elif step['kind'] in ('explicit_tolerance','model_ranges'):
+        # D=b_move-b_center on matching (i,r), with the same W_h and w_e.
         definition=records.load_document(run/'definitions'/f"{step['id']}.yaml")
         centers=definition['provenance']['centers']; lookup={row['name']:row for row in report['results']}; pairs=[]
         for name in centers:

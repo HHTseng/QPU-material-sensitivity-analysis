@@ -1,4 +1,7 @@
-"""Prepare physical studies, execute Geant4 and record complete measurements."""
+"""Study -> transport tasks -> N[i,r,e] -> J(x) or density response.
+
+x: physical properties; i: source site; r: realization; e: junction region.
+"""
 
 import argparse
 import copy
@@ -29,6 +32,7 @@ RUNTIME_FIELDS = ('material_catalog', 'lattices', 'parameter_table')
 
 
 def evaluate_points(study, candidates, results, context):
+    """Evaluate each x using its complete (i,r) task set before estimating J(x)."""
     started=time.perf_counter(); prepared_jobs=[]; futures={}; rows=[]
     stop_event=threading.Event()
     design=analysis.analysis_design(study)
@@ -205,6 +209,7 @@ def run_study(study_or_path, output, *, execute=True):
             rows=progress['rows'] if progress is not None else results.read('state','search_rows',[])
             if len(state['Y'])+len(state['rejected'])!=len(rows):
                 raise RuntimeError('saved optimizer and measured search rows are inconsistent')
+            # The measured target counts complete J(x), not unmeasured attempts.
             while (len(state['Y']) if measured_target else len(rows))<target and len(rows)<max_attempts:
                 remaining=min(target-(len(state['Y']) if measured_target else len(rows)),max_attempts-len(rows))
                 count=min(remaining,int(opt.get('popsize',12))) if method=='cmaes' else min(remaining,int(options.get('parallel_candidates',1)))
@@ -549,6 +554,7 @@ def load_study(path, *, directory=None):
 
 
 def task_plan(study, prepared, build_identity):
+    """Declare every (i,r) task with N_p primaries, source position and random seeds."""
     sampling=study['sampling']; tasks=[]
     excluded=('ode','trajectory','design_index','transport_group','problem','parameter_specs','source_text','input_text','proposal_id')
     transport={key:value for key,value in prepared.items() if key not in excluded}
