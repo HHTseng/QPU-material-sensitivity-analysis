@@ -185,27 +185,25 @@ margin, a 2% relative standard-error criterion for independent layouts, and a
 Primary-count errors condition on the fixed source positions. All results and
 failed criteria are retained. **The 1,024-site limit does not establish spatial
 convergence.** The queue stops for review after these checks, regardless of
-whether they pass. Search, linked-material, tolerance and model-range studies
-remain deferred until the results are reviewed.
+whether they pass. These diagnostic checks are retained. The newly authorized optimization comparison
+is described below; linked-material, tolerance and model-range extensions remain
+separate future studies.
 
 [`run_all.sh`](run_all.sh) freezes the scientific code, physical inputs,
 executable, libraries, lattice maps and Geant4 datasets before transport.
 The new run directory and tmux session are `initial_checks_1024_20261014`:
 
 ```bash
-bash run_all.sh check
-bash run_all.sh prepare
-tmux -L material-scan new-session -d -s initial_checks_1024_20261014 \
-  'bash run_all.sh run > material_scan_data/initial_checks_1024_20261014/queue.log 2>&1'
-bash run_all.sh status
-bash run_all.sh stop
+MATERIAL_QUEUE_CONFIG=studies/full_scale/queue.yaml bash run_all.sh check \
+  material_scan_data/initial_checks_1024_20261014
+bash run_all.sh status material_scan_data/initial_checks_1024_20261014
 ```
 
 All **10 measured studies and one source-validation step are complete**:
 160,000 completed tasks and **13.832 billion primary phonons**. The queue ran
 from October 14 at 22:55:40 to October 15 at **10:38:38 EDT**, taking **11 h 43 min**.
-This falls within the earlier 11–19 h estimate. There are no remaining queued
-simulations or active transport workers; later studies await a decision.
+This falls within the earlier 11–19 h estimate. This diagnostic queue has no remaining transport. The new optimization queue
+uses a separate directory and immutable source snapshot.
 
 At most half the available CPU affinity is used: 96 of 192 logical CPUs on this
 machine, with 94 transport workers and one numerical thread per process.
@@ -385,3 +383,85 @@ source definitions and recorded inputs before using them for a new study.
    with unused random streams.
 3. Obtain measured SiC scattering and decay constants, bracket film lifetimes,
    and test independently justified interface models before fabrication advice.
+
+
+<!-- optimization-start -->
+## New optimization experiments
+
+The new queue was launched in tmux on **2026-10-15** as
+`optimization_20261015`. Its [fixed inputs](studies/optimization/queue.yaml)
+define 56 sequential stages at 20 mK, with the same 1.5384 meV upper-film gap
+limit and at most 1,024 source positions. Historical physical inputs are measured
+again; historical response values are never imported as new observations.
+
+Twelve calibration cases select a fixed background. Search varies only
+$C_{11},C_{12},C_{44}$, upper-film gap $\Delta_t$, and upper- and lower-film
+phonon lifetimes $\tau_t,\tau_b$. Four resolution cases and a small search pilot
+precede the main comparison. Three independent search seeds each share **24
+measured starting points** across all seven methods, followed by **32 new
+complete responses per method**:
+
+| Method | Selection of the next physical point |
+|---|---|
+| Random | Uniform draws in normalized coordinates |
+| Sobol | Scrambled Sobol points |
+| CMA-ES | Covariance adaptation from the best common starting point |
+| BO | GP expected improvement |
+| Improved BO | Adaptive local range; completion probability and predicted time |
+| LLM proposals + improved BO | Eight bounded model proposals added to the ordinary pool |
+| LLM checks + improved BO | Same proposals, with at most two source or numerical checks |
+
+All BO variants retain 4,096 ordinary candidates plus eight additional candidates.
+The model cannot supply a measured response. Three compact Ollama models are
+being compared on **24 fixed physics cases × three seeds**. The selected model
+must pass the fixed reliability threshold and an actual GPU tool-use check
+before AI-assisted transport begins. Tags, digests, prompts and replies are
+retained locally. Compact models use one GPU when they fit; the service can see
+only physical GPUs **0–5**, leaving **6 and 7** for other users.
+
+Search estimates $J_D(x)$ on a fixed 512-position set $D$. Its GP uses transport
+error $s_T=\operatorname{sd}_r(\widehat J_{D,r})/\sqrt R$, where $r$ labels the
+$R$ transport realizations; position uncertainty is reported separately.
+Independent candidate streams limit repeated fitting to the same transport noise.
+Selected leaders and common starting winners are then measured on **four unused
+1,024-position layouts**, with matched streams across candidates. Reported gains
+will be $1-J(x_{\mathrm{leader}})/J(x_{\mathrm{initial}})$ and the corresponding
+reduction against Sobol, with paired layout errors and variation across search
+seeds. Three search seeds give exploratory comparisons, not a definitive ranking.
+
+The full plan contains **106.24 billion nominal primary phonons** before
+confirmation deduplication and failed attempts. The initial completion estimate
+is **4–8 days**, approximately **October 19–23 EDT**, based on the earlier
+transport rate with 10–20% additional time. Parameter-dependent slow transport,
+failed attempts and model calls can extend this estimate; calibration and the
+pilot will supply the first measured update.
+The first 1,406 completed calibration tasks averaged about **0.277 million
+primaries/s**, which scales to roughly **5.1 days** with 15% additional time.
+This early sample does not cover all positions or slow parameter choices.
+The [launch checks and timing calculation](verification/optimization_launch_20261015.json)
+record the assumptions and unchanged physical scoring equations.
+
+The allocation is **86 transport workers on CPUs 8–95**, with **eight LLM CPUs
+0–7**: no more than half of the 192 logical CPUs. Combined process RSS is limited
+to **64 GiB**, individual transport processes to 2 GiB, with 16 GiB host-memory
+and 20 GiB disk reserves. Each search stops at its complete-response target,
+three times as many attempts, or 24 hours. Missing responses remain absent.
+Completed raw data are cleared only after two verified archives exist on
+separate filesystems. Frozen source and physical inputs are preserved likewise.
+
+The [additional analysis of saved layouts](verification/optimization_spatial_subsets.json)
+keeps candidate ordering in all four balanced 512/1,024 comparisons, but regional
+spatial equivalence still fails. This result supports an exploratory screening
+comparison; it does not establish spatial convergence or identify a new material.
+
+```bash
+bash run_all.sh status material_scan_data/optimization_20261015
+tmux -L material-scan attach -t optimization_20261015
+# A controlled stop retains measurements for restart.
+bash run_all.sh stop material_scan_data/optimization_20261015
+```
+
+Completed experiments will generate confirmed comparisons, a summary figure
+and the final README update. The queue then commits and pushes those public
+results. Private coding rules and restructuring notes stay local.
+<!-- optimization-end -->

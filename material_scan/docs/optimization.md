@@ -1,7 +1,8 @@
 # Measured optimization gains and next comparisons
 
 Checked 2026-10-15. The current 1,024-site queue is complete and stopped for
-review. No further simulations were started for this assessment.
+review. A separate optimization queue was authorized and launched later on
+2026-10-15; see the [current experiments](../../README.md#new-optimization-experiments).
 
 ## Response and comparison
 
@@ -134,10 +135,9 @@ under the rewritten workflow.
    let $p_c(x)$ be estimated completion probability, $t(x)>0$ predicted runtime,
    and $\mathrm{EI}(x)$ expected decrease in $J$. A useful next-point score is
    $a(x)=p_c(x)\mathrm{EI}(x)/t(x)$. Failed and timed-out trials inform completion
-   and time, never a zero response. The current GP already uses measured
-   observation errors and some local proposals; it lacks these runtime terms.
-   Add them to the existing selection calculation before adopting a larger
-   framework. [Cost-aware BO](https://botorch.org/docs/v0.17.0/tutorials/cost_aware_bayesian_optimization)
+   and time, never a zero response. The new GP implementation uses measured conditional transport
+   errors, adaptive local proposals and estimated completion/time terms.
+   Its improvement remains to be measured against the original selection rule. [Cost-aware BO](https://botorch.org/docs/v0.17.0/tutorials/cost_aware_bayesian_optimization)
    provides the improvement-per-time principle. If the global GP still struggles,
    test an expanding/shrinking local search region, as motivated by
    [TuRBO](https://proceedings.neurips.cc/paper/2019/hash/6c990b7aca7bc7058f5e98ea909e924b-Abstract.html).

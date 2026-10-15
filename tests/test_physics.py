@@ -605,6 +605,149 @@ class SearchTests(unittest.TestCase):
         for x, y in zip(gp.predict([[.2], [.8]]), restored['_gp'].predict([[.2], [.8]])):
             np.testing.assert_array_equal(x, y)
 
+    def test_common_measurements_initialize_cma_at_measured_best_with_transport_noise(self):
+        import records
+        import search
+        space = physics.search_space({'topfilm_vsound': {'mode': 'search'}}, kind='fixed',
+                    table=records.load_document(ROOT / 'parameters.yaml')['parameters'])
+        starts = [{'values': physics.from_unit([u], space), 'value': value,
+                   'standard_error': 2., 'transport_standard_error': .02, 'elapsed_s': 3.}
+                  for u, value in ((.2, 3.), (.4, 1.), (.8, 2.))]
+        state = search.import_observations(search.new_state('cmaes', options={'popsize': 4}), space, starts)
+        np.testing.assert_allclose(state['SIG'], [.02 / 3, .02, .01])
+        self.assertEqual(state['initial_count'], 3)
+        self.assertEqual(state['pending'], [])
+        search.propose('cmaes', state, space, 1)
+        np.testing.assert_allclose(state['_cma'].mean, [.4])
+        self.assertEqual(state['_cma'].generation, 0)
+        self.assertEqual(len(state['_cma'].points), 1)
+        with self.assertRaisesRegex(ValueError, 'duplicate'):
+            search.import_observations(search.new_state('bo_gp'), space, [starts[0], starts[0]])
+        bad = dict(starts[0], values={**starts[0]['values'], 'sub_c44': 1.})
+        with self.assertRaisesRegex(ValueError, 'fixed property'):
+            search.import_observations(search.new_state('bo_gp'), space, [bad])
+
+    def test_runtime_failure_is_absent_response_and_timeout_is_lower_bound(self):
+        import records
+        import search
+        space = physics.search_space({'topfilm_vsound': {'mode': 'search'}}, kind='fixed',
+                    table=records.load_document(ROOT / 'parameters.yaml')['parameters'])
+        state = search.new_state('random', seed=14)
+        points = search.propose('random', state, space, 2)
+        search.update('random', state, points[0], 2., .01, elapsed_s=10., status='complete')
+        search.update('random', state, points[1], None, rejected_reason='task timeout', elapsed_s=1000., status='incomplete')
+        self.assertEqual(state['values'], [2.])
+        self.assertEqual(state['attempts'][1]['status'], 'timeout')
+        U = np.array([physics.to_unit(p, space) for p in points])
+        weights = search._runtime_weights(state, U)
+        self.assertLess(weights[1], weights[0])
+        self.assertLessEqual(weights[1], 1. / 1000.)
+        restored = search.load_state(search.save_state(state))
+        np.testing.assert_array_equal(weights, search._runtime_weights(restored, U))
+
+    def test_hybrid_gp_retains_equal_ordinary_pool_and_eight_additional_points(self):
+        import records
+        import search
+        space = physics.search_space({'topfilm_vsound': {'mode': 'search'}}, kind='fixed',
+                    table=records.load_document(ROOT / 'parameters.yaml')['parameters'])
+        starts = [{'values': physics.from_unit([u], space), 'value': 1. + u * u,
+                   'transport_standard_error': .01} for u in (.2, .5, .8)]
+        options = {'n_candidates': 32, 'extra_candidates': 8, 'n_restarts': 1,
+                   'n_polish': 1, 'pool_seed': 59}
+        states = [search.import_observations(search.new_state(method, seed=9, options=options), space, starts)
+                  for method in ('bo_gp', 'llm_bo')]
+        supplied = [physics.from_unit([u], space) for u in (.03, .07, .13, .27, .37, .63, .73, .93)]
+        pools = []
+        original = search.GaussianProcess.predict
+        def observed_pool(gp, X, *args, **kwargs):
+            if len(np.atleast_2d(X)) == 40:
+                pools.append(np.asarray(X).copy())
+            return original(gp, X, *args, **kwargs)
+        with patch.object(search.GaussianProcess, 'predict', observed_pool), \
+             patch.object(search, 'ollama_proposals', return_value=supplied) as llm:
+            for state in states:
+                result = search.propose(state['method'], state, space)
+                self.assertEqual(len(result), 1)
+                self.assertEqual(state['last_pool']['total'], 40)
+                self.assertEqual(state['last_pool']['ordinary'], 32)
+            llm.assert_called_once()
+        self.assertEqual(states[1]['last_pool']['llm'], 8)
+        np.testing.assert_array_equal(pools[0][:32], pools[1][:32])
+        self.assertEqual(len(np.unique(pools[1], axis=0)), 40)
+        for point in supplied:
+            self.assertTrue(np.any(np.all(pools[1] == physics.to_unit(point, space), axis=1)))
+
+    def test_ollama_tools_are_bounded_and_final_schema_contains_no_measured_response(self):
+        import io
+        import records
+        import search
+        space = physics.search_space({'topfilm_vsound': {'mode': 'search'}}, kind='fixed',
+                    table=records.load_document(ROOT / 'parameters.yaml')['parameters'])
+        state = search.new_state('llm_bo', options={'model': 'test:1', 'model_digest': 'abc',
+                    'agent_tools': True, 'source_records': {'fixed-physics': {'unit': 'km/s'}}})
+        point = physics.from_unit([.4], space)
+        replies = [{'models': [{'name': 'test:1', 'digest': 'abc'}]},
+                   {'message': {'tool_calls': [{'function': {'name': 'read_source',
+                      'arguments': {'source_id': 'fixed-physics'}}}]}},
+                   {'message': {'tool_calls': [{'function': {'name': 'check_physics',
+                      'arguments': {'values': {'topfilm_vsound': point['topfilm_vsound']}}}}]}},
+                   {'message': {'thinking': 'discarded', 'content': json.dumps({'candidates': [{
+                       'values': {'topfilm_vsound': point['topfilm_vsound']},
+                       'rationale': 'Test the permitted film speed.', 'source_ids': ['fixed-physics']}]})}}]
+        payloads = []
+        def respond(request, **kwargs):
+            if not isinstance(request, str):
+                payloads.append(json.loads(request.data))
+            return io.BytesIO(json.dumps(replies.pop(0)).encode())
+        with patch('urllib.request.urlopen', side_effect=respond):
+            out = search.ollama_proposals(state, space, 1)
+        self.assertEqual(out, [point])
+        self.assertEqual(state['llm_stats']['tools'], 2)
+        self.assertEqual(state['llm_stats']['repairs'], 0)
+        self.assertEqual(state['values'], [])
+        self.assertIn('format', payloads[-1])
+        self.assertNotIn('tools', payloads[-1])
+        self.assertIn('weighted junction QPs/injected-eV', payloads[0]['messages'][1]['content'])
+        self.assertNotIn('thinking', state['llm_records'][-1])
+
+    def test_ollama_repairs_unknown_sources_once_without_accepting_fabricated_response(self):
+        import io
+        import records
+        import search
+        space = physics.search_space({'topfilm_vsound': {'mode': 'search'}}, kind='fixed',
+                    table=records.load_document(ROOT / 'parameters.yaml')['parameters'])
+        state = search.new_state('llm_bo', options={'model': 'test:1'})
+        item = {'values': {'topfilm_vsound': physics.from_unit([.4], space)['topfilm_vsound']},
+                'rationale': 'Numerical hypothesis.', 'source_ids': []}
+        replies = [{'models': [{'name': 'test:1'}]},
+                   {'message': {'content': json.dumps({'candidates': [{**item, 'J': 0.}]})}},
+                   {'message': {'content': json.dumps({'candidates': [{**item, 'source_ids': ['invented']}]})}}]
+        with patch('urllib.request.urlopen', side_effect=lambda *a, **k: io.BytesIO(json.dumps(replies.pop(0)).encode())):
+            out = search.ollama_proposals(state, space, 1)
+        self.assertEqual(out, [])
+        self.assertEqual(state['llm_stats']['repairs'], 1)
+        self.assertEqual(state['llm_stats']['calls'], 2)
+        self.assertEqual(state['values'], [])
+        self.assertTrue(state['llm_rejected'])
+
+    def test_local_width_adapts_only_after_measured_results_and_old_gp_cannot_resume(self):
+        import records
+        import search
+        space = physics.search_space({'topfilm_vsound': {'mode': 'search'}}, kind='fixed',
+                    table=records.load_document(ROOT / 'parameters.yaml')['parameters'])
+        start = [{'values': physics.from_unit([.4], space), 'value': 1., 'transport_standard_error': .01}]
+        state = search.import_observations(search.new_state('random', options={'local_adapt': True}), space, start)
+        for point in search.propose('random', state, space, 4):
+            search.update('random', state, point, 2., .01)
+        self.assertEqual(state['local_width'], .04)
+        for value, point in zip((.9, .8, .7), search.propose('random', state, space, 3)):
+            search.update('random', state, point, value, .01)
+        self.assertEqual(state['local_width'], .08)
+        old = search.new_state('bo_gp'); old.pop('algorithm_version')
+        with self.assertRaisesRegex(ValueError, 'different proposal pool'):
+            search.propose('bo_gp', old, space)
+
+
 
 class RoundTwoAnalysisTests(unittest.TestCase):
     def test_retained_spatial_inputs_preserve_recorded_geometry_and_prefix(self):

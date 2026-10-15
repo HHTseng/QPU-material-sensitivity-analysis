@@ -1,0 +1,177 @@
+schema: material-scan-optimization-1
+id: optimization-improvement-20261015
+description: Seven methods use common measured starts and independent screening transport;
+  four unused layouts confirm selected targets.
+defaults:
+  temperature_K: 0.02
+  gun_energy_eV: 0.01
+  junction_gap_eV: 0.000191
+  cutoff_eV: 3.82e-05
+  nb_gap_min_eV: 0.0015384
+  source_half_span_mm: 4.0
+  source_law: uniform_surface
+  objective: device_junction_qps_per_eV
+  seed_base: 20261015
+  bootstrap_draws: 2000
+  design_counts:
+  - 128
+  - 512
+  - 1024
+  allocations:
+    '128':
+    - 34
+    - 16
+    - 24
+    - 24
+    - 30
+    '512':
+    - 68
+    - 64
+    - 128
+    - 128
+    - 124
+    '1024':
+    - 136
+    - 128
+    - 256
+    - 256
+    - 248
+  position_seed: 20261015
+  independent_position_seeds: []
+  confirmation_position_seeds:
+  - 20261201
+  - 20261202
+  - 20261203
+  - 20261204
+  area_seed: 0
+  area_samples: 8000000
+  design_note: Retain the recorded 512-site layout; append to 1024. All layouts keep
+    the same recorded region area fractions.
+  source_note: The chip is 10x10 mm2; the declared injection region is 8x8 mm2.
+  max_sites: 1024
+  base_design_file: figures/spatial_sites.json
+execution:
+  independent_archive_root: /data/htseng/material-scan-archives
+  max_cpu_fraction: 0.5
+  max_memory_fraction: 0.5
+  workers: 86
+  total_mem_gb: 64.0
+  reserved_mem_gb: 16.0
+  minimum_free_disk_gb: 20.0
+  per_task_mem_gb: 2.0
+  blas_threads: 1
+  timeout_s: 21600
+  stall_timeout_s: 7200
+  failed_response: missing
+  timeout_note: A task exceeding six hours is right-censored; it never supplies a
+    zero response.
+  queue_order: sequential_studies
+  stop_after_initial_checks: false
+  llm_cpu_count: 8
+  max_gpus: 6
+search_bounds:
+  sub_c11:
+  - 20.0
+  - 450.0
+  sub_c12:
+  - 0.0
+  - 250.0
+  sub_c44:
+  - 5.0
+  - 250.0
+  topfilm_gap:
+  - 0.0015384
+  - 0.0035
+  topfilm_ph_lifetime:
+  - 0.001
+  - 1.0
+  bot_ph_lifetime:
+  - 0.5
+  - 50.0
+calibration_file: studies/optimization/calibration.json
+background_cases:
+- reference
+- compatible-anchor
+- c44-5gpa
+- historical-01
+- historical-02
+- historical-03
+resolution_cases:
+- reference
+- compatible-anchor
+- historical-01
+- historical-03
+confirmation_anchors:
+- reference
+- SiC-derived-rates
+- cma-303-historical
+search_seeds:
+- 101
+- 202
+- 303
+pilot_methods:
+- bo
+- cmaes
+- sobol
+- llm_tools
+methods:
+- random
+- sobol
+- cmaes
+- bo
+- bo_improved
+- llm_proposals
+- llm_tools
+search_max_elapsed_s: 86400
+optimizer_options:
+  popsize: 8
+  n_init: 12
+  n_restarts: 3
+  n_candidates: 4096
+  extra_candidates: 8
+  local_width: 0.08
+  runtime_width: 0.2
+  llm_every: 4
+  num_ctx: 16384
+  num_predict: 4096
+  num_thread: 8
+  temperature: 0.2
+method_settings:
+  random:
+    method: random
+  sobol:
+    method: sobol
+  cmaes:
+    method: cmaes
+  bo:
+    method: bo_gp
+  bo_improved:
+    method: bo_gp
+    options:
+      local_adapt: true
+      runtime_aware: true
+  llm_proposals:
+    method: llm_bo
+    options:
+      local_adapt: true
+      runtime_aware: true
+      agent_tools: false
+  llm_tools:
+    method: llm_bo
+    options:
+      local_adapt: true
+      runtime_aware: true
+      agent_tools: true
+studies: []
+scientific_limits:
+  meaningful_additional_reduction: 0.05
+  primary_contrasts:
+  - bo_improved vs bo
+  - llm_proposals vs bo_improved
+  - llm_tools vs llm_proposals
+  search_seeds_note: Three searches provide exploratory effects; four confirmation
+    layouts are not extra optimizer repetitions.
+  spatial_note: Fixed 512-site screening estimates J_D(x). Independent 1024-site confirmation
+    measures layout variation; the site cap does not establish convergence.
+  material_note: Independent properties are model targets; supported material identities
+    require separate validation.

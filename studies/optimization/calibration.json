@@ -1,0 +1,709 @@
+{
+  "candidates": [
+    {
+      "background_eligible": true,
+      "name": "reference",
+      "source": "current reference",
+      "values": {
+        "bot_density": 8960.0,
+        "bot_gap_thres": 0.00018,
+        "bot_ph_lifetime": 5.1,
+        "bot_vsound": 2.608,
+        "lattice_deg": 45.0,
+        "orientation_azimuth_turns": 0.0,
+        "orientation_polar_cos": 1.0,
+        "sub_c11": 165.6,
+        "sub_c12": 63.9,
+        "sub_c44": 79.5,
+        "sub_decay": 7.41e-56,
+        "sub_decayTT": 0.74,
+        "sub_lattice_a": 5.431,
+        "sub_scat": 2.43e-42,
+        "temperature": 0.02,
+        "topfilm_density": 8570.0,
+        "topfilm_gap": 0.0015384,
+        "topfilm_ph_lifetime": 0.00417,
+        "topfilm_vsound": 2.444
+      }
+    },
+    {
+      "background_eligible": true,
+      "name": "compatible-anchor",
+      "source": "recorded compatible anchor; responses not reused",
+      "values": {
+        "bot_density": 7184.383239418074,
+        "bot_gap_thres": 0.00012981738953147298,
+        "bot_ph_lifetime": 0.5,
+        "bot_vsound": 3.174554206770729,
+        "lattice_deg": 45.0,
+        "orientation_azimuth_turns": 0.0,
+        "orientation_polar_cos": 1.0,
+        "sub_c11": 250.92689126211246,
+        "sub_c12": 0.0,
+        "sub_c44": 5.0,
+        "sub_decay": 6.129072648276415e-56,
+        "sub_decayTT": 0.8174135229343212,
+        "sub_lattice_a": 5.431,
+        "sub_scat": 9.99999999999994e-45,
+        "temperature": 0.02,
+        "topfilm_density": 15010.886904864794,
+        "topfilm_gap": 0.001670366222399775,
+        "topfilm_ph_lifetime": 0.003337436812440808,
+        "topfilm_vsound": 6.0
+      }
+    },
+    {
+      "background_eligible": false,
+      "name": "cma-101-historical",
+      "source": {
+        "git_revision": "ae97d0b",
+        "path": "material_scan/experiments/material-search-results.json",
+        "sha256": "2d4ea2639c128a74b99759b1294ea917ecbbe48046df0e2ac738837aaed269c7"
+      },
+      "values": {
+        "bot_density": 10319.615045411578,
+        "bot_gap_thres": 0.0003064448209256207,
+        "bot_ph_lifetime": 1.1192527480791334,
+        "bot_vsound": 2.9370145920866455,
+        "lattice_deg": 45.0,
+        "orientation_azimuth_turns": 0.0,
+        "orientation_polar_cos": 1.0,
+        "sub_c11": 931.1052914102013,
+        "sub_c12": 95.35132694468996,
+        "sub_c44": 5.0,
+        "sub_decay": 4.605632131376339e-56,
+        "sub_decayTT": 0.8136614458473828,
+        "sub_lattice_a": 5.431,
+        "sub_scat": 1.950723487023598e-45,
+        "temperature": 0.02,
+        "topfilm_density": 8884.286887158985,
+        "topfilm_gap": 0.0018597363725457714,
+        "topfilm_ph_lifetime": 0.001,
+        "topfilm_vsound": 5.2221703024391655
+      }
+    },
+    {
+      "background_eligible": false,
+      "name": "cma-202-historical",
+      "source": {
+        "git_revision": "ae97d0b",
+        "path": "material_scan/experiments/material-search-results.json",
+        "sha256": "2d4ea2639c128a74b99759b1294ea917ecbbe48046df0e2ac738837aaed269c7"
+      },
+      "values": {
+        "bot_density": 9331.908182142206,
+        "bot_gap_thres": 5.8225583788231135e-05,
+        "bot_ph_lifetime": 0.5094603839518561,
+        "bot_vsound": 3.0292784509722166,
+        "lattice_deg": 45.0,
+        "orientation_azimuth_turns": 0.0,
+        "orientation_polar_cos": 1.0,
+        "sub_c11": 940.4547548226906,
+        "sub_c12": 189.30382297531156,
+        "sub_c44": 5.0,
+        "sub_decay": 2.696121544108237e-56,
+        "sub_decayTT": 0.7624690235657265,
+        "sub_lattice_a": 5.431,
+        "sub_scat": 1e-45,
+        "temperature": 0.02,
+        "topfilm_density": 9190.954684074393,
+        "topfilm_gap": 0.0017456483248089224,
+        "topfilm_ph_lifetime": 0.00800655611377835,
+        "topfilm_vsound": 4.44942359356825
+      }
+    },
+    {
+      "background_eligible": false,
+      "name": "cma-303-historical",
+      "source": {
+        "git_revision": "ae97d0b",
+        "path": "material_scan/experiments/material-search-results.json",
+        "sha256": "2d4ea2639c128a74b99759b1294ea917ecbbe48046df0e2ac738837aaed269c7"
+      },
+      "values": {
+        "bot_density": 15055.140855217653,
+        "bot_gap_thres": 7.964976021121693e-05,
+        "bot_ph_lifetime": 0.5,
+        "bot_vsound": 1.9964846480854213,
+        "lattice_deg": 45.0,
+        "orientation_azimuth_turns": 0.0,
+        "orientation_polar_cos": 1.0,
+        "sub_c11": 1090.2514329815901,
+        "sub_c12": 0.0,
+        "sub_c44": 5.0,
+        "sub_decay": 5.942592400201972e-57,
+        "sub_decayTT": 0.7678718947699178,
+        "sub_lattice_a": 5.431,
+        "sub_scat": 2.5586068260426833e-44,
+        "temperature": 0.02,
+        "topfilm_density": 6014.875068028133,
+        "topfilm_gap": 0.0020531975876926455,
+        "topfilm_ph_lifetime": 0.0012189051410871473,
+        "topfilm_vsound": 6.0
+      }
+    },
+    {
+      "background_eligible": true,
+      "name": "c44-1gpa",
+      "source": "controlled reference C44 change",
+      "values": {
+        "bot_density": 8960.0,
+        "bot_gap_thres": 0.00018,
+        "bot_ph_lifetime": 5.1,
+        "bot_vsound": 2.608,
+        "lattice_deg": 45.0,
+        "orientation_azimuth_turns": 0.0,
+        "orientation_polar_cos": 1.0,
+        "sub_c11": 165.6,
+        "sub_c12": 63.9,
+        "sub_c44": 1.0,
+        "sub_decay": 7.41e-56,
+        "sub_decayTT": 0.74,
+        "sub_lattice_a": 5.431,
+        "sub_scat": 2.43e-42,
+        "temperature": 0.02,
+        "topfilm_density": 8570.0,
+        "topfilm_gap": 0.0015384,
+        "topfilm_ph_lifetime": 0.00417,
+        "topfilm_vsound": 2.444
+      }
+    },
+    {
+      "background_eligible": true,
+      "name": "c44-2gpa",
+      "source": "controlled reference C44 change",
+      "values": {
+        "bot_density": 8960.0,
+        "bot_gap_thres": 0.00018,
+        "bot_ph_lifetime": 5.1,
+        "bot_vsound": 2.608,
+        "lattice_deg": 45.0,
+        "orientation_azimuth_turns": 0.0,
+        "orientation_polar_cos": 1.0,
+        "sub_c11": 165.6,
+        "sub_c12": 63.9,
+        "sub_c44": 2.0,
+        "sub_decay": 7.41e-56,
+        "sub_decayTT": 0.74,
+        "sub_lattice_a": 5.431,
+        "sub_scat": 2.43e-42,
+        "temperature": 0.02,
+        "topfilm_density": 8570.0,
+        "topfilm_gap": 0.0015384,
+        "topfilm_ph_lifetime": 0.00417,
+        "topfilm_vsound": 2.444
+      }
+    },
+    {
+      "background_eligible": true,
+      "name": "c44-5gpa",
+      "source": "controlled reference C44 change",
+      "values": {
+        "bot_density": 8960.0,
+        "bot_gap_thres": 0.00018,
+        "bot_ph_lifetime": 5.1,
+        "bot_vsound": 2.608,
+        "lattice_deg": 45.0,
+        "orientation_azimuth_turns": 0.0,
+        "orientation_polar_cos": 1.0,
+        "sub_c11": 165.6,
+        "sub_c12": 63.9,
+        "sub_c44": 5.0,
+        "sub_decay": 7.41e-56,
+        "sub_decayTT": 0.74,
+        "sub_lattice_a": 5.431,
+        "sub_scat": 2.43e-42,
+        "temperature": 0.02,
+        "topfilm_density": 8570.0,
+        "topfilm_gap": 0.0015384,
+        "topfilm_ph_lifetime": 0.00417,
+        "topfilm_vsound": 2.444
+      }
+    },
+    {
+      "background_eligible": false,
+      "name": "SiC-derived-rates",
+      "realization": {
+        "base_lattice_map": "Si",
+        "lattice_map": "PseudoCubic",
+        "material_density_kg_m3": 3226.6291385651007,
+        "mode": "pseudo_si_base",
+        "substrate_carrier": "G4_CALCIUM_FLUORIDE"
+      },
+      "source": "derived SiC assumptions",
+      "values": {
+        "bot_density": 8960.0,
+        "bot_gap_thres": 0.00018,
+        "bot_ph_lifetime": 5.1,
+        "bot_vsound": 2.608,
+        "lattice_deg": 45.0,
+        "orientation_azimuth_turns": 0.0,
+        "orientation_polar_cos": 1.0,
+        "sub_c11": 384.0,
+        "sub_c12": 127.0,
+        "sub_c44": 241.0,
+        "sub_decay": 3.93e-57,
+        "sub_decayTT": 0.789,
+        "sub_lattice_a": 5.431,
+        "sub_scat": 4.78e-43,
+        "temperature": 0.02,
+        "topfilm_density": 8570.0,
+        "topfilm_gap": 0.0015384,
+        "topfilm_ph_lifetime": 0.00417,
+        "topfilm_vsound": 2.444
+      }
+    },
+    {
+      "background_eligible": true,
+      "name": "historical-01",
+      "source": "historical trial stage4_property_v1_bench_bo_gp_s1_1856cbcd89e6; old objective value not reused",
+      "values": {
+        "bot_density": 16136.093072593212,
+        "bot_gap_thres": 0.0003364507040474564,
+        "bot_ph_lifetime": 0.7963908663271284,
+        "bot_vsound": 4.715012292377651,
+        "lattice_deg": 45.0,
+        "orientation_azimuth_turns": 0.0,
+        "orientation_polar_cos": 1.0,
+        "sub_c11": 347.59559746831656,
+        "sub_c12": 93.51083333604038,
+        "sub_c44": 184.88329929299653,
+        "sub_decay": 2.4882371726013487e-54,
+        "sub_decayTT": 0.9076973125338554,
+        "sub_lattice_a": 5.431,
+        "sub_scat": 1.1150005307271205e-44,
+        "temperature": 0.02,
+        "topfilm_density": 19556.828126311302,
+        "topfilm_gap": 0.002962840337706148,
+        "topfilm_ph_lifetime": 0.3662212801540678,
+        "topfilm_vsound": 2.3764079860411584
+      }
+    },
+    {
+      "background_eligible": true,
+      "name": "historical-02",
+      "source": "historical trial stage4_property_v1_bench_random_s1_4954bdca74de; old objective value not reused",
+      "values": {
+        "bot_density": 13825.985607495046,
+        "bot_gap_thres": 0.00022794163134675537,
+        "bot_ph_lifetime": 45.34138000581339,
+        "bot_vsound": 4.687556416651465,
+        "lattice_deg": 45.0,
+        "orientation_azimuth_turns": 0.0,
+        "orientation_polar_cos": 1.0,
+        "sub_c11": 192.01296902051538,
+        "sub_c12": 8.438888855617554,
+        "sub_c44": 147.14477460119568,
+        "sub_decay": 4.411462054869782e-55,
+        "sub_decayTT": 0.6324938202253056,
+        "sub_lattice_a": 5.431,
+        "sub_scat": 1.1139238295190333e-44,
+        "temperature": 0.02,
+        "topfilm_density": 7897.690174375652,
+        "topfilm_gap": 0.0027473186212509364,
+        "topfilm_ph_lifetime": 0.8068252085762267,
+        "topfilm_vsound": 5.18689315540575
+      }
+    },
+    {
+      "background_eligible": true,
+      "name": "historical-03",
+      "source": "historical trial stage4_property_v1_bench_sobol_s1_16fa7301420f; old objective value not reused",
+      "values": {
+        "bot_density": 2939.536765217781,
+        "bot_gap_thres": 0.0003723299663513899,
+        "bot_ph_lifetime": 13.225442251478386,
+        "bot_vsound": 5.119120117742568,
+        "lattice_deg": 45.0,
+        "orientation_azimuth_turns": 0.0,
+        "orientation_polar_cos": 1.0,
+        "sub_c11": 223.44194849953055,
+        "sub_c12": 48.9787848200649,
+        "sub_c44": 166.11491024959832,
+        "sub_decay": 3.2381201336245746e-55,
+        "sub_decayTT": 0.9805854461155832,
+        "sub_lattice_a": 5.431,
+        "sub_scat": 9.226474102439643e-42,
+        "temperature": 0.02,
+        "topfilm_density": 2549.0994323045015,
+        "topfilm_gap": 0.003315652816183095,
+        "topfilm_ph_lifetime": 0.0034666257162479217,
+        "topfilm_vsound": 1.5027090311050415
+      }
+    }
+  ],
+  "historical_best": {
+    "background_eligible": false,
+    "name": "cma-303-historical",
+    "source": {
+      "git_revision": "ae97d0b",
+      "path": "material_scan/experiments/material-search-results.json",
+      "sha256": "2d4ea2639c128a74b99759b1294ea917ecbbe48046df0e2ac738837aaed269c7"
+    },
+    "values": {
+      "bot_density": 15055.140855217653,
+      "bot_gap_thres": 7.964976021121693e-05,
+      "bot_ph_lifetime": 0.5,
+      "bot_vsound": 1.9964846480854213,
+      "lattice_deg": 45.0,
+      "orientation_azimuth_turns": 0.0,
+      "orientation_polar_cos": 1.0,
+      "sub_c11": 1090.2514329815901,
+      "sub_c12": 0.0,
+      "sub_c44": 5.0,
+      "sub_decay": 5.942592400201972e-57,
+      "sub_decayTT": 0.7678718947699178,
+      "sub_lattice_a": 5.431,
+      "sub_scat": 2.5586068260426833e-44,
+      "temperature": 0.02,
+      "topfilm_density": 6014.875068028133,
+      "topfilm_gap": 0.0020531975876926455,
+      "topfilm_ph_lifetime": 0.0012189051410871473,
+      "topfilm_vsound": 6.0
+    }
+  },
+  "old_values_not_reused": true,
+  "schema": "material-scan-calibration-1",
+  "source_records": {
+    "historical-inputs": {
+      "records": [
+        {
+          "name": "reference",
+          "source": "current reference",
+          "values": {
+            "bot_density": 8960.0,
+            "bot_gap_thres": 0.00018,
+            "bot_ph_lifetime": 5.1,
+            "bot_vsound": 2.608,
+            "lattice_deg": 45.0,
+            "orientation_azimuth_turns": 0.0,
+            "orientation_polar_cos": 1.0,
+            "sub_c11": 165.6,
+            "sub_c12": 63.9,
+            "sub_c44": 79.5,
+            "sub_decay": 7.41e-56,
+            "sub_decayTT": 0.74,
+            "sub_lattice_a": 5.431,
+            "sub_scat": 2.43e-42,
+            "temperature": 0.02,
+            "topfilm_density": 8570.0,
+            "topfilm_gap": 0.0015384,
+            "topfilm_ph_lifetime": 0.00417,
+            "topfilm_vsound": 2.444
+          }
+        },
+        {
+          "name": "compatible-anchor",
+          "source": "recorded compatible anchor; responses not reused",
+          "values": {
+            "bot_density": 7184.383239418074,
+            "bot_gap_thres": 0.00012981738953147298,
+            "bot_ph_lifetime": 0.5,
+            "bot_vsound": 3.174554206770729,
+            "lattice_deg": 45.0,
+            "orientation_azimuth_turns": 0.0,
+            "orientation_polar_cos": 1.0,
+            "sub_c11": 250.92689126211246,
+            "sub_c12": 0.0,
+            "sub_c44": 5.0,
+            "sub_decay": 6.129072648276415e-56,
+            "sub_decayTT": 0.8174135229343212,
+            "sub_lattice_a": 5.431,
+            "sub_scat": 9.99999999999994e-45,
+            "temperature": 0.02,
+            "topfilm_density": 15010.886904864794,
+            "topfilm_gap": 0.001670366222399775,
+            "topfilm_ph_lifetime": 0.003337436812440808,
+            "topfilm_vsound": 6.0
+          }
+        },
+        {
+          "name": "cma-101-historical",
+          "source": {
+            "git_revision": "ae97d0b",
+            "path": "material_scan/experiments/material-search-results.json",
+            "sha256": "2d4ea2639c128a74b99759b1294ea917ecbbe48046df0e2ac738837aaed269c7"
+          },
+          "values": {
+            "bot_density": 10319.615045411578,
+            "bot_gap_thres": 0.0003064448209256207,
+            "bot_ph_lifetime": 1.1192527480791334,
+            "bot_vsound": 2.9370145920866455,
+            "lattice_deg": 45.0,
+            "orientation_azimuth_turns": 0.0,
+            "orientation_polar_cos": 1.0,
+            "sub_c11": 931.1052914102013,
+            "sub_c12": 95.35132694468996,
+            "sub_c44": 5.0,
+            "sub_decay": 4.605632131376339e-56,
+            "sub_decayTT": 0.8136614458473828,
+            "sub_lattice_a": 5.431,
+            "sub_scat": 1.950723487023598e-45,
+            "temperature": 0.02,
+            "topfilm_density": 8884.286887158985,
+            "topfilm_gap": 0.0018597363725457714,
+            "topfilm_ph_lifetime": 0.001,
+            "topfilm_vsound": 5.2221703024391655
+          }
+        },
+        {
+          "name": "cma-202-historical",
+          "source": {
+            "git_revision": "ae97d0b",
+            "path": "material_scan/experiments/material-search-results.json",
+            "sha256": "2d4ea2639c128a74b99759b1294ea917ecbbe48046df0e2ac738837aaed269c7"
+          },
+          "values": {
+            "bot_density": 9331.908182142206,
+            "bot_gap_thres": 5.8225583788231135e-05,
+            "bot_ph_lifetime": 0.5094603839518561,
+            "bot_vsound": 3.0292784509722166,
+            "lattice_deg": 45.0,
+            "orientation_azimuth_turns": 0.0,
+            "orientation_polar_cos": 1.0,
+            "sub_c11": 940.4547548226906,
+            "sub_c12": 189.30382297531156,
+            "sub_c44": 5.0,
+            "sub_decay": 2.696121544108237e-56,
+            "sub_decayTT": 0.7624690235657265,
+            "sub_lattice_a": 5.431,
+            "sub_scat": 1e-45,
+            "temperature": 0.02,
+            "topfilm_density": 9190.954684074393,
+            "topfilm_gap": 0.0017456483248089224,
+            "topfilm_ph_lifetime": 0.00800655611377835,
+            "topfilm_vsound": 4.44942359356825
+          }
+        },
+        {
+          "name": "cma-303-historical",
+          "source": {
+            "git_revision": "ae97d0b",
+            "path": "material_scan/experiments/material-search-results.json",
+            "sha256": "2d4ea2639c128a74b99759b1294ea917ecbbe48046df0e2ac738837aaed269c7"
+          },
+          "values": {
+            "bot_density": 15055.140855217653,
+            "bot_gap_thres": 7.964976021121693e-05,
+            "bot_ph_lifetime": 0.5,
+            "bot_vsound": 1.9964846480854213,
+            "lattice_deg": 45.0,
+            "orientation_azimuth_turns": 0.0,
+            "orientation_polar_cos": 1.0,
+            "sub_c11": 1090.2514329815901,
+            "sub_c12": 0.0,
+            "sub_c44": 5.0,
+            "sub_decay": 5.942592400201972e-57,
+            "sub_decayTT": 0.7678718947699178,
+            "sub_lattice_a": 5.431,
+            "sub_scat": 2.5586068260426833e-44,
+            "temperature": 0.02,
+            "topfilm_density": 6014.875068028133,
+            "topfilm_gap": 0.0020531975876926455,
+            "topfilm_ph_lifetime": 0.0012189051410871473,
+            "topfilm_vsound": 6.0
+          }
+        },
+        {
+          "name": "c44-1gpa",
+          "source": "controlled reference C44 change",
+          "values": {
+            "bot_density": 8960.0,
+            "bot_gap_thres": 0.00018,
+            "bot_ph_lifetime": 5.1,
+            "bot_vsound": 2.608,
+            "lattice_deg": 45.0,
+            "orientation_azimuth_turns": 0.0,
+            "orientation_polar_cos": 1.0,
+            "sub_c11": 165.6,
+            "sub_c12": 63.9,
+            "sub_c44": 1.0,
+            "sub_decay": 7.41e-56,
+            "sub_decayTT": 0.74,
+            "sub_lattice_a": 5.431,
+            "sub_scat": 2.43e-42,
+            "temperature": 0.02,
+            "topfilm_density": 8570.0,
+            "topfilm_gap": 0.0015384,
+            "topfilm_ph_lifetime": 0.00417,
+            "topfilm_vsound": 2.444
+          }
+        },
+        {
+          "name": "c44-2gpa",
+          "source": "controlled reference C44 change",
+          "values": {
+            "bot_density": 8960.0,
+            "bot_gap_thres": 0.00018,
+            "bot_ph_lifetime": 5.1,
+            "bot_vsound": 2.608,
+            "lattice_deg": 45.0,
+            "orientation_azimuth_turns": 0.0,
+            "orientation_polar_cos": 1.0,
+            "sub_c11": 165.6,
+            "sub_c12": 63.9,
+            "sub_c44": 2.0,
+            "sub_decay": 7.41e-56,
+            "sub_decayTT": 0.74,
+            "sub_lattice_a": 5.431,
+            "sub_scat": 2.43e-42,
+            "temperature": 0.02,
+            "topfilm_density": 8570.0,
+            "topfilm_gap": 0.0015384,
+            "topfilm_ph_lifetime": 0.00417,
+            "topfilm_vsound": 2.444
+          }
+        },
+        {
+          "name": "c44-5gpa",
+          "source": "controlled reference C44 change",
+          "values": {
+            "bot_density": 8960.0,
+            "bot_gap_thres": 0.00018,
+            "bot_ph_lifetime": 5.1,
+            "bot_vsound": 2.608,
+            "lattice_deg": 45.0,
+            "orientation_azimuth_turns": 0.0,
+            "orientation_polar_cos": 1.0,
+            "sub_c11": 165.6,
+            "sub_c12": 63.9,
+            "sub_c44": 5.0,
+            "sub_decay": 7.41e-56,
+            "sub_decayTT": 0.74,
+            "sub_lattice_a": 5.431,
+            "sub_scat": 2.43e-42,
+            "temperature": 0.02,
+            "topfilm_density": 8570.0,
+            "topfilm_gap": 0.0015384,
+            "topfilm_ph_lifetime": 0.00417,
+            "topfilm_vsound": 2.444
+          }
+        },
+        {
+          "name": "historical-01",
+          "source": "historical trial stage4_property_v1_bench_bo_gp_s1_1856cbcd89e6; old objective value not reused",
+          "values": {
+            "bot_density": 16136.093072593212,
+            "bot_gap_thres": 0.0003364507040474564,
+            "bot_ph_lifetime": 0.7963908663271284,
+            "bot_vsound": 4.715012292377651,
+            "lattice_deg": 45.0,
+            "orientation_azimuth_turns": 0.0,
+            "orientation_polar_cos": 1.0,
+            "sub_c11": 347.59559746831656,
+            "sub_c12": 93.51083333604038,
+            "sub_c44": 184.88329929299653,
+            "sub_decay": 2.4882371726013487e-54,
+            "sub_decayTT": 0.9076973125338554,
+            "sub_lattice_a": 5.431,
+            "sub_scat": 1.1150005307271205e-44,
+            "temperature": 0.02,
+            "topfilm_density": 19556.828126311302,
+            "topfilm_gap": 0.002962840337706148,
+            "topfilm_ph_lifetime": 0.3662212801540678,
+            "topfilm_vsound": 2.3764079860411584
+          }
+        },
+        {
+          "name": "historical-02",
+          "source": "historical trial stage4_property_v1_bench_random_s1_4954bdca74de; old objective value not reused",
+          "values": {
+            "bot_density": 13825.985607495046,
+            "bot_gap_thres": 0.00022794163134675537,
+            "bot_ph_lifetime": 45.34138000581339,
+            "bot_vsound": 4.687556416651465,
+            "lattice_deg": 45.0,
+            "orientation_azimuth_turns": 0.0,
+            "orientation_polar_cos": 1.0,
+            "sub_c11": 192.01296902051538,
+            "sub_c12": 8.438888855617554,
+            "sub_c44": 147.14477460119568,
+            "sub_decay": 4.411462054869782e-55,
+            "sub_decayTT": 0.6324938202253056,
+            "sub_lattice_a": 5.431,
+            "sub_scat": 1.1139238295190333e-44,
+            "temperature": 0.02,
+            "topfilm_density": 7897.690174375652,
+            "topfilm_gap": 0.0027473186212509364,
+            "topfilm_ph_lifetime": 0.8068252085762267,
+            "topfilm_vsound": 5.18689315540575
+          }
+        },
+        {
+          "name": "historical-03",
+          "source": "historical trial stage4_property_v1_bench_sobol_s1_16fa7301420f; old objective value not reused",
+          "values": {
+            "bot_density": 2939.536765217781,
+            "bot_gap_thres": 0.0003723299663513899,
+            "bot_ph_lifetime": 13.225442251478386,
+            "bot_vsound": 5.119120117742568,
+            "lattice_deg": 45.0,
+            "orientation_azimuth_turns": 0.0,
+            "orientation_polar_cos": 1.0,
+            "sub_c11": 223.44194849953055,
+            "sub_c12": 48.9787848200649,
+            "sub_c44": 166.11491024959832,
+            "sub_decay": 3.2381201336245746e-55,
+            "sub_decayTT": 0.9805854461155832,
+            "sub_lattice_a": 5.431,
+            "sub_scat": 9.226474102439643e-42,
+            "temperature": 0.02,
+            "topfilm_density": 2549.0994323045015,
+            "topfilm_gap": 0.003315652816183095,
+            "topfilm_ph_lifetime": 0.0034666257162479217,
+            "topfilm_vsound": 1.5027090311050415
+          }
+        }
+      ],
+      "status": "Full property inputs only; historical responses are not reused as fresh observations. These are model targets, not identified materials."
+    },
+    "physics-definitions": {
+      "anharmonic_rate": "A*nu^5",
+      "cubic_stability": "C11>C12; C11+2*C12>0; C44>0",
+      "h_eV_s": 4.135667696e-15,
+      "isotope_rate": "B*nu^4, nu=E/h in Hz",
+      "pair_breaking": "E>=2*Delta"
+    },
+    "response-definition": {
+      "J": "sum_h W_h mean_i sum_e w_e mean_r Q_hire/(N_p*E_gun)",
+      "conditional_noise": "With fixed positions D, independent transport contributes noise to J_D(x); position uncertainty belongs to J(x).",
+      "missing": "failed, cancelled, timed-out, incomplete and malformed responses are absent",
+      "units": "QPs/injected-eV"
+    },
+    "search-domain": {
+      "C11_GPa": [
+        20,
+        450
+      ],
+      "C12_GPa": [
+        0,
+        250
+      ],
+      "C44_GPa": [
+        5,
+        250
+      ],
+      "bottom_lifetime_ns": [
+        0.5,
+        50
+      ],
+      "status": "Independent property model; no material identity implied.",
+      "top_gap_eV": [
+        0.0015384,
+        0.0035
+      ],
+      "top_lifetime_ns": [
+        0.001,
+        1
+      ]
+    },
+    "sic-derived-local": {
+      "C11_GPa": 384.0,
+      "C12_GPa": 127.0,
+      "C44_GPa": 241.0,
+      "density_kg_m3": 3226.6291385651007,
+      "source_id": "mp-8062",
+      "status": "DFT elasticity; phonon coefficients are derived assumptions, not measured; Si dynamical/DOS fields remain borrowed."
+    }
+  }
+}

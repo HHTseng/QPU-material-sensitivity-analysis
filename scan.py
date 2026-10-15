@@ -44,7 +44,10 @@ def evaluate_points(study, candidates, results, context):
     try:
         for candidate in candidates:
             prepared=physics.prepare_values(study,candidate)
-            prepared.update({key:candidate[key] for key in ('macro','config','ode','trajectory') if key in candidate})
+            prepared.update({key:candidate[key] for key in ('macro','config','ode','trajectory','stream_group') if key in candidate})
+            if study['sampling'].get('independent_candidate_streams',False):
+                prepared.setdefault('stream_group',records.content_hash({'study':study['id'],'name':candidate.get('name'),
+                                                                         'values':prepared['values']}))
             prepared['input_text']=input_text(prepared,context.get('installation',study['installation']))
             tasks=task_plan(study,prepared,context['build'])
             identifier=records.content_hash({'tasks':[row['task_id'] for row in tasks],'ode':prepared.get('ode',{})})
@@ -84,6 +87,11 @@ def evaluate_points(study, candidates, results, context):
         shared=set(); exhausted=False
         queue=((job,task) for group in itertools.zip_longest(*todo) for job,task in zip(prepared_jobs,group) if task is not None)
         while futures or not exhausted:
+            if context.get('deadline') is not None and time.monotonic()>=context['deadline']:
+                close_workers(pool,futures,context['active'],context['lock'],stop_event)
+                for job,task,token in futures.values():
+                    results.finish(task['task_id'],token,'interrupted',{'reason':'search elapsed limit reached'})
+                futures.clear(); break
             while not exhausted and len(futures)<2*study['execution']['workers']:
                 try: job,task=next(queue)
                 except StopIteration:
@@ -117,9 +125,12 @@ def evaluate_points(study, candidates, results, context):
             task_rows=results.tasks(job['candidate_id']) if shared.intersection(row['task_id'] for row in job['task_rows']) else job['task_rows']
             row={'name':job['candidate'].get('name',job['candidate_id'][:12]),'candidate_id':job['candidate_id'],
                  'parameters':job['prepared']['values'],'cached_tasks':job['cached'],'tasks':len(task_rows),
-                 'completed_tasks':sum(r['status']=='complete' for r in task_rows)}
+                 'completed_tasks':sum(r['status']=='complete' for r in task_rows),
+                 'elapsed_s':sum((r.get('result') or {}).get('elapsed_s',0.) for r in task_rows)/study['execution']['workers'],
+                 'evaluation_wall_s':time.perf_counter()-started}
             row.update({key:job['candidate'][key] for key in ('inputs','trajectory','design_index','tolerance') if key in job['candidate']})
             if not results.completed(job['candidate_id'],tasks=task_rows,verified=verified):
+                row['elapsed_s']=max(row['elapsed_s'],row['evaluation_wall_s']/max(1,len(prepared_jobs)))
                 row.update(status='incomplete',value=None,standard_error=None,
                            reasons=[{'task_id':r['task_id'],'state':r['status'],'reason':(r.get('result') or {}).get('reason')} for r in task_rows if r['status']!='complete'])
             else:
@@ -133,13 +144,16 @@ def evaluate_points(study, candidates, results, context):
                 selected=estimate if objective in ('device_junction_qps_per_eV','device_weighted_junction_qps_per_energy') else historical
                 row.update(status='complete',blocks=blocks,value=selected['value'],standard_error=selected['standard_error'],
                            units=selected['units'],estimate=estimate,historical=historical)
+                replicas=selected.get('by_replica',[])
+                # s_T=sd_r(J_D,r)/sqrt(R); source-position error stays separate.
+                row['transport_standard_error']=float(np.std(replicas,ddof=1)/np.sqrt(len(replicas))) if len(replicas)>1 else None
                 if needs_time:
                     defaults={entry[0]:entry[1] for entry in study['parameter_table']['morris']['QPDE_params']}
                     row.update(analysis.density_response(blocks,job['prepared'],defaults,context.setdefault('time_sums',{})))
                     if objective=='integrated_density':
-                        row.update(value=row['integrated_density'],standard_error=None,units='MHz us',
+                        row.update(value=row['integrated_density'],standard_error=None,transport_standard_error=None,units='MHz us',
                                    uncertainty_note='Replica responses are supplied; pooled nonlinear ODE uncertainty is not estimated.')
-                results.observation(job['candidate_id'],{k:v for k,v in row.items() if k not in ('name','cached_tasks','blocks')},
+                results.observation(job['candidate_id'],{k:v for k,v in row.items() if k not in ('name','cached_tasks','blocks','evaluation_wall_s')},
                                     analysis={'options':options,'design':design,'code':context['analysis_sha256']},
                                     kind='physical_zero' if row['value']==0 else 'measured',tasks=task_rows,verified=verified)
             rows.append(row)
@@ -202,45 +216,63 @@ def run_study(study_or_path, output, *, execute=True):
             max_attempts=options.get('max_attempts',2*target if measured_target else target)
             if not isinstance(measured_target,bool) or isinstance(max_attempts,bool) or not isinstance(max_attempts,int) or max_attempts<target:
                 raise ValueError('search measured_evaluations must be boolean and max_attempts an integer at least evaluations')
-            opt={**options.get('options',{}),'floor':.5/study['events_total']}
+            opt={**options.get('options',{}),'floor':.5/study['events_total'],'objective':study['analysis']['objective']}
             progress=results.read('state','search_progress')
             saved=progress['optimizer'] if progress is not None else results.read('state','optimizer')
             state=search.load_state(saved) if saved else search.new_state(method,seed=int(options.get('seed',41)),options=opt)
+            initial=options.get('initial_observations',[])
+            if initial and not saved:
+                search.import_observations(state,study['space'],initial)
+                opt=state['options']
+            initial_count=int(state.get('initial_count',0))
             rows=progress['rows'] if progress is not None else results.read('state','search_rows',[])
-            if len(state['Y'])+len(state['rejected'])!=len(rows):
+            if len(state['Y'])-initial_count+len(state['rejected'])!=len(rows):
                 raise RuntimeError('saved optimizer and measured search rows are inconsistent')
+            previous_elapsed=float((progress or {}).get('elapsed_s',0.))
+            search_started=time.perf_counter()
+            max_elapsed=float(options.get('max_elapsed_s',0.))
+            if max_elapsed<0 or not np.isfinite(max_elapsed): raise ValueError('search elapsed limit must be finite and nonnegative')
+            if max_elapsed: context['deadline']=time.monotonic()+max(0.,max_elapsed-previous_elapsed)
             # The measured target counts complete J(x), not unmeasured attempts.
-            while (len(state['Y']) if measured_target else len(rows))<target and len(rows)<max_attempts:
-                remaining=min(target-(len(state['Y']) if measured_target else len(rows)),max_attempts-len(rows))
+            while (len(state['Y'])-initial_count if measured_target else len(rows))<target and len(rows)<max_attempts:
+                elapsed=previous_elapsed+time.perf_counter()-search_started
+                if max_elapsed and elapsed>=max_elapsed: break
+                remaining=min(target-(len(state['Y'])-initial_count if measured_target else len(rows)),max_attempts-len(rows))
                 count=min(remaining,int(opt.get('popsize',12))) if method=='cmaes' else min(remaining,int(options.get('parallel_candidates',1)))
                 points=list(state.get('pending',[])) or search.propose(method,state,study['space'],count=count,options=opt)
                 proposal_ids=list(state['pending_ids'])
                 if not points: raise RuntimeError('optimizer has no proposal while no simulations are pending')
-                results.save_state('search_progress',{'optimizer':search.save_state(state),'rows':rows})
+                results.save_state('search_progress',{'optimizer':search.save_state(state),'rows':rows,'elapsed_s':elapsed})
                 batch=evaluate_points(study,[{'name':f'{method}_{len(rows)+i:04d}','values':point} for i,point in enumerate(points)],results,context)
                 for number,point,row in zip(proposal_ids,points,batch):
                     row['proposal_id']=number
                     row['proposal']=state['proposals'][str(number)]
-                    search.update(method,state,point,row['value'],se=row.get('standard_error'),proposal_id=number,
-                                  rejected_reason=None if row['status']=='complete' else str(row.get('reasons')))
+                    noise=row.get('transport_standard_error') if options.get('conditional_transport_noise',False) else row.get('standard_error')
+                    update_options={'se':noise,'proposal_id':number,
+                                    'rejected_reason':None if row['status']=='complete' else str(row.get('reasons'))}
+                    if options.get('record_runtime',False): update_options.update(elapsed_s=row.get('elapsed_s'),status=row['status'])
+                    search.update(method,state,point,row['value'],**update_options)
                     if not study['analysis'].get('store_search_blocks',True): row.pop('blocks',None)
                     rows.append(row)
                 for previous in rows:
                     key=str(previous['proposal_id'])
                     previous['proposal']['used_in_optimizer_update']=bool(state['used'].get(key,False))
-                results.save_state('search_progress',{'optimizer':search.save_state(state),'rows':rows})
+                results.save_state('search_progress',{'optimizer':search.save_state(state),'rows':rows,
+                                   'elapsed_s':previous_elapsed+time.perf_counter()-search_started})
         else:
             rows=evaluate_points(study,candidates,results,context)
         report=analysis.analyse_results(study,rows)
         if study['kind']!='search' and study['analysis'].get('store_blocks',True) is False:
             for row in report['results']: row.pop('blocks',None)
         if study['kind']=='search':
-            reached=(len(state['Y']) if measured_target else len(rows))>=target
-            report['search_counts']={'measured':len(state['Y']),'target':target,'attempts':len(rows),
+            reached=(len(state['Y'])-initial_count if measured_target else len(rows))>=target
+            report['initial_results']=[{**row,'parameters':row['values'],'status':'complete'} for row in initial]
+            report['search_counts']={'measured':len(state['Y'])-initial_count,'initial':initial_count,'target':target,'attempts':len(rows),
                                      'max_attempts':max_attempts,'measured_evaluations':measured_target,'target_reached':reached}
+            report['search_elapsed_s']=previous_elapsed+time.perf_counter()-search_started
             if measured_target:
                 report.update(complete=reached,status='complete' if reached else 'incomplete')
-                if not reached: report['incomplete_reason']='maximum attempts reached before the measured target'
+                if not reached: report['incomplete_reason']='elapsed limit or maximum attempts reached before the measured target'
         report.update(build=build,timing={**context['timing'],'total_s':time.perf_counter()-start})
         records.write_json(output/'summary.json',report,overwrite=True)
         results.save_state('summary',report)
@@ -485,6 +517,8 @@ def load_study(path, *, directory=None):
             install[name]=str(value if value.is_absolute() else source.parent/value)
         install['environment_scripts']=[str((source.parent/Path(p).expanduser()).resolve()) if not Path(p).expanduser().is_absolute() else str(Path(p).expanduser()) for p in install.get('environment_scripts',[])]
         sampling=dict(reference['sampling']); sampling.update(raw.get('sampling',{}))
+        if not isinstance(sampling.get('independent_candidate_streams',False),bool):
+            raise ValueError('independent_candidate_streams must be boolean')
         if 'seed' in sampling:
             sampling['seed_base']=sampling['seed']['base']; sampling['seed_bank']=sampling['seed']['bank_id']
         sampling['events_per_task']=raw.get('event_counts',{}).get('events_per_task',sampling['events_per_task'])
@@ -532,6 +566,27 @@ def load_study(path, *, directory=None):
         if raw.get('event_counts',{}).get('events_total',count)!=count:
             raise ValueError('declared total primary count differs from task grid')
         study['events_total']=count
+        initial_file=study.get('search',{}).get('initial_observations_file')
+        if initial_file:
+            initial_path=Path(initial_file).expanduser()
+            if not initial_path.is_absolute(): initial_path=source.parent/initial_path
+            shared=records.load_document(initial_path)
+            if any(shared.get(key)!=value for key,value in
+                   [('objective',study['analysis']['objective']),('design_hash',study['design']['design_hash']),
+                    ('events_per_task',sampling['events_per_task']),('replicas',sampling['replicas'])]):
+                raise ValueError('shared initial observations differ in objective or sampling')
+            observations=shared.get('observations',[])
+            if not observations: raise ValueError('shared starting measurements are empty')
+            for observation in observations:
+                point={**space['baseline'],**observation['values']}
+                if any(not np.isclose(point[name],value,rtol=1e-12,atol=1e-14)
+                       for name,value in space['baseline'].items() if name not in space['names']):
+                    raise ValueError('shared initial observation changes a fixed physical property')
+                if observation.get('objective',study['analysis']['objective'])!=study['analysis']['objective']:
+                    raise ValueError('shared initial observation objective differs')
+            study['search']=copy.deepcopy(study['search'])
+            study['search'].update(initial_observations=observations,initial_observations_file=str(initial_path.resolve()),
+                                   initial_observations_sha256=records.sha256_file(initial_path))
         study['resolved_hash']=records.content_hash(study)
 
     catalog=cached.get('material_catalog') or records.load_document(study.get('materials_file',ROOT/'legacy/material_catalog.yaml'))
@@ -550,20 +605,27 @@ def load_study(path, *, directory=None):
     if lattices is None or not names<=set(lattices):
         lattices=records.material_inputs(catalog,study['installation']['lattice_data'],names)['lattices']
     study.update(material_catalog=catalog,lattices=lattices,parameter_table=parameter_table)
+    for observation in study.get('search',{}).get('initial_observations',[]):
+        physics.prepare_values(study,{'values':observation['values']})
     return study
 
 
 def task_plan(study, prepared, build_identity):
     """Declare every (i,r) task with N_p primaries, source position and random seeds."""
     sampling=study['sampling']; tasks=[]
-    excluded=('ode','trajectory','design_index','transport_group','problem','parameter_specs','source_text','input_text','proposal_id')
+    excluded=('ode','trajectory','design_index','transport_group','stream_group','problem','parameter_specs','source_text','input_text','proposal_id')
     transport={key:value for key,value in prepared.items() if key not in excluded}
     encoded=records.canonical_json({'build':build_identity,'physics':transport})[:-1]+',"task":'
     prefix=hashlib.sha256(encoded.encode())
     for r in range(sampling['replicas']):
         for i,site in enumerate(study['design']['sites_mm']):
             seed=(sampling['seed_base']+sampling['seed_bank']*7919003+prepared.get('trajectory',0)*1000003+r*10007+i*101)%900000000+1
-            raw={'position':i,'replica':r,'site_mm':site,'seeds':[seed,seed+1],'events':sampling['events_per_task'],
+            seeds=[seed,seed+1]
+            if sampling.get('independent_candidate_streams',False):
+                group=prepared.get('stream_group',records.content_hash(prepared['values']))
+                digest=hashlib.sha256(records.canonical_json([sampling['seed_base'],sampling['seed_bank'],group,r,i]).encode()).digest()
+                seeds=[int.from_bytes(digest[j:j+8],'big')%900000000+1 for j in (0,8)]
+            raw={'position':i,'replica':r,'site_mm':site,'seeds':seeds,'events':sampling['events_per_task'],
                  'stratum':study['design']['stratum'][i]}
             digest=prefix.copy(); digest.update((records.canonical_json(raw)+'}').encode())
             raw['task_id']=digest.hexdigest(); tasks.append(raw)

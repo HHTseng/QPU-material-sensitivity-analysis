@@ -1,0 +1,318 @@
+{
+  "schema": "material-scan-model-checks-1",
+  "description": "Fixed local unit/physics/missingness checks; no confirmation observations or measured material discovery claims. Reliability checks do not establish proposal quality.",
+  "objective": "device_junction_qps_per_eV",
+  "provided_sources": {
+    "physics-definitions": {
+      "h_eV_s": 4.135667696e-15,
+      "cubic_stability": "C11>C12; C11+2*C12>0; C44>0",
+      "isotope_rate": "B*nu^4, nu=E/h in Hz",
+      "anharmonic_rate": "A*nu^5",
+      "pair_breaking": "E>=2*Delta"
+    },
+    "response-definition": {
+      "J": "sum_h W_h mean_i sum_e w_e mean_r Q_hire/(N_p*E_gun)",
+      "units": "QPs/injected-eV",
+      "missing": "failed, cancelled, timed-out, incomplete and malformed responses are absent",
+      "conditional_noise": "With fixed positions D, independent transport contributes noise to J_D(x); position uncertainty belongs to J(x)."
+    },
+    "sic-derived-local": {
+      "source_id": "mp-8062",
+      "C11_GPa": 384.0,
+      "C12_GPa": 127.0,
+      "C44_GPa": 241.0,
+      "density_kg_m3": 3226.6291385651007,
+      "status": "DFT elasticity; phonon coefficients are derived assumptions, not measured; Si dynamical/DOS fields remain borrowed."
+    },
+    "search-domain": {
+      "C11_GPa": [
+        20,
+        450
+      ],
+      "C12_GPa": [
+        0,
+        250
+      ],
+      "C44_GPa": [
+        5,
+        250
+      ],
+      "top_gap_eV": [
+        0.0015384,
+        0.0035
+      ],
+      "top_lifetime_ns": [
+        0.001,
+        1
+      ],
+      "bottom_lifetime_ns": [
+        0.5,
+        50
+      ],
+      "status": "Independent property model; no material identity implied."
+    }
+  },
+  "seeds": [
+    101,
+    202,
+    303
+  ],
+  "options": {
+    "temperature": 0.2,
+    "num_ctx": 16384,
+    "num_predict": 4096,
+    "num_thread": 8
+  },
+  "max_repairs": 1,
+  "selection": {
+    "minimum_valid_fraction": 0.95,
+    "rank": [
+      "valid_fraction_descending",
+      "warm_inference_seconds_ascending"
+    ],
+    "exclude_cpu_fallback": true,
+    "warm_inference_definition": "Sum over all initial and repair calls: max(0,total_duration-load_duration)/1e9. Report actual request wall time and cold loading separately."
+  },
+  "cases": [
+    {
+      "id": "gap-uev-ev",
+      "kind": "units",
+      "question": "Convert 191 microelectronvolts to eV. Return unit eV.",
+      "expected": {
+        "answer": 0.000191,
+        "unit": "eV"
+      },
+      "tolerance": 1e-12
+    },
+    {
+      "id": "gap-mev-ev",
+      "kind": "units",
+      "question": "Convert 1.5384 millielectronvolts to eV. Return unit eV.",
+      "expected": {
+        "answer": 0.0015384,
+        "unit": "eV"
+      },
+      "tolerance": 1e-12
+    },
+    {
+      "id": "velocity-kms-ms",
+      "kind": "units",
+      "question": "Convert 3.582 km/s to m/s. Return unit m/s.",
+      "expected": {
+        "answer": 3582.0,
+        "unit": "m/s"
+      },
+      "tolerance": 1e-06
+    },
+    {
+      "id": "density-gcm-kgm",
+      "kind": "units",
+      "question": "Convert 3.18 g/cm^3 to kg/m^3. Return unit kg/m^3.",
+      "expected": {
+        "answer": 3180.0,
+        "unit": "kg/m^3"
+      },
+      "tolerance": 1e-06
+    },
+    {
+      "id": "temperature-mk-k",
+      "kind": "units",
+      "question": "Convert 20 mK to K. Return unit K.",
+      "expected": {
+        "answer": 0.02,
+        "unit": "K"
+      },
+      "tolerance": 1e-12
+    },
+    {
+      "id": "pair-break-threshold",
+      "kind": "gaps",
+      "question": "For junction gap Delta=191 microelectronvolts, compute 2*Delta in eV. Return unit eV.",
+      "expected": {
+        "answer": 0.000382,
+        "unit": "eV"
+      },
+      "tolerance": 1e-12
+    },
+    {
+      "id": "stable-silicon",
+      "kind": "elasticity",
+      "question": "Is cubic elasticity stable for C11=165.6,C12=63.9,C44=79.5 GPa? Return boolean, unit none.",
+      "expected": {
+        "answer": true,
+        "unit": "none"
+      },
+      "tolerance": 0.0
+    },
+    {
+      "id": "negative-shear",
+      "kind": "elasticity",
+      "question": "Is cubic elasticity stable for C11=165.6,C12=63.9,C44=-1 GPa? Return boolean, unit none.",
+      "expected": {
+        "answer": false,
+        "unit": "none"
+      },
+      "tolerance": 0.0
+    },
+    {
+      "id": "negative-tetragonal",
+      "kind": "elasticity",
+      "question": "Is cubic elasticity stable for C11=100,C12=120,C44=20 GPa? Return boolean, unit none.",
+      "expected": {
+        "answer": false,
+        "unit": "none"
+      },
+      "tolerance": 0.0
+    },
+    {
+      "id": "negative-bulk",
+      "kind": "elasticity",
+      "question": "Is cubic elasticity stable for C11=20,C12=-15,C44=10 GPa? Return boolean, unit none.",
+      "expected": {
+        "answer": false,
+        "unit": "none"
+      },
+      "tolerance": 0.0
+    },
+    {
+      "id": "frequency-energy",
+      "kind": "rates",
+      "question": "Using supplied h_eV_s, compute nu for E=0.010 eV. Return unit Hz.",
+      "expected": {
+        "answer": 2417989242625.068,
+        "unit": "Hz"
+      },
+      "tolerance": 3000000.0
+    },
+    {
+      "id": "isotope-rate",
+      "kind": "rates",
+      "question": "At nu=1e12 Hz with B=1e-43 s^3, compute isotope rate B*nu^4. Return unit s^-1.",
+      "expected": {
+        "answer": 100000.0,
+        "unit": "s^-1"
+      },
+      "tolerance": 1e-06
+    },
+    {
+      "id": "anharmonic-rate",
+      "kind": "rates",
+      "question": "At nu=1e12 Hz with A=3e-57 s^4, compute anharmonic rate A*nu^5. Return unit s^-1.",
+      "expected": {
+        "answer": 3000.0,
+        "unit": "s^-1"
+      },
+      "tolerance": 1e-06
+    },
+    {
+      "id": "failed-response",
+      "kind": "missing",
+      "question": "A task timed out without a complete valid hit file. Should its response be assigned zero? Return boolean, unit none.",
+      "expected": {
+        "answer": false,
+        "unit": "none"
+      },
+      "tolerance": 0.0
+    },
+    {
+      "id": "valid-empty-hits",
+      "kind": "missing",
+      "question": "A complete successful transport task produced a valid witnessed header-only hit file. Can its measured hit count equal zero? Return boolean, unit none.",
+      "expected": {
+        "answer": true,
+        "unit": "none"
+      },
+      "tolerance": 0.0
+    },
+    {
+      "id": "unknown-material-rate",
+      "kind": "missing",
+      "question": "Can the supplied sic-derived-local record be cited as a measured isotope coefficient for native SiC? Return boolean, unit none.",
+      "expected": {
+        "answer": false,
+        "unit": "none"
+      },
+      "tolerance": 0.0
+    },
+    {
+      "id": "attributed-elasticity",
+      "kind": "sources",
+      "question": "Which supplied record contains the SiC DFT elastic constants? Return its exact source key as answer, unit none. Do not cite an unsupplied source.",
+      "expected": {
+        "answer": "sic-derived-local",
+        "unit": "none"
+      },
+      "tolerance": 0.0
+    },
+    {
+      "id": "weighted-response",
+      "kind": "objective",
+      "question": "Two source regions have area fractions0.25 and0.75; their already-junction-weighted QPs/primary are0.7 and0.2. E_gun=0.010 eV. Compute J in QPs/injected-eV. Return unit QPs/injected-eV.",
+      "expected": {
+        "answer": 32.5,
+        "unit": "QPs/injected-eV"
+      },
+      "tolerance": 1e-09
+    },
+    {
+      "id": "model-output-not-measured",
+      "kind": "missing",
+      "question": "An LLM predicts J=8 QPs/injected-eV for an unevaluated vector. Is that a measured response usable as observed GP training data? Return boolean, unit none.",
+      "expected": {
+        "answer": false,
+        "unit": "none"
+      },
+      "tolerance": 0.0
+    },
+    {
+      "id": "relative-standard-error",
+      "kind": "uncertainty",
+      "question": "A measured response has mean J=10 and standard error s=0.2 in the same units. Compute s/J. Return unit dimensionless.",
+      "expected": {
+        "answer": 0.02,
+        "unit": "dimensionless"
+      },
+      "tolerance": 1e-12
+    },
+    {
+      "id": "fixed-position-noise",
+      "kind": "uncertainty",
+      "question": "For independent transport on fixed positions D, which error enters the diagonal GP observation variance of J_D(x): transport or position? Return exactly transport or position, unit none.",
+      "expected": {
+        "answer": "transport",
+        "unit": "none"
+      },
+      "tolerance": 0.0
+    },
+    {
+      "id": "surface-row-meaning",
+      "kind": "hits",
+      "question": "Can multiple surface-hit records belong to the same injected phonon? Return boolean, unit none.",
+      "expected": {
+        "answer": true,
+        "unit": "none"
+      },
+      "tolerance": 0.0
+    },
+    {
+      "id": "coupled-proposal",
+      "kind": "proposal",
+      "question": "Which candidate satisfies both supplied search-domain bounds and Born stability? A:(C11,C12,C44,Delta_t,tau_t,tau_b)=(165.6,63.9,79.5,0.002,0.1,5); B:(100,120,20,0.002,0.1,5); C:(165.6,63.9,1,0.002,0.1,5). Elastic units GPa, gap eV, lifetimes ns. Return exactly A, B or C, unit none.",
+      "expected": {
+        "answer": "A",
+        "unit": "none"
+      },
+      "tolerance": 0.0
+    },
+    {
+      "id": "bounded-tool-selection",
+      "kind": "tools",
+      "question": "A proposed vector has uncertain cubic stability. Available allowed tools are read_sources, summarize_training and check_physics. Which tool should be called before Geant4? Return the exact tool name, unit none.",
+      "expected": {
+        "answer": "check_physics",
+        "unit": "none"
+      },
+      "tolerance": 0.0
+    }
+  ]
+}

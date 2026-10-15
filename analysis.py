@@ -587,7 +587,8 @@ def analyse_results(study, rows):
             'sites':len(study['design']['sites_mm']),'replicas':study['sampling']['replicas'],
             'events_per_task':study['sampling']['events_per_task'],'design':design,'results':rows,'comparisons':comparisons,
             'geometry':geometry,'sites_mm':study['design']['sites_mm'],
-            'streams':{k:study['sampling'][k] for k in ('seed_base','seed_bank','position_seed')},
+            'streams':{**{k:study['sampling'][k] for k in ('seed_base','seed_bank','position_seed')},
+                       'independent_candidates':study['sampling'].get('independent_candidate_streams',False)},
             'complete':bool(rows) and len(complete)==len(rows),'limitations':['Calibrated interface model.','Property targets need measured-material validation.',
                                                             'QP yield is not a logical-error probability.']}
     if study['kind']=='sensitivity':
@@ -667,10 +668,14 @@ def read_analysis(path, output=None, settings=None):
         objective=options['objective']
         selected=row['estimate'] if objective in ('device_junction_qps_per_eV','device_weighted_junction_qps_per_energy') else row['historical']
         row.update(value=selected['value'],standard_error=selected['standard_error'],units=selected['units'])
+        replicas=selected.get('by_replica',[])
+        row['transport_standard_error']=float(np.std(replicas,ddof=1)/np.sqrt(len(replicas))) if len(replicas)>1 else None
         if objective=='integrated_density':
             row.update(density_response(blocks,declarations[row['candidate_id']],defaults,cache,from_hits=from_hits))
-            row.update(value=row['integrated_density'],standard_error=None,units='MHz us')
+            row.update(value=row['integrated_density'],standard_error=None,transport_standard_error=None,units='MHz us')
     report=analyse_results(study,data['results'])
+    for key in ('initial_results','search_elapsed_s'):
+        if key in data: report[key]=data[key]
     for row in compact_rows: row.pop('blocks',None)
     if 'search_counts' in data:
         report['search_counts']=data['search_counts']

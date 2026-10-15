@@ -616,6 +616,21 @@ if mode == 'teardown': sys.exit(139)
         self.assertEqual(len({row["task_id"] for row in tasks}), 4)
         self.assertEqual(len({tuple(row["seeds"]) for row in tasks}), 4)
 
+    def test_independent_candidate_seed_pairs_preserve_optional_paired_streams(self):
+        raw=copy.deepcopy(self.raw)
+        for independent in (False,True):
+            raw['sampling']['independent_candidate_streams']=independent
+            study=scan.load_study(raw)
+            first=physics.prepare_values(study,{'values':{}})
+            second=physics.prepare_values(study,{'values':{'sub_c44':40.}})
+            a=scan.task_plan(study,first,{'build':'fixed'})
+            b=scan.task_plan(study,second,{'build':'fixed'})
+            self.assertEqual(a,scan.task_plan(study,first,{'build':'fixed'}))
+            self.assertEqual([row['seeds'] for row in a]==[row['seeds'] for row in b],not independent)
+            if independent:
+                self.assertTrue(all(1<=seed<=900000000 for row in a for seed in row['seeds']))
+                self.assertTrue(any(row['seeds'][1]!=row['seeds'][0]+1 for row in a))
+
     def test_equal_physical_targets_keep_names_and_share_complete_tasks(self):
         raw=copy.deepcopy(self.raw)
         raw['candidates']=[{'name':'first','values':{}},{'name':'second','values':{}}]
@@ -1536,6 +1551,53 @@ class LongRunTests(unittest.TestCase):
     make_executable = WorkflowTests.make_executable
     search_input = SearchResumeTests.search_input
 
+    def test_shared_measured_starts_count_only_new_responses_and_resume(self):
+        from unittest.mock import patch
+        import search
+        raw=self.search_input(evaluations=2)
+        study=scan.load_study(raw)
+        values=physics.prepare_values(study,{'values':{}})['values']
+        initial={'objective':study['analysis']['objective'],'design_hash':study['design']['design_hash'],
+                 'events_per_task':study['sampling']['events_per_task'],'replicas':study['sampling']['replicas'],
+                 'observations':[{'values':values,'value':.01,'standard_error':.002,
+                                  'transport_standard_error':.0001,'elapsed_s':1.}]}
+        path=self.root/'common.json'; records.write_json(path,initial)
+        raw['search'].update(initial_observations_file=str(path),measured_evaluations=True,
+                             conditional_transport_noise=True,record_runtime=True)
+        output=self.root/'shared-start'; original=search.update
+        with patch('search.update',wraps=original) as update:
+            report=scan.run_study(raw,output)
+        self.assertEqual(report['search_counts']['initial'],1)
+        self.assertEqual(report['search_counts']['measured'],2)
+        self.assertEqual(len(self.calls.read_text().splitlines()),8)
+        measured=[call for call in update.call_args_list if call.kwargs.get('status')=='complete']
+        self.assertEqual(len(measured),3)
+        for call,row in zip(measured[1:],report['results']):
+            self.assertEqual(call.kwargs['se'],row['transport_standard_error'])
+            self.assertGreater(call.kwargs['elapsed_s'],0.)
+        resumed=scan.run_study(raw,output)
+        self.assertEqual(resumed['results'],report['results'])
+        self.assertEqual(analysis.read_analysis(output)['initial_results'],report['initial_results'])
+        self.assertEqual(len(self.calls.read_text().splitlines()),8)
+        for field,value in [('objective','different objective'),('replicas',3)]:
+            invalid=copy.deepcopy(initial); invalid[field]=value
+            records.write_json(path,invalid,overwrite=True)
+            with self.assertRaisesRegex(ValueError,'objective or sampling'): scan.load_study(raw)
+        invalid=copy.deepcopy(initial); invalid['observations'][0]['values']['temperature']=.01
+        records.write_json(path,invalid,overwrite=True)
+        with self.assertRaisesRegex(ValueError,'fixed physical property'): scan.load_study(raw)
+
+    def test_search_elapsed_limit_stops_without_recording_false_zeros(self):
+        self.make_executable('timeout')
+        raw=self.search_input(evaluations=2)
+        raw['search'].update(measured_evaluations=True,max_attempts=4,max_elapsed_s=.4,record_runtime=True)
+        started=time.monotonic(); report=scan.run_study(raw,self.root/'elapsed-limit')
+        self.assertLess(time.monotonic()-started,4.)
+        self.assertFalse(report['complete'])
+        self.assertEqual(report['search_counts']['measured'],0)
+        self.assertTrue(all(row['value'] is None for row in report['results']))
+        self.assertTrue(all(row['elapsed_s']>0 for row in report['results']))
+
     def test_term_and_hup_reap_children_and_resume_saved_proposals(self):
         import signal
         import search
@@ -1880,6 +1942,42 @@ class QueueTests(unittest.TestCase):
     tearDown = WorkflowTests.tearDown
     make_executable = WorkflowTests.make_executable
 
+    def test_optimization_configuration_keeps_equal_work_and_reserved_resources(self):
+        cfg=records.load_document(ROOT/'studies/optimization/queue.yaml')
+        self.assertEqual(len(cfg['search_bounds']),6)
+        self.assertEqual(len(cfg['methods']),7)
+        self.assertEqual(len(cfg['search_seeds']),3)
+        self.assertLessEqual(cfg['execution']['max_gpus'],6)
+        self.assertEqual(cfg['execution']['workers']+2+cfg['execution']['llm_cpu_count'],96)
+        self.assertLessEqual(max(cfg['defaults']['design_counts']),1024)
+        calibration=records.load_document(ROOT/cfg['calibration_file'])
+        self.assertEqual(len(calibration['candidates']),12)
+        self.assertTrue(calibration['old_values_not_reused'])
+        namespace=self.queue_python(scope="mode in ('check', 'prepare')",start='queue =',
+            stop="groups =",cfg=cfg,defaults=cfg['defaults'],optimization=True,source=ROOT,run=self.root)
+        queue=namespace['queue']
+        self.assertEqual(len(queue),56)
+        self.assertEqual(sum(step['kind']=='optimization_initial' for step in queue),4)
+        main=[step for step in queue if step['kind']=='optimization_search' and not step['id'].startswith('pilot-')]
+        self.assertEqual(len(main),21)
+        self.assertTrue(all(step['count']==32 for step in main))
+        self.assertEqual(sum(step['kind']=='optimization_drift' for step in queue),21)
+        planned=records.load_document(self.root/'planned-computation.json')
+        self.assertEqual(planned['primaries_upper_bound'],106240000000)
+        self.assertEqual(552+192,planned['new_measurements_screening'])
+
+    def test_queue_memory_guard_includes_only_the_identified_llm_service(self):
+        script=(ROOT/'run_all.sh').read_text()
+        fragment=script[script.index("    service=root/'ollama-service.json'"):]
+        fragment=fragment[:fragment.index('    while True:')]
+        import textwrap
+        created=int(Path(f'/proc/{os.getpid()}/stat').read_text().split(') ',1)[1].split()[19])
+        for start,expected in ((created,True),(str(created),True),(created+1,False)):
+            records.write_json(self.root/'ollama-service.json',{'pid':os.getpid(),'starttime':start},overwrite=True)
+            namespace={'root':self.root,'Path':Path,'json':json,'descendants':set()}
+            exec(textwrap.dedent(fragment),namespace)
+            self.assertEqual(os.getpid() in namespace['descendants'],expected)
+
     def queue_command(self, mode, run, *arguments):
         environment={**os.environ,'MATERIAL_REPOSITORY':str(ROOT),'MATERIAL_PYTHON':sys.executable}
         return subprocess.run(['bash',str(ROOT/'run_all.sh'),mode,str(run),*map(str,arguments)],
@@ -1910,7 +2008,7 @@ class QueueTests(unittest.TestCase):
         namespace={'records':records,'analysis':analysis,'scan':scan,'physics':physics,
                    'np':np,'copy':copy,'math':math,'itertools':itertools,'Path':Path,
                    'os':os,'time':time,'sys':sys,'json':json,'shutil':shutil,
-                   'max_sites':1024,'initial_checks':False,**values}
+                   'max_sites':1024,'initial_checks':False,'optimization':False,**values}
         exec(compile(ast.Module(body=code,type_ignores=[]),'isolated queue Python','exec'),namespace)
         return namespace
 
@@ -2005,7 +2103,7 @@ class QueueTests(unittest.TestCase):
         cfg=copy.deepcopy(records.load_document(ROOT/'studies/full_scale/queue.yaml'))
         convergence=next(group for group in cfg['studies'] if group['kind']=='convergence')
         convergence['sites']=[512,1024]
-        namespace=self.queue_python(scope="mode in ('check', 'prepare')",start="queue = [{'id': 'pilot'",
+        namespace=self.queue_python(scope="mode in ('check', 'prepare')",start="queue =",
                                     stop="records.write_json(run / 'queue.json'",cfg=cfg,defaults=cfg['defaults'],
                                     initial_checks=True,run=self.root)
         queue=namespace['queue']; kinds={step['kind'] for step in queue}

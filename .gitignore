@@ -3,6 +3,10 @@
 # from the code plus a SENSITIVITY_MORRIS_SEED, so they are not tracked.
 output/
 results/
+!/docs/results/
+/docs/results/*
+!/docs/results/optimization_summary.json
+!/docs/results/optimization_summary.md
 logs/
 
 # Python
