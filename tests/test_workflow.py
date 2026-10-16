@@ -1551,6 +1551,53 @@ class LongRunTests(unittest.TestCase):
     make_executable = WorkflowTests.make_executable
     search_input = SearchResumeTests.search_input
 
+    def test_ai_outage_pauses_before_transport_and_resumes_measured_history(self):
+        from unittest.mock import patch
+        import search
+        raw=self.search_input(method='llm_bo',evaluations=2)
+        raw['search'].update(measured_evaluations=True,parallel_candidates=1)
+        raw['search']['options'].update(n_init=1,n_candidates=16,extra_candidates=1,n_restarts=1,
+                                       model='local:1',model_digest='weights')
+        output=self.root/'ai-pause'
+        def unavailable(state,*args,**kwargs):
+            state['unavailable']='Ollama unavailable: test service outage'
+            raise RuntimeError(state['unavailable'])
+        with patch('search.ollama_proposals',side_effect=unavailable):
+            paused=scan.run_study(raw,output)
+        self.assertFalse(paused['complete'])
+        self.assertEqual(paused['status'],'paused')
+        self.assertFalse(paused['ai']['valid'])
+        self.assertEqual(paused['search_counts']['measured'],1)
+        self.assertEqual(len(self.calls.read_text().splitlines()),4)
+        self.assertEqual(analysis.read_analysis(output)['status'],'paused')
+        def available(state,space,*args,**kwargs):
+            state.pop('unavailable',None)
+            state['llm_stats']={'calls':1,'accepted':1,'tools':0}
+            state['llm_model']='local:1'; state['llm_digest']='weights'
+            state['llm_records']=[{'model':'local:1','digest':'weights','elapsed_s':1.}]
+            return [physics.from_unit([.75],space)]
+        with patch('search.ollama_proposals',side_effect=available):
+            resumed=scan.run_study(raw,output)
+        self.assertTrue(resumed['complete'])
+        self.assertTrue(resumed['ai']['valid'])
+        self.assertEqual(resumed['search_counts']['measured'],2)
+        self.assertEqual(resumed['results'][0],paused['results'][0])
+        self.assertEqual(len(self.calls.read_text().splitlines()),8)
+        self.assertEqual(analysis.read_analysis(output)['ai'],resumed['ai'])
+
+    def test_ai_zero_valid_proposals_cannot_be_reported_as_complete(self):
+        from unittest.mock import patch
+        raw=self.search_input(method='llm_bo',evaluations=2)
+        raw['search'].update(measured_evaluations=True,parallel_candidates=1)
+        raw['search']['options'].update(n_init=1,n_candidates=16,extra_candidates=1,n_restarts=1)
+        with patch('search.ollama_proposals',return_value=[]):
+            report=scan.run_study(raw,self.root/'ai-zero')
+        self.assertEqual(report['status'],'paused')
+        self.assertFalse(report['complete'])
+        self.assertFalse(report['ai']['valid'])
+        self.assertEqual(report['search_counts']['measured'],1)
+        self.assertEqual(len(self.calls.read_text().splitlines()),4)
+
     def test_shared_measured_starts_count_only_new_responses_and_resume(self):
         from unittest.mock import patch
         import search
@@ -1978,6 +2025,41 @@ class QueueTests(unittest.TestCase):
             exec(textwrap.dedent(fragment),namespace)
             self.assertEqual(os.getpid() in namespace['descendants'],expected)
 
+    def test_ai_evidence_requires_inference_proposals_and_tools_but_not_selection(self):
+        step={'kind':'optimization_search','method':'llm_tools','id':'llm_tools-101'}
+        records.write_json(self.root/'gpu_benchmark.json',{'chosen_model':'local:1','digest':'weights'})
+        (self.root/'definitions').mkdir()
+        records.write_json(self.root/'definitions/llm_tools-101.yaml',{'search':{'options':{'model':'local:1','model_digest':'weights'}}})
+        namespace=self.queue_python('require_ai_evidence',run=self.root)
+        gate=namespace['require_ai_evidence']
+        valid={'ai':{'required':True,'valid':True,'model':'local:1','digest':'weights',
+            'stats':{'calls':1,'accepted':1,'tools':1},'records':[{'model':'local:1','digest':'weights'},
+            {'model':'local:1','error':'earlier connection failure'}],
+            'selected_llm_points':0,'measured_llm_points':0}}
+        gate(step,valid)
+        for change in ('missing','calls','accepted','tools','identity'):
+            report=copy.deepcopy(valid)
+            if change=='missing': report.pop('ai')
+            elif change=='identity': report['ai']['records'][0]['digest']='different'
+            else: report['ai']['stats'][change]=0
+            with self.subTest(change=change),self.assertRaises(SystemExit) as stopped: gate(step,report)
+            self.assertEqual(stopped.exception.code,75)
+            self.assertEqual(records.load_document(self.root/'queue_status.json')['state'],'paused')
+
+    def test_nonzero_search_cannot_reuse_a_stale_exhaustion_summary(self):
+        from unittest.mock import patch
+        report={'complete':False,'search_counts':{'measured':2},
+                'incomplete_reason':'elapsed limit or maximum attempts reached before the measured target'}
+        path=self.root/'summary.json'; records.write_json(path,report)
+        stamp=path.stat().st_mtime_ns
+        script=(ROOT/'run_all.sh').read_text(); start=script.index("limited=report.get('incomplete_reason')")
+        fragment=script[start:script.index('\nPY',start)]
+        for launch,code in ((stamp,0),(stamp+1,1)):
+            with patch.object(sys,'argv',['-',str(self.root),'0',str(self.root),str(launch)]):
+                with self.assertRaises(SystemExit) as stopped:
+                    exec(fragment,{'report':report,'path':path,'step':{'kind':'optimization_search'},'sys':sys})
+            self.assertEqual(stopped.exception.code,code)
+
     def queue_command(self, mode, run, *arguments):
         environment={**os.environ,'MATERIAL_REPOSITORY':str(ROOT),'MATERIAL_PYTHON':sys.executable}
         return subprocess.run(['bash',str(ROOT/'run_all.sh'),mode,str(run),*map(str,arguments)],
@@ -1991,6 +2073,8 @@ class QueueTests(unittest.TestCase):
         tree=ast.parse(text)
         code=[node for node in tree.body if isinstance(node,ast.FunctionDef) and node.name in functions]
         self.assertEqual(len(code),len(functions))
+        if 'require_ai_evidence' not in functions:
+            code.extend(node for node in tree.body if isinstance(node,ast.FunctionDef) and node.name=='require_ai_evidence')
         if scope is not None:
             condition=scope if scope.startswith('mode ') else f'mode == {scope!r}'
             scopes=[node for node in ast.walk(tree) if isinstance(node,ast.If) and ast.unparse(node.test)==condition]

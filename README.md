@@ -388,8 +388,8 @@ source definitions and recorded inputs before using them for a new study.
 <!-- optimization-start -->
 ## New optimization experiments
 
-The new queue was launched in tmux on **2026-10-15** as
-`optimization_20261015`. Its [fixed inputs](studies/optimization/queue.yaml)
+The original queue began on **2026-10-15**. A corrected run on **2026-10-16**
+uses `optimization_20261016_fixed`, with the [fixed inputs](studies/optimization/queue.yaml)
 define 56 sequential stages at 20 mK, with the same 1.5384 meV upper-film gap
 limit and at most 1,024 source positions. Historical physical inputs are measured
 again; historical response values are never imported as new observations.
@@ -412,10 +412,13 @@ complete responses per method**:
 | LLM checks + improved BO | Same proposals, with at most two source or numerical checks |
 
 All BO variants retain 4,096 ordinary candidates plus eight additional candidates.
-The model cannot supply a measured response. Three compact Ollama models are
-being compared on **24 fixed physics cases × three seeds**. The selected model
-must pass the fixed reliability threshold and an actual GPU tool-use check
-before AI-assisted transport begins. Tags, digests, prompts and replies are
+The model cannot supply a measured response. Three compact Ollama models were
+compared on **24 fixed physics cases × three seeds**. Qwen3.8-27B passed
+70/72 cases (97.22%) and was selected under the original criteria. These scalar
+checks used 16,384 context tokens and at most 4,096 output tokens. Full proposal
+requests use 32,768 context tokens, at most 8,192 output tokens and a 420 s
+request timeout. Both proposal modes must pass an eight-vector test using the
+actual 24 shared measurements before AI-assisted transport begins. Tags, digests, prompts and replies are
 retained locally. Compact models use one GPU when they fit; the service can see
 only physical GPUs **0–5**, leaving **6 and 7** for other users.
 
@@ -431,15 +434,13 @@ seeds. Three search seeds give exploratory comparisons, not a definitive ranking
 
 The full plan contains **106.24 billion nominal primary phonons** before
 confirmation deduplication and failed attempts. The initial completion estimate
-is **4–8 days**, approximately **October 19–23 EDT**, based on the earlier
-transport rate with 10–20% additional time. Parameter-dependent slow transport,
-failed attempts and model calls can extend this estimate; calibration and the
-pilot will supply the first measured update.
-The first 1,406 completed calibration tasks averaged about **0.277 million
-primaries/s**, which scales to roughly **5.1 days** with 15% additional time.
-This early sample does not cover all positions or slow parameter choices.
-The [launch checks and timing calculation](verification/optimization_launch_20261015.json)
-record the assumptions and unchanged physical scoring equations.
+was **4–8 days** at launch. The October 16 estimate is **October 19–21 EDT**,
+including repeated AI stages and independent confirmation. About 21.76 billion
+primaries from verified CPU studies can be retained, leaving at most 84.48
+billion new primaries before confirmation deduplication. Parameter-dependent
+slow transport, failed attempts and model calls can extend this estimate.
+The [original launch checks](verification/optimization_launch_20261015.json)
+retain the initial timing assumptions.
 
 The allocation is **86 transport workers on CPUs 8–95**, with **eight LLM CPUs
 0–7**: no more than half of the 192 logical CPUs. Combined process RSS is limited
@@ -455,11 +456,30 @@ spatial equivalence still fails. This result supports an exploratory screening
 comparison; it does not establish spatial convergence or identify a new material.
 
 ```bash
-bash run_all.sh status material_scan_data/optimization_20261015
-tmux -L material-scan attach -t optimization_20261015
+bash run_all.sh status material_scan_data/optimization_20261016_fixed
+tmux -L material-scan attach -t optimization_20261016_fixed
 # A controlled stop retains measurements for restart.
-bash run_all.sh stop material_scan_data/optimization_20261015
+bash run_all.sh stop material_scan_data/optimization_20261016_fixed
 ```
+
+The original AI pilot and both seed-101 AI stages made no inference calls:
+the process excluded `localhost` from its proxy but not `127.0.0.1`, and the
+optimizer continued with ordinary BO proposals. Their transport observations
+remain saved, but they are excluded from AI comparisons. These three stages
+and two associated reference checks are repeated; verified CPU-only results,
+calibration and shared starting measurements retain their original records.
+
+Local model requests now bypass the proxy. The model is explicitly instructed
+to **minimize $J$**, use at most two permitted checks in the tool-assisted mode,
+and return only proposed inputs. Unavailable inference, zero valid proposals
+or unverified GPU residency pause the AI stage. Saved evidence distinguishes
+successful inference, valid proposed vectors, selected LLM-origin points and
+completed transport. Zero selected LLM points can be a valid negative result;
+a stage with no working inference cannot become an AI result.
+
+[Repair, reuse and rerun verification](verification/ai_rerun_20261016.json)
+records the source changes, model checks, excluded studies and completion
+estimate. Original snapshots and the failed checking attempts remain local.
 
 Completed experiments will generate confirmed comparisons, a summary figure
 and the final README update. The queue then commits and pushes those public

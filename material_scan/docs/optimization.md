@@ -198,3 +198,25 @@ time, rejected/clipped proposals and confirmed response reduction. Retain AI
 proposals only if they improve measured results or time to reach a predeclared
 response. Keep the physical checks and simulation response unchanged. This
 comparison should follow a working conventional BO run.
+
+
+## Corrected AI execution, October 16
+
+The original AI pilot and seed-101 AI searches completed transport using BO
+fallback alone: their model-list requests were routed through a proxy. They
+supply no measured AI contribution. Those trajectories are retained separately
+and repeated from the original shared starting observations. CPU-only studies
+and their source records remain unchanged.
+
+The corrected calculation bypasses proxies for local model endpoints and pauses
+when inference, physical proposals or GPU residency cannot be verified. Real
+eight-vector checks use the actual 24 starting measurements. Full proposal
+requests use a 32,768-token context and an 8,192-token output limit; the scalar
+model benchmark keeps its recorded settings. The model is explicitly asked to
+minimize $J$. Tool-assisted requests state and enforce at most two checks.
+
+Successful model activity does not guarantee lower $J$. Report accepted
+proposals, GP-selected LLM-origin points, completed responses and independently
+confirmed gains separately. The GP may choose zero model-origin points. Only
+confirmation can determine the added improvement relative to the shared start
+and conventional search.

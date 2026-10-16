@@ -691,7 +691,7 @@ class SearchTests(unittest.TestCase):
                       'arguments': {'source_id': 'fixed-physics'}}}]}},
                    {'message': {'tool_calls': [{'function': {'name': 'check_physics',
                       'arguments': {'values': {'topfilm_vsound': point['topfilm_vsound']}}}}]}},
-                   {'message': {'thinking': 'discarded', 'content': json.dumps({'candidates': [{
+                   {'done_reason': 'stop', 'eval_count': 234, 'message': {'thinking': 'discarded', 'content': json.dumps({'candidates': [{
                        'values': {'topfilm_vsound': point['topfilm_vsound']},
                        'rationale': 'Test the permitted film speed.', 'source_ids': ['fixed-physics']}]})}}]
         payloads = []
@@ -699,7 +699,8 @@ class SearchTests(unittest.TestCase):
             if not isinstance(request, str):
                 payloads.append(json.loads(request.data))
             return io.BytesIO(json.dumps(replies.pop(0)).encode())
-        with patch('urllib.request.urlopen', side_effect=respond):
+        with patch('urllib.request.build_opener') as build:
+            build.return_value.open.side_effect = respond
             out = search.ollama_proposals(state, space, 1)
         self.assertEqual(out, [point])
         self.assertEqual(state['llm_stats']['tools'], 2)
@@ -708,7 +709,22 @@ class SearchTests(unittest.TestCase):
         self.assertIn('format', payloads[-1])
         self.assertNotIn('tools', payloads[-1])
         self.assertIn('weighted junction QPs/injected-eV', payloads[0]['messages'][1]['content'])
+        prompt = json.loads(payloads[0]['messages'][1]['content'])
+        self.assertEqual(prompt['direction'], 'minimize')
+        self.assertEqual(prompt['tool_limit'], 2)
+        self.assertIn('minimize J', prompt['request'])
+        self.assertIn('Smaller J is better', prompt['request'])
+        self.assertIn('Minimize the measured response J', payloads[0]['messages'][0]['content'])
+        self.assertIn('at most 2 tool calls in total', payloads[0]['messages'][0]['content'])
+        self.assertEqual(state['llm_stats']['tool_requests'], 2)
+        self.assertEqual([row['requested_tool_count'] for row in state['llm_records']], [1, 1, 0])
+        self.assertNotIn('J', payloads[-1]['format']['properties']['candidates']['items']['properties'])
         self.assertNotIn('thinking', state['llm_records'][-1])
+        self.assertEqual(state['llm_records'][-1]['thinking_characters'], len('discarded'))
+        self.assertEqual(state['llm_records'][-1]['done_reason'], 'stop')
+        self.assertEqual(state['llm_records'][-1]['eval_count'], 234)
+        self.assertEqual(state['llm_records'][-1]['num_predict'], 4096)
+        self.assertEqual(state['llm_records'][-1]['num_ctx'], 16384)
 
     def test_ollama_repairs_unknown_sources_once_without_accepting_fabricated_response(self):
         import io
@@ -716,19 +732,167 @@ class SearchTests(unittest.TestCase):
         import search
         space = physics.search_space({'topfilm_vsound': {'mode': 'search'}}, kind='fixed',
                     table=records.load_document(ROOT / 'parameters.yaml')['parameters'])
-        state = search.new_state('llm_bo', options={'model': 'test:1'})
+        state = search.new_state('llm_bo', options={'model': 'test:1', 'host': 'http://ollama.example:11435'})
         item = {'values': {'topfilm_vsound': physics.from_unit([.4], space)['topfilm_vsound']},
                 'rationale': 'Numerical hypothesis.', 'source_ids': []}
         replies = [{'models': [{'name': 'test:1'}]},
                    {'message': {'content': json.dumps({'candidates': [{**item, 'J': 0.}]})}},
                    {'message': {'content': json.dumps({'candidates': [{**item, 'source_ids': ['invented']}]})}}]
-        with patch('urllib.request.urlopen', side_effect=lambda *a, **k: io.BytesIO(json.dumps(replies.pop(0)).encode())):
+        with patch('urllib.request.build_opener') as build:
+            build.return_value.open.side_effect = lambda *a, **k: io.BytesIO(json.dumps(replies.pop(0)).encode())
             out = search.ollama_proposals(state, space, 1)
+            build.assert_called_once_with()
         self.assertEqual(out, [])
         self.assertEqual(state['llm_stats']['repairs'], 1)
         self.assertEqual(state['llm_stats']['calls'], 2)
         self.assertEqual(state['values'], [])
         self.assertTrue(state['llm_rejected'])
+
+    def test_excess_tools_are_recorded_and_never_executed(self):
+        import io
+        import records
+        import search
+        space = physics.search_space({'topfilm_vsound': {'mode': 'search'}}, kind='fixed',
+                    table=records.load_document(ROOT / 'parameters.yaml')['parameters'])
+        state = search.new_state('llm_bo', options={'model': 'test:1', 'agent_tools': True})
+        excess = {'message': {'tool_calls': [{'function': {'name': 'summarize_measurements', 'arguments': {}}}] * 3}}
+        replies = [{'models': [{'name': 'test:1'}]}, excess, excess]
+        with patch('urllib.request.build_opener') as build:
+            build.return_value.open.side_effect = lambda *a, **k: io.BytesIO(json.dumps(replies.pop(0)).encode())
+            self.assertEqual(search.ollama_proposals(state, space, 1), [])
+        self.assertEqual(state['llm_stats']['calls'], 2)
+        self.assertEqual(state['llm_stats']['tool_requests'], 6)
+        self.assertEqual(state['llm_stats']['tools'], 0)
+        self.assertEqual([row['requested_tool_count'] for row in state['llm_records']], [3, 3])
+        self.assertFalse(any('tool_results' in row for row in state['llm_records']))
+        self.assertEqual(state['llm_stats']['repairs'], 1)
+
+    def test_loopback_ollama_bypasses_bad_proxy_and_outages_stop_before_transport(self):
+        import http.server
+        import os
+        import threading
+        import records
+        import search
+        space = physics.search_space({'topfilm_vsound': {'mode': 'search'}}, kind='fixed',
+                    table=records.load_document(ROOT / 'parameters.yaml')['parameters'])
+        item = {'values': {'topfilm_vsound': physics.from_unit([.4], space)['topfilm_vsound']},
+                'rationale': 'Numerical hypothesis.', 'source_ids': []}
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.server.routes.append(('GET', self.path))
+                self.send_response(503 if self.server.failure == 'tags' else 200)
+                self.end_headers()
+                model = {'name': 'test:1', 'digest': 'abc'}
+                if self.path == '/api/ps':
+                    model.update(size=1000, size_vram=0 if self.server.failure == 'cpu_fallback' else 1000)
+                    if self.server.failure == 'gpu_digest':
+                        model['digest'] = 'changed'
+                self.wfile.write(json.dumps({'models': [model]}).encode())
+
+            def do_POST(self):
+                self.server.routes.append(('POST', self.path))
+                self.server.payloads.append(json.loads(self.rfile.read(int(self.headers['Content-Length']))))
+                self.send_response(503 if self.server.failure == 'chat' else 200)
+                self.end_headers()
+                reply = {'error': 'model unavailable'} if self.server.failure == 'inference' else {
+                    'message': {'content': json.dumps({'candidates': [item]})}, 'done': True}
+                self.wfile.write(json.dumps(reply).encode())
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        server.failure, server.routes, server.payloads = None, [], []
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        bad_proxy = {'http_proxy': 'http://127.0.0.1:1', 'HTTP_PROXY': 'http://127.0.0.1:1',
+                     'https_proxy': 'http://127.0.0.1:1', 'HTTPS_PROXY': 'http://127.0.0.1:1',
+                     'no_proxy': '', 'NO_PROXY': ''}
+        try:
+            with patch.dict(os.environ, bad_proxy):
+                for hostname in ('127.0.0.1', 'localhost'):
+                    state = search.new_state('llm_bo', options={'model': 'test:1', 'model_digest': 'abc',
+                          'host': f'http://{hostname}:{server.server_port}', 'require_gpu': True})
+                    self.assertEqual(search.ollama_proposals(state, space, 1)[0]['topfilm_vsound'], item['values']['topfilm_vsound'])
+                    self.assertEqual(state['llm_route']['mode'], 'direct_loopback')
+                    self.assertEqual(state['llm_stats']['calls'], 1)
+                    self.assertEqual(json.loads(server.payloads[-1]['messages'][1]['content'])['tool_limit'], 0)
+                    self.assertEqual(state['llm_records'][-1]['gpu_residency']['size_vram'], 1000)
+                self.assertEqual(server.routes, [('GET', '/api/tags'), ('POST', '/api/chat'), ('GET', '/api/ps')] * 2)
+                for failure in ('tags', 'chat', 'inference', 'missing_model', 'digest', 'cpu_fallback', 'gpu_digest'):
+                    with self.subTest(failure=failure):
+                        server.failure = failure
+                        state = search.new_state('llm_bo', options={'model': 'test:1', 'model_digest': 'abc',
+                              'host': f'http://127.0.0.1:{server.server_port}', 'require_gpu': True})
+                        starts = [{'values': physics.from_unit([.2], space), 'value': 1., 'transport_standard_error': .01}]
+                        search.import_observations(state, space, starts)
+                        if failure == 'missing_model':
+                            state['options']['model'] = 'absent:1'
+                        if failure == 'digest':
+                            state['options']['model_digest'] = 'changed'
+                        with patch.object(search, '_gp_points', side_effect=AssertionError('unavailable model fell back to GP')):
+                            with self.assertRaisesRegex(RuntimeError, 'Ollama'):
+                                search.propose('llm_bo', state, space)
+                        self.assertEqual(state['llm_stats']['calls'], int(failure in ('cpu_fallback', 'gpu_digest')))
+                        self.assertEqual(state['llm_stats']['accepted'], 0)
+                        self.assertEqual(state['llm_stats']['request_failures'], int(failure in ('chat', 'inference', 'cpu_fallback', 'gpu_digest')))
+                        self.assertEqual(state['pending'], [])
+                        self.assertEqual(state['iteration'], 0)
+                        self.assertIn('unavailable', state)
+                        restored = search.load_state(search.save_state(state))
+                        self.assertEqual(restored['unavailable'], state['unavailable'])
+        finally:
+            server.shutdown(); server.server_close(); thread.join()
+
+    def test_agent_requires_a_permitted_check_before_accepting_proposals(self):
+        import io
+        import records
+        import search
+        space = physics.search_space({'topfilm_vsound': {'mode': 'search'}}, kind='fixed',
+                    table=records.load_document(ROOT / 'parameters.yaml')['parameters'])
+        item = {'values': {'topfilm_vsound': physics.from_unit([.4], space)['topfilm_vsound']},
+                'rationale': 'Numerical hypothesis.', 'source_ids': []}
+        final = {'message': {'content': json.dumps({'candidates': [item]})}}
+        for attempts in ([final, final], [{'message': {'tool_calls': [
+                {'function': {'name': 'invented', 'arguments': {}}},
+                {'function': {'name': 'read_source', 'arguments': {'source_id': 'absent'}}}]}}, final, final]):
+            state = search.new_state('llm_bo', options={'model': 'test:1', 'agent_tools': True})
+            replies = [{'models': [{'name': 'test:1'}]}] + attempts
+            with patch('urllib.request.build_opener') as build:
+                build.return_value.open.side_effect = lambda *a, **k: io.BytesIO(json.dumps(replies.pop(0)).encode())
+                self.assertEqual(search.ollama_proposals(state, space, 1), [])
+            self.assertEqual(state['llm_stats']['accepted'], 0)
+            self.assertEqual(state['llm_stats']['tools'], 0)
+            self.assertEqual(state['llm_stats']['calls'], len(attempts))
+            self.assertEqual(state['llm_stats']['repairs'], 1)
+            self.assertTrue(state['llm_rejected'])
+        state = search.import_observations(search.new_state('llm_bo'), space,
+                  [{'values': physics.from_unit([.2], space), 'value': 1., 'transport_standard_error': .01}])
+        with patch.object(search, 'ollama_proposals', return_value=[]), \
+             patch.object(search, '_gp_points', side_effect=AssertionError('no valid LLM inputs fell back to GP')):
+            with self.assertRaisesRegex(RuntimeError, 'no valid physical proposals'):
+                search.propose('llm_bo', state, space)
+        self.assertEqual(state['pending'], [])
+        self.assertEqual(state['iteration'], 0)
+
+    def test_old_ai_state_cannot_resume_as_corrected_ai(self):
+        import records
+        import search
+        space = physics.search_space({'topfilm_vsound': {'mode': 'search'}}, kind='fixed',
+                    table=records.load_document(ROOT / 'parameters.yaml')['parameters'])
+        for method in ('llm_bo', 'llm_agent'):
+            for version in (None, 2):
+                state = search.new_state(method)
+                if version is None:
+                    state.pop('llm_protocol_version')
+                else:
+                    state['llm_protocol_version'] = version
+                with self.assertRaisesRegex(ValueError, 'verified inference and minimization'):
+                    search.propose(method, state, space)
+        for method in ('bo_gp', 'cmaes'):
+            state = search.new_state(method)
+            state.pop('llm_protocol_version')
+            self.assertEqual(len(search.propose(method, state, space)), 1)
 
     def test_local_width_adapts_only_after_measured_results_and_old_gp_cannot_resume(self):
         import records

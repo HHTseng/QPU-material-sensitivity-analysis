@@ -1,0 +1,821 @@
+{
+  "active_resources": {
+    "free_disk_bytes": 177805180928,
+    "memory": {
+      "available_bytes": 457705676800,
+      "limiting_cgroup": "/sys/fs/cgroup/user.slice",
+      "raw_unreclaimed_headroom_bytes": 63087276032
+    },
+    "rss_bytes": 9993293824,
+    "updated": 1792164393.4955237
+  },
+  "active_state": {
+    "driver_pid": 3497364,
+    "driver_starttime": 277374835,
+    "index": 6,
+    "stage": "pilot-llm_tools",
+    "state": "running",
+    "updated": 1792163939.4240446
+  },
+  "causes": {
+    "context": {
+      "interpretation": "Both replies used the full context window before any final JSON.",
+      "old_context_tokens": 16384,
+      "requests": [
+        {
+          "final_content_characters": 0,
+          "generated_tokens": 2110,
+          "prompt_tokens": 14274
+        },
+        {
+          "final_content_characters": 0,
+          "generated_tokens": 2072,
+          "prompt_tokens": 14312
+        }
+      ]
+    },
+    "fallback": "The earlier AI method continued with ordinary BO after model unavailability.",
+    "prompt": "The earlier prompt defined J without explicitly saying minimize J, and did not state the enforced two-tool limit.",
+    "proxy": "The inherited no_proxy excluded localhost but not the configured 127.0.0.1 endpoint; tags failed with HTTP503 before inference."
+  },
+  "checked_EDT": "2026-10-16T11:21:59.559376-04:00",
+  "corrections": [
+    "Direct loopback opener for model listing, inference and residency; both proxy-exclusion variables retained.",
+    "AI outages, zero valid proposals and CPU fallback pause before new transport.",
+    "Explicit minimization and tool limit; protocol3 rejects earlier AI checkpoints.",
+    "Inference, valid proposed vectors, selected LLM-origin points and measured responses remain separate.",
+    "Fresh service/runtime/CPU/GPU/source checks; stale process summaries cannot advance.",
+    "Evidence required before archive reuse, recording, leader selection and publication."
+  ],
+  "estimated_completion": {
+    "additional_inference_hours_rough_range": [
+      3,
+      6
+    ],
+    "dates_EDT": [
+      "2026-10-19",
+      "2026-10-21"
+    ],
+    "qualification": "Before confirmation deduplication. Slow transport, failed attempts and service/resource pauses can extend the date range.",
+    "transport_days_with15percent": 3.3621206609291345,
+    "transport_rate_reference_primaries_per_s": 334445
+  },
+  "first_actual_AI_measurements": {
+    "checked_EDT": "2026-10-16T11:26:34.622376-04:00",
+    "complete_responses": 4,
+    "interpretation": "Successful execution evidence; these partial pilot measurements do not establish an optimization advantage.",
+    "protocol": 3,
+    "route": {
+      "host": "http://127.0.0.1:11435",
+      "mode": "direct_loopback"
+    },
+    "selected_LLM_origin_points": 0,
+    "stage": "pilot-llm_tools",
+    "stats": {
+      "accepted": 8,
+      "calls": 4,
+      "clipped": 0,
+      "fallbacks": 0,
+      "infeasible": 8,
+      "malformed": 0,
+      "proposed": 16,
+      "repairs": 1,
+      "request_attempts": 4,
+      "request_failures": 0,
+      "tool_requests": 1,
+      "tools": 1
+    },
+    "task_states": {
+      "complete": 2048
+    },
+    "unavailable": null
+  },
+  "limits": [
+    "The 1024-site cap does not establish spatial convergence.",
+    "Three search seeds provide exploratory algorithm comparisons.",
+    "No new material identity or confirmed AI reduction is claimed by these execution checks."
+  ],
+  "objective": "device_junction_qps_per_eV",
+  "previous_commit": "1cc74b469fce311fd00a97e3733772a7959c1d01",
+  "proposal_settings": {
+    "num_ctx": 32768,
+    "num_predict": 8192,
+    "num_thread": 8,
+    "temperature": 0.2,
+    "timeout": 420
+  },
+  "remaining_nominal_primaries": 84480000000,
+  "repeated_studies": [
+    {
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/drift-llm_proposals-101.tar.gz",
+      "original_archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/drift-llm_proposals-101.tar.gz",
+      "original_archive_sha256": "ab900360b1d67e932046171bb32abb2781701afe61a1cc9260b759e745e2079c",
+      "reason": "Repeat reference immediately after corrected AI search",
+      "study": "drift-llm_proposals-101"
+    },
+    {
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/drift-llm_tools-101.tar.gz",
+      "original_archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/drift-llm_tools-101.tar.gz",
+      "original_archive_sha256": "4c51d62aa2d6a2a66d821c4c81607053f6c9d6fd0f8357371000b23a4247db1c",
+      "reason": "Repeat reference immediately after corrected AI search",
+      "study": "drift-llm_tools-101"
+    },
+    {
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/llm_proposals-101.tar.gz",
+      "original_archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/llm_proposals-101.tar.gz",
+      "original_archive_sha256": "c3dafd406377ca17c68de225c2e796069252ed5d4d580f6764cc0afa7f3de37e",
+      "reason": "No inference calls; BO fallback alone",
+      "study": "llm_proposals-101"
+    },
+    {
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/llm_tools-101.tar.gz",
+      "original_archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/llm_tools-101.tar.gz",
+      "original_archive_sha256": "92025e3f05c58f46f35c85efe408f1b402c8181c8a0c9379a9fc2c3559e0e5dd",
+      "reason": "No inference calls; BO fallback alone",
+      "study": "llm_tools-101"
+    },
+    {
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/pilot-llm_tools.tar.gz",
+      "original_archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/pilot-llm_tools.tar.gz",
+      "original_archive_sha256": "4eb5f23a639287e2e1d60eb35d607ade7ee4c4de501dd790d81bba9feae20347",
+      "reason": "No inference calls; BO fallback alone",
+      "study": "pilot-llm_tools"
+    }
+  ],
+  "resources": {
+    "all_cpus": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63,
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84,
+      85,
+      86,
+      87,
+      88,
+      89,
+      90,
+      91,
+      92,
+      93,
+      94,
+      95
+    ],
+    "cpu_cap": 96,
+    "cpus": [
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63,
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84,
+      85,
+      86,
+      87,
+      88,
+      89,
+      90,
+      91,
+      92,
+      93,
+      94,
+      95
+    ],
+    "llm_cpus": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "minimum_free_disk_gb": 20.0,
+    "per_task_mem_gb": 2.0,
+    "system_mem_reserve_gb": 16.0,
+    "total_mem_gb": 64.0,
+    "workers": 86
+  },
+  "retained_primaries": 21760000000,
+  "retained_studies": [
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/calibration.tar.gz",
+      "archive_sha256": "7c3e1ade7906388ec79d7a5c5ad1dd5bb8350e5b9f300dc7d235b1217ab7a15f",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/calibration.tar.gz",
+      "primaries": 768000000,
+      "study": "calibration",
+      "summary_sha256": "6b0d267e4629783a9a556ebe7b4b382f8a0bf6fc5025f2f5f6e89ab6f0a1fec2"
+    },
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/calibration-resolution.tar.gz",
+      "archive_sha256": "5aacaed27178fa86c7b2827ef1b32f3582622e213654c3edf73e6b4616c7b13d",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/calibration-resolution.tar.gz",
+      "primaries": 512000000,
+      "study": "calibration-resolution",
+      "summary_sha256": "ced168d311aab934845eae4a15cf0bf52870026ce4f0982f3bdfaa4d143dd65c"
+    },
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/pilot-initial.tar.gz",
+      "archive_sha256": "2d2cc65281624e36b9fbc91f71894bf7332620babad4ea823545b0f57d8ec130",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/pilot-initial.tar.gz",
+      "primaries": 192000000,
+      "study": "pilot-initial",
+      "summary_sha256": "06554fa69561543f54e65fc9a313d986131737ddae047f3c66ee1a7ae7038ad7"
+    },
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/pilot-bo.tar.gz",
+      "archive_sha256": "ae67572a4d63d2ea6fa3672e9b0af32a28bc1ba43834c2f9c030b5748186ea4c",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/pilot-bo.tar.gz",
+      "primaries": 128000000,
+      "study": "pilot-bo",
+      "summary_sha256": "04ef0397b426ba9884af97f18a190f5351b03b95813325ac3b0d7fac23b2b38a"
+    },
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/pilot-cmaes.tar.gz",
+      "archive_sha256": "5cef9fc72d2094bbcd31cc13c2ead67d49e9b1edb7271780010ac84dbec00d2a",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/pilot-cmaes.tar.gz",
+      "primaries": 128000000,
+      "study": "pilot-cmaes",
+      "summary_sha256": "e5defd6379f7fe7a2167b2193cf46b807c120547bf65c2882eac4f76f5457c7a"
+    },
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/pilot-sobol.tar.gz",
+      "archive_sha256": "9e3c08f19d584ed772f84e40418e4e811ddf59ea3854e030e69050ba4907e139",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/pilot-sobol.tar.gz",
+      "primaries": 128000000,
+      "study": "pilot-sobol",
+      "summary_sha256": "9d512cb2d971bc85e41611e2c921b15aa5332518b03ad5a24a3cc1c2338bf40f"
+    },
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/initial-101.tar.gz",
+      "archive_sha256": "a7e01a165654271f1bb6abd8ca42fe487b83d732e7ae88b34191b875f3fb7e1c",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/initial-101.tar.gz",
+      "primaries": 1536000000,
+      "study": "initial-101",
+      "summary_sha256": "b40387c7debb8e96f673347ce3c84204ec1f25f352d2b67f911dd7a0b7037972"
+    },
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/random-101.tar.gz",
+      "archive_sha256": "6f69d949b48784cee7e43874114a485e6335b22520ae596829dc1c041f5064a5",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/random-101.tar.gz",
+      "primaries": 2048000000,
+      "study": "random-101",
+      "summary_sha256": "8014b45d017a8f9804a0df19a08f1ba91a6df384a85b916df2ab25ea438f71e3"
+    },
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/drift-random-101.tar.gz",
+      "archive_sha256": "e2780210c496fdd122d68ce2acb0766f700eef5388f999126dd9f84982cd5217",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/drift-random-101.tar.gz",
+      "primaries": 64000000,
+      "study": "drift-random-101",
+      "summary_sha256": "a0b1cf0ae98c819157daf923a0ffb2fb29cdd6b33bd6a6677dfdf45a0e9ae9cd"
+    },
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/sobol-101.tar.gz",
+      "archive_sha256": "f5b74714c347cb0fe6055b1478fe8ab3b39ea232c74089a9aaa4405228882e7c",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/sobol-101.tar.gz",
+      "primaries": 2048000000,
+      "study": "sobol-101",
+      "summary_sha256": "e07a19ac85fb87f2c757968678bf488e02d2b33fceb3b3a54ca79b61021821af"
+    },
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/drift-sobol-101.tar.gz",
+      "archive_sha256": "024340f7361c8166f3dd24c1109f3521dfe103e167d8a63d506b9a24b3e3d25a",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/drift-sobol-101.tar.gz",
+      "primaries": 64000000,
+      "study": "drift-sobol-101",
+      "summary_sha256": "92b5b6de0939187094d826a64af1897ec84e73b9b97dd83fe16fad8eb85eb190"
+    },
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/cmaes-101.tar.gz",
+      "archive_sha256": "857096295562616eeb88846e8e3506d7fe80d105cc3a3ed82f6694e83e95a599",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/cmaes-101.tar.gz",
+      "primaries": 2048000000,
+      "study": "cmaes-101",
+      "summary_sha256": "5ef12804dba5efa4a57f43594873c8be4334de5ead687c995903703ec11a628f"
+    },
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/drift-cmaes-101.tar.gz",
+      "archive_sha256": "7a4e14d8411727ccd65cbd22b46297b4e0b431ddfbd27821a0e753ef2d49f2e5",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/drift-cmaes-101.tar.gz",
+      "primaries": 64000000,
+      "study": "drift-cmaes-101",
+      "summary_sha256": "e8aace4d97b0d5668a00372268b7222520414cee7f05b26991ef75f70d12111f"
+    },
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/bo-101.tar.gz",
+      "archive_sha256": "2218235a01cc64f19f7cfa9b19ea078a1b55d94a3c0ffbcce2d5b689ff288aa8",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/bo-101.tar.gz",
+      "primaries": 2048000000,
+      "study": "bo-101",
+      "summary_sha256": "d439e9118f3be805437cf57c5deb2d13894b88d2f59ea269e088429f293ac6a3"
+    },
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/drift-bo-101.tar.gz",
+      "archive_sha256": "fc5e161adbae812976c9891d6b2af11706afe84f351e250a5936f8c3ac69f395",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/drift-bo-101.tar.gz",
+      "primaries": 64000000,
+      "study": "drift-bo-101",
+      "summary_sha256": "2a87837f4a89bedac786d0124e38bd2da64e6c8c05f04c5b7bf5f36c92a8d3ad"
+    },
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/bo_improved-101.tar.gz",
+      "archive_sha256": "6365b859199199dd44cc175cf00df985ba332aaddeca014e926bd4357b6d0b31",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/bo_improved-101.tar.gz",
+      "primaries": 2048000000,
+      "study": "bo_improved-101",
+      "summary_sha256": "47e3c9a36755157166e27d44f2a77ca4029b78e55ed8a2028bb255d0fa16287a"
+    },
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/drift-bo_improved-101.tar.gz",
+      "archive_sha256": "339ec9781050ff6f48f8a559336eba480eb106fadac1b07269be06e78089b0c9",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/drift-bo_improved-101.tar.gz",
+      "primaries": 64000000,
+      "study": "drift-bo_improved-101",
+      "summary_sha256": "2300bd5cad2730e6c6c98a11a20f439ff6ee8880fdb7605a181255c76724aff1"
+    },
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/initial-202.tar.gz",
+      "archive_sha256": "1b0aacbc786f02ba4e0059d59a1526070f0604de9c9285f7ef53d1d929f4e9dd",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/initial-202.tar.gz",
+      "primaries": 1536000000,
+      "study": "initial-202",
+      "summary_sha256": "4ffddaab13ebc92ab71dc984d1ba80ddffddea99218f68f4930d6eec987c3edb"
+    },
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/sobol-202.tar.gz",
+      "archive_sha256": "f17dd739d93c92028f5b4cfea402052f3336913c1829f18f04c259575789b535",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/sobol-202.tar.gz",
+      "primaries": 2048000000,
+      "study": "sobol-202",
+      "summary_sha256": "e1a473273c5d43b402534ade80c729bf8e48a3b86f9c094bf6333d519086480f"
+    },
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/drift-sobol-202.tar.gz",
+      "archive_sha256": "d4f8bd6aa91fd6744a5cd78f930c7eedb9cb41feebdc42078f537de7bc77d252",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/drift-sobol-202.tar.gz",
+      "primaries": 64000000,
+      "study": "drift-sobol-202",
+      "summary_sha256": "090b109a5f2e24448691fac401b78c259e1b4cc7406da98ffdb0313ed247e314"
+    },
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/cmaes-202.tar.gz",
+      "archive_sha256": "be3bae4620d23d28c667215ab4b6e383eaa1dd90e00b9ecf723d55505eae0549",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/cmaes-202.tar.gz",
+      "primaries": 2048000000,
+      "study": "cmaes-202",
+      "summary_sha256": "c21b6393639b7ac76c2c843003cc1790a896fa1ca8c042468a612b81347271fd"
+    },
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/drift-cmaes-202.tar.gz",
+      "archive_sha256": "7b841e0c7128135c0d0018c0b3cbe105a0ca4e4d7b169977e4c376d679541cc7",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/drift-cmaes-202.tar.gz",
+      "primaries": 64000000,
+      "study": "drift-cmaes-202",
+      "summary_sha256": "af1636689812e6f7c6b81fcfccb2b56280f2d8ba5eddce04055f3cbbc2986b2c"
+    },
+    {
+      "archive": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261015/archives/bo-202.tar.gz",
+      "archive_sha256": "af1841ce97a5a8e3d42d0e2e41e9677a5a3c03c728cf78b993a7d1884990154f",
+      "independent_copy": "/data/htseng/material-scan-archives/optimization_20261015/bo-202.tar.gz",
+      "primaries": 2048000000,
+      "study": "bo-202",
+      "summary_sha256": "f829ca967b11f2244bac2883e2130367e98827bee1a93de7a44cd0e79b5f845f"
+    }
+  ],
+  "run_directory": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261016_fixed",
+  "shared_start_sha256": {
+    "initial-101.json": "b34c638c573a3bc750cc06f5a4ed975245cf09b21e69e1e4c9e185b36369685b",
+    "initial-202.json": "c2e2a8944ffb44b3fbbc4343b5fcbf79b5a424b84b5b3f46a540694c017f3470",
+    "pilot-initial.json": "e1ac83bef294065b606c2b1105a951be90a0f5aeb3c5c2388036735c74f965c1"
+  },
+  "source_archive": {
+    "bytes": 2150935639,
+    "independent_copy": "/data/htseng/material-scan-archives/optimization_20261016_fixed/frozen-source.tar.gz",
+    "independent_copy_verified": true,
+    "manifest_sha256": "d0a340645609a5d7ca0bd82a61aad01f3950b9ac25bd3cb97abb99d4383dbf1b",
+    "members": 67431,
+    "path": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261016_fixed/archives/frozen-source.tar.gz",
+    "schema": "material-scan-archive-1",
+    "separate_filesystem": true,
+    "sha256": "6d6c048568f693961852efa58b37a916c80340a5b1ff25fb778d884a959b04fe",
+    "verified": true
+  },
+  "source_sha256": {
+    "analysis.py": "6320d6572f149260be022b9811d1f960015293ea4d5d73eaf27383001740ef8e",
+    "figures/plot.py": "33d85d4ce3bf9a348a4707487ef575be27e96a7190f85345b7682f8cb75c2dc6",
+    "parameters.yaml": "902b657893d5fc9fc99d1b7d23b4987e1aa9355cd4bad91f092fd69e8d020900",
+    "physics.py": "5132113c77d22c5dc6a3caff0b22909e3fde35503cc3a4e5198e1f37c9749edf",
+    "records.py": "cb65827bc75015be556ca7f54e5b08261a169f0f361ca51886ca16461441ef32",
+    "run_all.sh": "63acba70ece64972a42d1425247937e71847f1d6a06aadff96ca36b6153d1452",
+    "scan.py": "5ac19b2c32d20489408d6dcaac1fdbfeff45ff08cd5b49a61650fa7734cad674",
+    "search.py": "c48194379134521aff75a69721cc092e90c6b437f80a729362675affcf04266d"
+  },
+  "unchanged_calculations": {
+    "analysis.py:analysis_design": true,
+    "analysis.py:nested_spatial_difference": true,
+    "analysis.py:prepare_counts": true,
+    "analysis.py:score_output": true,
+    "analysis.py:scoring_identity": true,
+    "analysis.py:summarize": true,
+    "physics.py:build_design": true,
+    "physics.py:from_unit": true,
+    "physics.py:prepare_values": true,
+    "physics.py:qp_counts": true,
+    "physics.py:search_space": true,
+    "physics.py:to_unit": true,
+    "scan.py:input_text": true,
+    "scan.py:replace_commands": true,
+    "scan.py:run_task": true,
+    "scan.py:task_plan": true,
+    "search.py:_cma_points": true,
+    "search.py:_gp_points": true,
+    "search.py:_runtime_weights": true,
+    "search.py:import_observations": true,
+    "search.py:update": true
+  },
+  "validation": {
+    "actual_GPU_checks": {
+      "checks": [
+        {
+          "common_starts": 24,
+          "elapsed_s": 144.0608332180418,
+          "pool": {
+            "additional": 8,
+            "llm": 8,
+            "local_width": 0.08,
+            "ordinary": 4096,
+            "seed": 101000303,
+            "total": 4104
+          },
+          "reply_diagnostics": [
+            {
+              "done_reason": "stop",
+              "eval_count": 4389,
+              "gpu_residency": {
+                "context_length": 32768,
+                "digest": "25b843619e944cd0ae6069f94ff4e5e26a16e109ccbc0a66a0f05979ed70098e",
+                "size": 18708766391,
+                "size_vram": 18708766391
+              },
+              "num_ctx": 32768,
+              "num_predict": 8192,
+              "prompt_eval_count": 14309,
+              "requested_tool_count": 0,
+              "thinking_characters": 6875
+            }
+          ],
+          "requested_vectors": 8,
+          "stats": {
+            "accepted": 8,
+            "calls": 1,
+            "clipped": 0,
+            "fallbacks": 0,
+            "infeasible": 0,
+            "malformed": 0,
+            "proposed": 8,
+            "repairs": 0,
+            "request_attempts": 1,
+            "request_failures": 0,
+            "tool_requests": 0,
+            "tools": 0
+          },
+          "tools_enabled": false,
+          "valid_vectors": 8
+        },
+        {
+          "common_starts": 24,
+          "elapsed_s": 315.1066760919057,
+          "pool": {
+            "additional": 8,
+            "llm": 8,
+            "local_width": 0.08,
+            "ordinary": 4096,
+            "seed": 101000303,
+            "total": 4104
+          },
+          "reply_diagnostics": [
+            {
+              "done_reason": "stop",
+              "eval_count": 1473,
+              "gpu_residency": {
+                "context_length": 32768,
+                "digest": "25b843619e944cd0ae6069f94ff4e5e26a16e109ccbc0a66a0f05979ed70098e",
+                "size": 18708766391,
+                "size_vram": 18708766391
+              },
+              "num_ctx": 32768,
+              "num_predict": 8192,
+              "prompt_eval_count": 14830,
+              "requested_tool_count": 2,
+              "thinking_characters": 3100
+            },
+            {
+              "done_reason": "stop",
+              "eval_count": 4474,
+              "gpu_residency": {
+                "context_length": 32768,
+                "digest": "25b843619e944cd0ae6069f94ff4e5e26a16e109ccbc0a66a0f05979ed70098e",
+                "size": 18708766391,
+                "size_vram": 18708766391
+              },
+              "num_ctx": 32768,
+              "num_predict": 8192,
+              "prompt_eval_count": 21796,
+              "requested_tool_count": 0,
+              "thinking_characters": 7149
+            },
+            {
+              "done_reason": "stop",
+              "eval_count": 3400,
+              "gpu_residency": {
+                "context_length": 32768,
+                "digest": "25b843619e944cd0ae6069f94ff4e5e26a16e109ccbc0a66a0f05979ed70098e",
+                "size": 18708766391,
+                "size_vram": 18708766391
+              },
+              "num_ctx": 32768,
+              "num_predict": 8192,
+              "prompt_eval_count": 21881,
+              "requested_tool_count": 0,
+              "thinking_characters": 5485
+            }
+          ],
+          "requested_vectors": 8,
+          "stats": {
+            "accepted": 8,
+            "calls": 3,
+            "clipped": 0,
+            "fallbacks": 0,
+            "infeasible": 8,
+            "malformed": 0,
+            "proposed": 16,
+            "repairs": 1,
+            "request_attempts": 3,
+            "request_failures": 0,
+            "tool_requests": 2,
+            "tools": 2
+          },
+          "tools_enabled": true,
+          "valid_vectors": 8
+        }
+      ],
+      "devices": [
+        {
+          "memory_MiB": 19068.0,
+          "pid": 3472487,
+          "uuid": "GPU-9fc9c0e1-dcc7-d258-4056-2576f08c8b3c"
+        }
+      ],
+      "digest": "25b843619e944cd0ae6069f94ff4e5e26a16e109ccbc0a66a0f05979ed70098e",
+      "full_record_sha256": "77651f14f642cf8e8b5dc32fa669d7c618f620c284ddc93463e49b28e88ebf01",
+      "model": "qwen3.8:27b-q4_K_M",
+      "passed": true,
+      "transport_performed": false
+    },
+    "all_stages_prepared": 56,
+    "synthetic_checks": {
+      "model_calls": 0,
+      "rejected_cases": [
+        "missing-ai",
+        "paused",
+        "zero-calls",
+        "zero-accepted",
+        "zero-tools",
+        "wrong-digest",
+        "paused-record",
+        "paused-finish",
+        "paused-selection",
+        "legacy-import",
+        "stale-nonzero-summary-including-old-exhaustion",
+        "both-proxy-variables"
+      ],
+      "service_cases": [
+        {
+          "case": "valid",
+          "passed": true
+        },
+        {
+          "case": "changed-process",
+          "paused": true,
+          "reason": "owned Ollama process changed"
+        },
+        {
+          "case": "changed-runtime",
+          "paused": true,
+          "reason": "Ollama runtime differs from its recorded identity"
+        },
+        {
+          "case": "CPU-affinity",
+          "paused": true,
+          "reason": "Ollama CPU affinity exceeds its allocation"
+        },
+        {
+          "case": "old-source",
+          "paused": true,
+          "reason": "AI proposal/tool check predates the frozen source: search.py"
+        },
+        {
+          "case": "tag-digest",
+          "paused": true,
+          "reason": "Ollama tag or weights changed"
+        },
+        {
+          "case": "GPU-digest",
+          "paused": true,
+          "reason": "chosen model is not fully resident on GPUs; CPU fallback is not allowed"
+        },
+        {
+          "case": "threads",
+          "paused": true,
+          "reason": "LLM thread count exceeds its CPU allocation"
+        },
+        {
+          "case": "all-eight-visible",
+          "paused": true,
+          "reason": "live inference backend does not exclude the reserved GPUs"
+        },
+        {
+          "case": "numeric-mask",
+          "paused": true,
+          "reason": "live inference backend does not exclude the reserved GPUs"
+        },
+        {
+          "case": "Vulkan-visible",
+          "paused": true,
+          "reason": "live inference backend does not exclude the reserved GPUs"
+        },
+        {
+          "case": "reserved-actual-GPU",
+          "paused": true,
+          "reason": "actual Ollama CUDA devices differ from the allowed GPUs"
+        },
+        {
+          "case": "GPU-memory",
+          "paused": true,
+          "reason": "GPU free-memory reserve reached"
+        },
+        {
+          "case": "CPU-fallback",
+          "paused": true,
+          "reason": "chosen model is not fully resident on GPUs; CPU fallback is not allowed"
+        }
+      ],
+      "transport_calls": 0
+    },
+    "unit_test_seconds": 50.503,
+    "unit_tests_passed": 185
+  }
+}

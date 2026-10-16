@@ -6,13 +6,15 @@ mode=status
 if (( $# > 0 )); then mode=$1; fi
 if printenv MATERIAL_REPOSITORY >/dev/null; then repository=$(printenv MATERIAL_REPOSITORY)
 else repository=$(cd -- "$(dirname -- "$BASH_SOURCE")" && pwd -P); fi
-material_run="$repository/material_scan_data/optimization_20261015"
+material_run="$repository/material_scan_data/optimization_20261016_fixed"
 if (( $# > 1 )); then material_run=$2; fi
 material_run=$(realpath -m -- "$material_run")
 material_python=/home/htseng/.conda/envs/G4CMP/bin/python
 if printenv MATERIAL_PYTHON >/dev/null; then material_python=$(printenv MATERIAL_PYTHON); fi
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
 export PYTHONDONTWRITEBYTECODE=1 MPLCONFIGDIR=/tmp/material-full-scale-mpl
+export NO_PROXY="${NO_PROXY:+$NO_PROXY,}${no_proxy:+$no_proxy,}127.0.0.1,localhost,::1"
+export no_proxy="$NO_PROXY"
 source_dir="$material_run/source"
 
 if [[ "$mode" == run ]]; then
@@ -81,6 +83,7 @@ if [[ "$mode" == execute ]]; then
         output="$material_run/studies/$id"
         while :; do
             rm -f "$material_run/guard.json"
+            scan_started_ns=$("$material_python" -c 'import time;print(time.time_ns())')
             "$material_python" "$source_dir/scan.py" run "$study" --output "$output" >"$material_run/logs/$id.log" 2>&1 &
             driver_pid=$!
             "$material_python" - "$driver_pid" "$material_run" "$index" <<'PY' &
@@ -143,13 +146,16 @@ PY
                 continue
             fi
             if (( code != 0 )); then
-                if "$material_python" - "$material_run" "$index" "$output" <<'PY'
+                if ! bash "$BASH_SOURCE" verify-ai "$material_run" "$index"; then exit 75; fi
+                if "$material_python" - "$material_run" "$index" "$output" "$scan_started_ns" <<'PY'
 import json,sys
 from pathlib import Path
 root=Path(sys.argv[1]); step=json.loads((root/'queue.json').read_text())[int(sys.argv[2])]
 path=Path(sys.argv[3])/'summary.json'
 report=json.loads(path.read_text()) if path.is_file() else {}
-raise SystemExit(0 if step['kind']=='optimization_search' and report.get('search_counts') else 1)
+limited=report.get('incomplete_reason')=='elapsed limit or maximum attempts reached before the measured target'
+fresh=path.is_file() and path.stat().st_mtime_ns>=int(sys.argv[4])
+raise SystemExit(0 if fresh and step['kind']=='optimization_search' and not report.get('complete') and report.get('search_counts') and limited else 1)
 PY
                 then break; fi
                 bash "$BASH_SOURCE" failed "$material_run" "$index"
@@ -173,6 +179,7 @@ import json,subprocess,sys
 from pathlib import Path
 root=Path(sys.argv[1]); state=json.loads((root/'queue_status.json').read_text())
 assert state['state']=='complete'
+subprocess.run(['bash',str(root/'source/run_all.sh'),'verify-ai',str(root)],check=True)
 publication=json.loads((root/'publication.json').read_text())
 assert subprocess.check_output(['git','branch','--show-current'],text=True).strip()==publication['branch']
 assert subprocess.check_output(['git','remote','get-url','origin'],text=True).strip()==publication['remote']
@@ -199,7 +206,7 @@ sys.path.insert(0,str(source if (run/'source-ready.json').is_file() else repo))
 import numpy as np
 import yaml
 import analysis,physics,records,scan
-default_config='studies/optimization/queue.yaml' if run.name=='optimization_20261015' else 'studies/full_scale/queue.yaml'
+default_config='studies/optimization/queue.yaml' if run.name.startswith('optimization_') else 'studies/full_scale/queue.yaml'
 config_path=Path(os.environ.get('MATERIAL_QUEUE_CONFIG',default_config))
 if (run/'queue-config.json').is_file(): config_path=Path(records.load_document(run/'queue-config.json')['relative_path'])
 if not config_path.is_absolute(): config_path=(source if (run/'source-ready.json').is_file() else repo)/config_path
@@ -311,6 +318,100 @@ def compact_study(output,report,receipt):
         if path.name in ('summary.json','resolved.json','build.json','archive.json') or path.name.startswith('source-comparison-'): continue
         if path.is_dir(): shutil.rmtree(path)
         else: path.unlink()
+
+def require_ai_evidence(step,report):
+    if step['kind']!='optimization_search' or not step.get('method','').startswith('llm_'): return
+    ai=report.get('ai',{}); stats=ai.get('stats',{})
+    bench=records.load_document(run/'gpu_benchmark.json') if (run/'gpu_benchmark.json').is_file() else {}
+    definition=run/'definitions'/(step['id']+'.yaml')
+    options=records.load_document(definition).get('search',{}).get('options',{}) if definition.is_file() else {}
+    reason=None
+    if not ai.get('required') or not ai.get('valid'):
+        reason='AI search has no valid inference evidence; old BO fallback results cannot be used as AI results'
+    elif ai.get('model')!=bench.get('chosen_model') or ai.get('digest')!=bench.get('digest') or ai.get('model')!=options.get('model') or ai.get('digest')!=options.get('model_digest'):
+        reason='AI result model identity differs from its frozen inputs'
+    elif stats.get('calls',0)<1 or stats.get('accepted',0)<1 or not ai.get('records'):
+        reason='AI search has no successful inference and physically valid proposals'
+    elif step['method']=='llm_tools' and stats.get('tools',0)<1:
+        reason='AI tools search has no executed numerical or source-reading tool'
+    elif not any('error' not in row for row in ai['records']) or any(row.get('model')!=ai['model'] or row.get('digest')!=ai['digest'] for row in ai['records'] if 'error' not in row):
+        reason='AI inference records contain a different model identity'
+    elif not isinstance(ai.get('selected_llm_points'),int) or ai['selected_llm_points']<0:
+        reason='AI result is missing its measured LLM-selection count'
+    if reason:
+        records.write_json(run/'queue_status.json',{'state':'paused','stage':step['id'],'reason':reason,'updated':time.time()},overwrite=True)
+        print(reason,file=sys.stderr)
+        raise SystemExit(75)
+
+def ai_preflight(step,options):
+    # Check the current service and GPU allocation, including after model unload.
+    import urllib.request
+    try:
+        service=records.load_document(run/'ollama-service.json')
+        pid=int(service['pid']); fields=Path(f'/proc/{pid}/stat').read_text().split(') ',1)[1].split()
+        if int(fields[19])!=int(service['starttime']): raise ValueError('owned Ollama process changed')
+        if records.sha256_file(Path(f'/proc/{pid}/exe'))!=service['runtime_binary_sha256']:
+            raise ValueError('Ollama runtime differs from its recorded identity')
+        if not set(os.sched_getaffinity(pid))<=set(limits['llm_cpus']): raise ValueError('Ollama CPU affinity exceeds its allocation')
+        host=options['host'].rstrip('/')
+        if host.rstrip('/')!=service.get('host',service.get('endpoint','')).rstrip('/'): raise ValueError('Ollama endpoint differs from its recorded process')
+        check=records.load_document(run/'gpu_tool_check.json')
+        if not check.get('passed') or check.get('model')!=options['model'] or check.get('digest')!=options['model_digest']:
+            raise ValueError('current AI proposal/tool check has not passed for the chosen model')
+        for name in ('search.py','physics.py','parameters.yaml'):
+            identity=check.get('source_identity',{}).get(name,{})
+            if identity.get('frozen_sha256')!=records.sha256_file(source/name): raise ValueError('AI proposal/tool check predates the frozen source: '+name)
+        hardware=subprocess.check_output(['nvidia-smi','--query-gpu=index,uuid,name,memory.free','--format=csv,noheader,nounits'],text=True)
+        cards={}
+        for line in hardware.splitlines():
+            index,uuid,name,free=[part.strip() for part in line.split(',')]
+            cards[uuid]={'index':int(index),'name':name,'free_MiB':float(free)}
+        allowed=set(service['gpu_uuids']); reserved=set(service.get('reserved_gpu_indices',[6,7]))
+        if not 0<len(allowed)<=min(6,int(cfg['execution'].get('max_gpus',6))) or not allowed<=cards.keys(): raise ValueError('invalid visible GPU allocation')
+        if any(cards[uuid]['index'] in reserved or cards[uuid]['name']!='NVIDIA RTX A6000' for uuid in allowed): raise ValueError('reserved or unsupported GPU is visible to Ollama')
+        environment=dict(row.split('=',1) for row in Path(f'/proc/{pid}/environ').read_bytes().decode().split('\0') if '=' in row)
+        if set(environment.get('CUDA_VISIBLE_DEVICES','').split(','))!=allowed or environment.get('OLLAMA_VULKAN','').lower()!='false':
+            raise ValueError('live inference backend does not exclude the reserved GPUs')
+        if not 0<int(options.get('num_thread',0))<=len(limits['llm_cpus']): raise ValueError('LLM thread count exceeds its CPU allocation')
+        opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(host+'/api/tags',timeout=5) as response: tags={row['name']:row for row in json.load(response)['models']}
+        if tags.get(options['model'],{}).get('digest')!=options['model_digest']: raise ValueError('Ollama tag or weights changed')
+        request=urllib.request.Request(host+'/api/generate',data=json.dumps({'model':options['model'],'prompt':'','stream':False,'keep_alive':'5m',
+            'options':{key:options[key] for key in ('temperature','num_ctx','num_predict','num_thread') if key in options}}).encode(),headers={'Content-Type':'application/json'})
+        with opener.open(request,timeout=180) as response: loaded=json.load(response)
+        if loaded.get('error') or not loaded.get('done'): raise ValueError('Ollama model loading did not finish')
+        with opener.open(host+'/api/ps',timeout=5) as response: resident={row.get('name',row.get('model')):row for row in json.load(response)['models']}
+        model=resident.get(options['model'],{})
+        if model.get('digest')!=options['model_digest'] or model.get('size_vram',0)<.98*max(1,model.get('size',0)):
+            raise ValueError('chosen model is not fully resident on GPUs; CPU fallback is not allowed')
+        processes={}
+        for path in Path('/proc').iterdir():
+            if not path.name.isdigit(): continue
+            try: processes[int(path.name)]=int((path/'stat').read_text().split(') ',1)[1].split()[1])
+            except (OSError,ValueError,IndexError): pass
+        owned={pid}
+        while True:
+            added={p for p,parent in processes.items() if parent in owned}-owned
+            if not added: break
+            owned.update(added)
+        compute=subprocess.check_output(['nvidia-smi','--query-compute-apps=gpu_uuid,pid,used_gpu_memory','--format=csv,noheader,nounits'],text=True)
+        devices=[]
+        for line in compute.splitlines():
+            uuid,process,memory=[part.strip() for part in line.split(',')]
+            if int(process) in owned: devices.append({'uuid':uuid,'pid':int(process),'memory_MiB':float(memory)})
+        used={row['uuid'] for row in devices}
+        if not used or not used<=allowed: raise ValueError('actual Ollama CUDA devices differ from the allowed GPUs')
+        free=subprocess.check_output(['nvidia-smi','--query-gpu=uuid,memory.free','--format=csv,noheader,nounits'],text=True)
+        headroom={row.split(',')[0].strip():float(row.split(',')[1]) for row in free.splitlines()}
+        if any(headroom[uuid]<1024*float(cfg['execution'].get('gpu_memory_reserve_gb',2)) for uuid in used): raise ValueError('GPU free-memory reserve reached')
+        record={'passed':True,'model':options['model'],'digest':options['model_digest'],'service_pid':pid,'devices':devices,'resident':model,
+                'source_identity':check['source_identity'],'gpu_free_MiB':headroom,'updated':time.time()}
+    except Exception as exc:
+        record={'passed':False,'reason':str(exc),'updated':time.time()}
+        records.write_json(run/'preflight'/(step['id']+'.json'),record,overwrite=True)
+        records.write_json(run/'queue_status.json',{'state':'paused','stage':step['id'],'reason':'AI service check failed: '+str(exc),'updated':time.time()},overwrite=True)
+        raise SystemExit(75)
+    records.write_json(run/'preflight'/(step['id']+'.json'),record,overwrite=True)
 
 if mode=='status':
     for name in ('queue_status.json','resources-current.json','published.json'):
@@ -495,7 +596,20 @@ if mode in ('check','prepare'):
     print(records.canonical_json({'prepared_studies':len(queue),'source':str(source),'resources':limits}))
     raise SystemExit(0)
 
-index=int(sys.argv[6]) if mode in ('stage','record','failed','pause') else None
+index=int(sys.argv[6]) if mode in ('stage','record','failed','pause','check-ai') or mode=='verify-ai' and len(sys.argv)>6 else None
+if mode=='verify-ai':
+    for step in ([queue[index]] if index is not None else queue):
+        if step['kind']=='optimization_search' and step.get('method','').startswith('llm_'):
+            path=run/'studies'/step['id']/'summary.json'
+            require_ai_evidence(step,records.load_document(path) if path.is_file() else {})
+    raise SystemExit(0)
+if mode=='check-ai':
+    step=queue[index]
+    if step['kind']!='optimization_search' or not step.get('method','').startswith('llm_'): raise ValueError('choose an AI search stage')
+    definition=records.load_document(run/'definitions'/(step['id']+'.yaml'))
+    ai_preflight(step,definition['search']['options'])
+    print('Verified current Ollama model, frozen tool check and GPU allocation.')
+    raise SystemExit(0)
 if mode=='stage':
     step=queue[index]; identifier=step['id']; output=run/'studies'/identifier
     if (output/'summary.json').is_file():
@@ -503,6 +617,7 @@ if mode=='stage':
         if 'archive' not in old and (output/'archive.json').is_file():
             old['archive']=records.load_document(output/'archive.json'); old['raw_files_present']=False
         if (old.get('complete') or old.get('terminated_search')) and old.get('archive',{}).get('verified'):
+            require_ai_evidence(step,old)
             receipt=verify_saved_archive(old)
             compact_study(output,old,receipt)
             print('SKIP'); raise SystemExit(0)
@@ -556,10 +671,15 @@ if mode=='stage':
                         records.write_json(run/'queue_status.json',{'state':'waiting_for_gpu_checks','stage':identifier,'index':index,'updated':time.time()},overwrite=True)
                         time.sleep(15)
                     if not bench.get('passed') or not bench.get('gpu_verified') or not bench.get('digest') or not tool_check.get('passed'):
-                        raise ValueError('GPU model checks must pass and residency be verified before AI-assisted transport')
+                        records.write_json(run/'queue_status.json',{'state':'paused','stage':identifier,'index':index,'reason':'GPU model and proposal/tool checks must pass before AI transport','updated':time.time()},overwrite=True)
+                        raise SystemExit(75)
                     options.update(bench.get('options',{}),model=bench['chosen_model'],host=bench['host'],model_digest=bench['digest'])
+                    options.update({key:cfg['optimizer_options'][key] for key in ('num_ctx','num_predict','num_thread','temperature','timeout') if key in cfg['optimizer_options']})
                     if 'think' in bench: options['think']=bench['think']
                     options['agent_tools']=step['method']=='llm_tools'
+                    options['require_ai']=True
+                    options['require_gpu']=True
+                    ai_preflight(step,options)
                 raw['search']={'method':settings['method'],'seed':step['seed'],'evaluations':step['count'],
                     'measured_evaluations':True,'max_attempts':3*step['count'],'max_elapsed_s':cfg['search_max_elapsed_s'],
                     'conditional_transport_noise':True,'record_runtime':True,
@@ -568,6 +688,9 @@ if mode=='stage':
                 raw['analysis']['store_search_blocks']=False
                 raw['provenance']={'method_id':step['method'],'initial_study':step['initial'],'background':str(run/'calibration-background.json')}
         elif kind=='optimization_confirmation':
+            for entry in queue:
+                if entry['kind']=='optimization_search' and entry.get('method','').startswith('llm_'):
+                    require_ai_evidence(entry,records.load_document(run/'studies'/entry['id']/'summary.json'))
             selection=run/'selected-leaders.json'
             if not selection.is_file():
                 points=[point for point in calibration['candidates'] if point['name'] in cfg['confirmation_anchors']]
@@ -727,6 +850,7 @@ elif mode in ('pause','failed'):
     print(records.canonical_json(reason))
 elif mode=='record':
     step=queue[index]; output=run/'studies'/step['id']; report=records.load_document(output/'summary.json')
+    require_ai_evidence(step,report)
     if report.get('archive'):
         receipt=verify_saved_archive(report); compact_study(output,report,receipt)
         print(records.canonical_json({'stage':step['id'],'already_archived':True})); raise SystemExit(0)
@@ -853,7 +977,9 @@ elif mode=='finish':
     reports={}
     for step in queue:
         path=run/'studies'/step['id']/'summary.json'
-        if path.exists(): reports[step['id']]=records.load_document(path)
+        if path.exists():
+            reports[step['id']]=records.load_document(path)
+            require_ai_evidence(step,reports[step['id']])
         elif not (run/(step['id']+'-skipped.json')).is_file(): raise ValueError('a declared study has no final record')
     if any(not report['complete'] and not (optimization and report.get('terminated_search')) for report in reports.values()):
         raise ValueError('all declared measured studies must finish or have an explicitly terminated search record')

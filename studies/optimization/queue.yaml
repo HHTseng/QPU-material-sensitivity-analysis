@@ -1,5 +1,5 @@
 schema: material-scan-optimization-1
-id: optimization-improvement-20261015
+id: optimization-improvement-20261016-corrected
 description: Seven methods use common measured starts and independent screening transport;
   four unused layouts confirm selected targets.
 defaults:
@@ -132,8 +132,9 @@ optimizer_options:
   local_width: 0.08
   runtime_width: 0.2
   llm_every: 4
-  num_ctx: 16384
-  num_predict: 4096
+  num_ctx: 32768
+  num_predict: 8192
+  timeout: 420
   num_thread: 8
   temperature: 0.2
 method_settings:

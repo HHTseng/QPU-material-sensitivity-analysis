@@ -233,13 +233,21 @@ def run_study(study_or_path, output, *, execute=True):
             max_elapsed=float(options.get('max_elapsed_s',0.))
             if max_elapsed<0 or not np.isfinite(max_elapsed): raise ValueError('search elapsed limit must be finite and nonnegative')
             if max_elapsed: context['deadline']=time.monotonic()+max(0.,max_elapsed-previous_elapsed)
+            ai_pause=None
             # The measured target counts complete J(x), not unmeasured attempts.
             while (len(state['Y'])-initial_count if measured_target else len(rows))<target and len(rows)<max_attempts:
                 elapsed=previous_elapsed+time.perf_counter()-search_started
                 if max_elapsed and elapsed>=max_elapsed: break
                 remaining=min(target-(len(state['Y'])-initial_count if measured_target else len(rows)),max_attempts-len(rows))
                 count=min(remaining,int(opt.get('popsize',12))) if method=='cmaes' else min(remaining,int(options.get('parallel_candidates',1)))
-                points=list(state.get('pending',[])) or search.propose(method,state,study['space'],count=count,options=opt)
+                try:
+                    points=list(state.get('pending',[])) or search.propose(method,state,study['space'],count=count,options=opt)
+                except RuntimeError:
+                    if method not in ('llm_bo','llm_agent') or not state.get('unavailable'): raise
+                    ai_pause=state['unavailable']
+                    results.save_state('search_progress',{'optimizer':search.save_state(state),'rows':rows,
+                                       'elapsed_s':previous_elapsed+time.perf_counter()-search_started})
+                    break
                 proposal_ids=list(state['pending_ids'])
                 if not points: raise RuntimeError('optimizer has no proposal while no simulations are pending')
                 results.save_state('search_progress',{'optimizer':search.save_state(state),'rows':rows,'elapsed_s':elapsed})
@@ -273,6 +281,18 @@ def run_study(study_or_path, output, *, execute=True):
             if measured_target:
                 report.update(complete=reached,status='complete' if reached else 'incomplete')
                 if not reached: report['incomplete_reason']='elapsed limit or maximum attempts reached before the measured target'
+            if method in ('llm_bo','llm_agent'):
+                stats=copy.deepcopy(state.get('llm_stats',{})); tool_required=bool(state['options'].get('agent_tools'))
+                valid=not state.get('unavailable') and stats.get('calls',0)>0 and stats.get('accepted',0)>0 and (not tool_required or stats.get('tools',0)>0)
+                selected=[row for row in rows if row.get('proposal',{}).get('proposal_source','').startswith('llm')]
+                report['ai']={'required':True,'valid':bool(valid),'model':state.get('llm_model',opt.get('model')),
+                    'digest':state.get('llm_digest',opt.get('model_digest')),'stats':stats,
+                    'records':copy.deepcopy(state.get('llm_records',[])),'rejected':copy.deepcopy(state.get('llm_rejected',[])),
+                    'selected_llm_points':len(selected),'measured_llm_points':sum(row['status']=='complete' for row in selected),
+                    'tools_required':tool_required,'route':state.get('llm_route'),
+                    'status':'paused' if ai_pause else 'valid' if valid else 'invalid'}
+                if ai_pause or not valid:
+                    report.update(complete=False,status='paused',incomplete_reason=ai_pause or 'AI stage has no verified inference, valid proposals or required tool use')
         report.update(build=build,timing={**context['timing'],'total_s':time.perf_counter()-start})
         records.write_json(output/'summary.json',report,overwrite=True)
         results.save_state('summary',report)

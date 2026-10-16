@@ -301,7 +301,8 @@ def new_state(method, seed=0, options=None):
             'pending_ids': [], 'observation_ids': [], 'proposal_units': [], 'next_proposal_id': 0,
             'rejected': [], 'proposals': {}, 'used': {}, 'sobol_draws': 0,
             'design_cursor': 0, 'gp_fits': 0, 'algorithm_version': 3,
-            'attempts': [], 'initial_count': 0, 'gp_pool_round': 0}
+            'attempts': [], 'initial_count': 0, 'gp_pool_round': 0,
+            'llm_protocol_version': 3}
 
 
 def import_observations(state, space, observations):
@@ -676,31 +677,45 @@ def _tpe_points(state, space, count):
 def ollama_proposals(state, space, count, options=None):
     """A bounded Ollama loop proposes x; only transport supplies measured J."""
     import hashlib
+    import ipaddress
     import os
     import time
+    import urllib.parse
     import urllib.request
     options = options or state['options']
     host = options.get('host', os.environ.get('OLLAMA_HOST', 'http://localhost:11434')).rstrip('/')
     model = options.get('model', os.environ.get('STAGE4_LLM_MODEL', 'qwen3:32b'))
+    hostname = urllib.parse.urlsplit(host).hostname
+    try:
+        loopback = ipaddress.ip_address(hostname).is_loopback
+    except ValueError:
+        loopback = hostname == 'localhost'
+    # The same opener serves both routes; local inference never uses a proxy.
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({})) if loopback else urllib.request.build_opener()
+    state['llm_route'] = {'host': host, 'mode': 'direct_loopback' if loopback else 'environment_proxy'}
     stats = state.setdefault('llm_stats', {})
     for name in ('calls', 'proposed', 'clipped', 'infeasible', 'malformed', 'accepted',
-                 'tools', 'repairs', 'fallbacks'):
+                 'tools', 'tool_requests', 'repairs', 'fallbacks', 'request_attempts', 'request_failures'):
         stats.setdefault(name, 0)
     try:
-        with urllib.request.urlopen(host + '/api/tags', timeout=5) as response:
-            models = {row['name']: row for row in json.load(response).get('models', [])}
+        with opener.open(host + '/api/tags', timeout=5) as response:
+            models = {row['name']: row for row in json.load(response)['models']}
         if model not in models:
             raise RuntimeError(f'Ollama model {model!r} is absent at {host}')
         digest = models[model].get('digest')
         if options.get('model_digest') and options['model_digest'] != digest:
             raise RuntimeError('Ollama model digest differs from the declared weights')
-    except (OSError, ValueError, RuntimeError) as exc:
+    except (OSError, ValueError, TypeError, KeyError, RuntimeError) as exc:
         state['unavailable'] = f'Ollama unavailable: {exc}'
         raise RuntimeError(state['unavailable']) from exc
     state.pop('unavailable', None)
+    state['llm_model'], state['llm_host'], state['llm_digest'] = model, host, digest
     sources = options.get('source_records', {})
     if not isinstance(sources, dict):
         raise ValueError('source_records must map fixed source IDs to permitted extracts')
+    allowed_tools = min(2, max(0, int(options.get('max_tool_calls', 2)))) if options.get('agent_tools') else 0
+    if options.get('agent_tools') and not allowed_tools:
+        raise ValueError('agent_tools requires at least one permitted tool call')
     best = sorted(range(len(state['values'])), key=state['values'].__getitem__)[:8]
     indices = sorted(set(best + list(range(max(0, len(state['values']) - 8), len(state['values'])))))
     measured = [{'point': state['points'][i], 'J': state['values'][i], 'transport_se': state['se'][i],
@@ -713,8 +728,8 @@ def ollama_proposals(state, space, count, options=None):
     elif objective == 'integrated_density':
         definition = 'J is the recorded time-integrated quasiparticle density; retain the units specified in the supplied source records.'
     prompt = {
-        'request': f'Propose {count} distinct physical vectors. Never invent a measured response.',
-        'objective': objective, 'definition': definition,
+        'request': f'Propose {count} distinct physical vectors to minimize J. Smaller J is better. Never invent a measured response.',
+        'objective': objective, 'direction': 'minimize', 'definition': definition, 'tool_limit': allowed_tools,
         'variables': [{'name': name, 'low': float(low), 'high': float(high), 'scale': scale,
                        'unit': options.get('units', {}).get(name, 'see frozen physical sources')}
                       for name, low, high, scale in zip(space['names'], space['low'], space['high'], space['scales'])],
@@ -743,15 +758,17 @@ def ollama_proposals(state, space, count, options=None):
                             'required': ['values'], 'additionalProperties': False}}},
         {'type': 'function', 'function': {'name': 'summarize_measurements', 'description': 'Read permitted measured training points.',
              'parameters': {'type': 'object', 'properties': {}, 'additionalProperties': False}}}]
-    messages = [{'role': 'system', 'content': 'Propose physical inputs using measured training data and supplied sources. '
-                 'Do not claim unmeasured response, material identity or missing properties. Return the requested JSON.'},
+    messages = [{'role': 'system', 'content': 'Minimize the measured response J; smaller J is better. '
+                 'Propose physical inputs using measured training data and supplied sources. '
+                 'Do not claim unmeasured response, material identity or missing properties. Return the requested JSON.'
+                 + (f' First perform at least one permitted check and at most {allowed_tools} tool calls in total; '
+                    'then return final candidate JSON.' if allowed_tools else '')},
                 {'role': 'user', 'content': json.dumps(prompt, allow_nan=False)}]
     events = state.setdefault('llm_records', [])
-    allowed_tools = min(2, max(0, int(options.get('max_tool_calls', 2)))) if options.get('agent_tools') else 0
-    out, errors, tool_count, repairs = [], [], 0, 0
+    out, errors, tool_count, performed_tools, repairs, finish_tools = [], [], 0, 0, 0, False
     max_repairs = min(1, max(0, int(options.get('retries', 2)) - 1))
     for step in range(allowed_tools + max_repairs + 1):
-        use_tools = tool_count < allowed_tools
+        use_tools = not finish_tools and tool_count < allowed_tools
         payload = {'model': model, 'stream': False, 'messages': messages,
                    'options': {'temperature': float(options.get('temperature', 0.7)),
                                'seed': state['seed'] * 1000 + state['iteration'] * 10 + step,
@@ -767,20 +784,47 @@ def ollama_proposals(state, space, count, options=None):
         request = urllib.request.Request(host + '/api/chat', data=json.dumps(payload).encode(),
                                          headers={'Content-Type': 'application/json'})
         started = time.perf_counter()
+        stats['request_attempts'] += 1
+        residency = None
         try:
-            with urllib.request.urlopen(request, timeout=float(options.get('timeout', 180))) as response:
+            with opener.open(request, timeout=float(options.get('timeout', 180))) as response:
                 result = json.load(response)
-            message = result.get('message', {})
+            if not isinstance(result, dict) or result.get('error') or result.get('done') is False:
+                raise ValueError(f'Ollama inference failed: {result.get("error", "incomplete response") if isinstance(result, dict) else "invalid response"}')
+            message = result.get('message')
             if not isinstance(message, dict):
-                raise ValueError('Ollama message must be an object')
+                raise ValueError('Ollama response has no message object')
             stats['calls'] += 1
+            if options.get('require_gpu', False):
+                with opener.open(host + '/api/ps', timeout=5) as response:
+                    loaded = json.load(response)['models']
+                residency = next((row for row in loaded if row.get('name', row.get('model')) == model), None)
+                if (not residency or residency.get('digest') != digest or not digest
+                        or float(residency.get('size', 0)) <= 0
+                        or float(residency.get('size_vram', 0)) < .98 * float(residency['size'])):
+                    raise ValueError('Ollama model identity or full GPU residency could not be verified')
+                residency = {key: residency.get(key) for key in ('digest', 'size', 'size_vram', 'context_length')}
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            stats['request_failures'] += 1
+            state['unavailable'] = f'Ollama request failed: {exc}'
+            events.append({'model': model, 'digest': digest, 'iteration': state['iteration'],
+                           'error': state['unavailable'], 'elapsed_s': time.perf_counter() - started,
+                           'gpu_residency': residency})
+            raise RuntimeError(state['unavailable']) from exc
+        try:
             event = {'model': model, 'digest': digest, 'iteration': state['iteration'],
                      'elapsed_s': time.perf_counter() - started, 'tools_enabled': use_tools,
                      'prompt_sha256': hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest(),
                      'prompt_eval_count': result.get('prompt_eval_count'), 'eval_count': result.get('eval_count'),
-                     'total_duration_ns': result.get('total_duration'), 'content': message.get('content', '')}
+                     'done_reason': result.get('done_reason'), 'thinking_characters': len(message.get('thinking') or ''),
+                     'num_ctx': payload['options']['num_ctx'], 'num_predict': payload['options']['num_predict'],
+                     'total_duration_ns': result.get('total_duration'), 'content': message.get('content', ''),
+                     'gpu_residency': residency}
             events.append(event)
             calls = message.get('tool_calls', [])
+            event['requested_tool_count'] = len(calls) if isinstance(calls, list) else None
+            if isinstance(calls, list):
+                stats['tool_requests'] += len(calls)
             if calls:
                 if not use_tools or not isinstance(calls, list) or len(calls) > allowed_tools - tool_count:
                     raise ValueError('tool request exceeds the permitted tools or count')
@@ -790,31 +834,42 @@ def ollama_proposals(state, space, count, options=None):
                     function = call['function']; name = function['name']; arguments = function.get('arguments', {})
                     if isinstance(arguments, str):
                         arguments = json.loads(arguments)
+                    performed = False
                     try:
                         if name == 'read_source' and set(arguments) == {'source_id'}:
                             answer = {'source_id': arguments['source_id'], 'record': sources[arguments['source_id']]}
+                            performed = True
                         elif name == 'summarize_measurements' and not arguments:
                             answer = {'measured': measured, 'failed': state['rejected'][-8:]}
+                            performed = True
                         elif name == 'check_physics' and set(arguments) == {'values'}:
                             values = arguments['values']
                             if set(values) != set(space['names']):
                                 raise ValueError('checker requires every searched coordinate and no additional field')
                             checked = dict(space['baseline']); checked.update(values)
+                            performed = True
                             answer = {'valid': True, 'derived': validate_values(checked, space, exact=True)}
                         else:
                             raise ValueError('unknown tool or invalid arguments')
                     except (ValueError, TypeError, KeyError) as exc:
                         answer = {'valid': False, 'error': str(exc)}
-                    tool_count += 1; stats['tools'] += 1
-                    event['tool_results'].append({'name': name, 'arguments': arguments, 'answer': answer})
+                    tool_count += 1
+                    if performed:
+                        performed_tools += 1; stats['tools'] += 1
+                    event['tool_results'].append({'name': name, 'arguments': arguments, 'answer': answer, 'performed': performed})
                     messages.append({'role': 'tool', 'tool_name': name, 'content': json.dumps(answer)})
-                messages.append({'role': 'user', 'content': 'Use the tool answers; return final candidates now or request a remaining permitted check.'})
+                messages.append({'role': 'user', 'content': f'Use the tool answers and return final candidate JSON. '
+                                 f'At most {allowed_tools - tool_count} further tool calls are permitted.'})
                 continue
             if use_tools:
+                if not performed_tools:
+                    raise ValueError('agent must request at least one permitted source or numerical check')
                 messages.append({'role': 'assistant', 'content': message.get('content', '')})
                 messages.append({'role': 'user', 'content': 'Return the final candidates using the required JSON schema.'})
-                tool_count = allowed_tools
+                finish_tools = True
                 continue
+            if allowed_tools and not performed_tools:
+                raise ValueError('agent supplied no permitted source or numerical check')
             reply = json.loads(message.get('content', ''))
             if set(reply) != {'candidates'} or not isinstance(reply['candidates'], list):
                 raise ValueError('reply must contain only a candidates list')
@@ -850,18 +905,14 @@ def ollama_proposals(state, space, count, options=None):
                 errors = [f'Only {len(out)} valid distinct proposals; {count} requested']
         except (ValueError, KeyError, TypeError) as exc:
             stats['malformed'] += 1; errors = [str(exc)]
-        except OSError as exc:
-            state['unavailable'] = f'Ollama request failed: {exc}'
-            events.append({'model': model, 'iteration': state['iteration'], 'error': state['unavailable'],
-                           'elapsed_s': time.perf_counter() - started})
-            break
         if repairs >= max_repairs:
             break
         repairs += 1; stats['repairs'] += 1
-        tool_count = allowed_tools
-        messages.append({'role': 'user', 'content': json.dumps({'errors': errors, 'request': 'Repair once and return final candidate JSON.'})})
+        finish_tools = bool(performed_tools) or tool_count >= allowed_tools
+        repair_request = ('Request a permitted source or numerical check, then return final candidate JSON.'
+                          if allowed_tools and not performed_tools else 'Repair once and return final candidate JSON.')
+        messages.append({'role': 'user', 'content': json.dumps({'errors': errors, 'request': repair_request})})
     stats['accepted'] += len(out)
-    state['llm_model'], state['llm_host'], state['llm_digest'] = model, host, digest
     if errors:
         state.setdefault('llm_rejected', []).append({'iteration': state['iteration'], 'reasons': errors})
     return out
@@ -875,6 +926,8 @@ def propose(method, state, space, count=1, options=None):
         state['options'].update(options)
     if state.get('algorithm_version', 2) < 3 and method in ('bo_gp', 'llm_bo', 'llm_agent'):
         raise ValueError('older GP/LLM checkpoints use a different proposal pool; start a new comparison')
+    if method in ('llm_bo', 'llm_agent') and state.get('llm_protocol_version', 1) < 3:
+        raise ValueError('older AI checkpoints did not require verified inference and minimization; start a new AI comparison')
     if 'space' in state:
         old = state['space']
         for name in ('names', 'low', 'high', 'scales', 'baseline', 'constraints',
@@ -909,9 +962,16 @@ def propose(method, state, space, count=1, options=None):
                     wanted = int(state['options'].get('extra_candidates', 8))
                     try:
                         supplied = ollama_proposals(state, space, wanted)
+                        if not supplied:
+                            state['unavailable'] = 'Ollama supplied no valid physical proposals; AI search is paused'
+                            raise RuntimeError(state['unavailable'])
                     except RuntimeError as exc:
-                        supplied = []
                         state.setdefault('llm_rejected', []).append({'iteration': state['iteration'], 'reasons': [str(exc)]})
+                        state['iteration'] -= 1
+                        state.pop('_dispatch', None)
+                        state.pop('_llm_rationales', None)
+                        state.pop('_llm_sources', None)
+                        raise
                     state['llm_pool'] = [
                         {'point': p,
                          'rationale': next((reason for original, reason in state.get('_llm_rationales', []) if original == p), ''),
@@ -926,7 +986,18 @@ def propose(method, state, space, count=1, options=None):
                 state['_llm_sources'] = [(row['point'], row['source_ids']) for row in valid]
                 points = _gp_points(state, space, count, pool=[row['point'] for row in valid])
         else:
-            points = [_tag(state, space, p, 'llm') for p in ollama_proposals(state, space, count)]
+            try:
+                supplied = ollama_proposals(state, space, count)
+                if not supplied:
+                    state['unavailable'] = 'Ollama supplied no valid physical proposals; AI search is paused'
+                    raise RuntimeError(state['unavailable'])
+            except RuntimeError:
+                state['iteration'] -= 1
+                state.pop('_dispatch', None)
+                state.pop('_llm_rationales', None)
+                state.pop('_llm_sources', None)
+                raise
+            points = [_tag(state, space, p, 'llm') for p in supplied]
         if len(points) < count:
             state['incomplete_proposal'] = f'Ollama returned {len(points)}/{count} valid distinct proposals'
     else:

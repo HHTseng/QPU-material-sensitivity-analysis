@@ -674,7 +674,7 @@ def read_analysis(path, output=None, settings=None):
             row.update(density_response(blocks,declarations[row['candidate_id']],defaults,cache,from_hits=from_hits))
             row.update(value=row['integrated_density'],standard_error=None,transport_standard_error=None,units='MHz us')
     report=analyse_results(study,data['results'])
-    for key in ('initial_results','search_elapsed_s'):
+    for key in ('initial_results','search_elapsed_s','ai'):
         if key in data: report[key]=data[key]
     for row in compact_rows: row.pop('blocks',None)
     if 'search_counts' in data:
@@ -683,6 +683,8 @@ def read_analysis(path, output=None, settings=None):
             report['complete']=bool(data['search_counts']['target_reached'])
             report['status']='complete' if report['complete'] else 'incomplete'
         if 'incomplete_reason' in data: report['incomplete_reason']=data['incomplete_reason']
+        if data.get('ai',{}).get('required') and not data['ai'].get('valid'):
+            report.update(complete=False,status='paused')
     if output: records.write_json(output,report)
     return report
 
