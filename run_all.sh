@@ -76,8 +76,25 @@ if [[ "$mode" == execute ]]; then
     guardian_pid=
     trap 'if [[ -n "$driver_pid" ]]; then kill -TERM "$driver_pid" 2>/dev/null || true; wait "$driver_pid" || true; fi; if [[ -n "$guardian_pid" ]]; then kill "$guardian_pid" 2>/dev/null || true; fi; exit 130' INT TERM HUP
     count=$("$material_python" -c 'import json,sys;print(len(json.load(open(sys.argv[1]))))' "$material_run/queue.json")
-    for (( index=0; index<count; index++ )); do
-        study=$(bash "$BASH_SOURCE" stage "$material_run" "$index")
+    for pass in 1 2; do
+    indices=$("$material_python" - "$material_run" <<'PY'
+import json,sys
+from pathlib import Path
+root=Path(sys.argv[1])
+for index,step in enumerate(json.loads((root/'queue.json').read_text())):
+    path=root/'studies'/step['id']/'summary.json'
+    report=json.loads(path.read_text()) if path.is_file() else {}
+    if not (report.get('complete') or report.get('terminated_search')) or not report.get('archive',{}).get('verified'):
+        print(index)
+PY
+    )
+    for index in $indices; do
+        if study=$(bash "$BASH_SOURCE" stage "$material_run" "$index"); then :
+        else
+            code=$?
+            if (( code == 75 )) && bash "$BASH_SOURCE" defer-ai "$material_run" "$index"; then continue; fi
+            exit "$code"
+        fi
         [[ "$study" != SKIP ]] || continue
         id=$(basename "$study" .yaml)
         output="$material_run/studies/$id"
@@ -146,7 +163,10 @@ PY
                 continue
             fi
             if (( code != 0 )); then
-                if ! bash "$BASH_SOURCE" verify-ai "$material_run" "$index"; then exit 75; fi
+                if ! bash "$BASH_SOURCE" verify-ai "$material_run" "$index"; then
+                    if bash "$BASH_SOURCE" defer-ai "$material_run" "$index"; then continue 2; fi
+                    exit 75
+                fi
                 if "$material_python" - "$material_run" "$index" "$output" "$scan_started_ns" <<'PY'
 import json,sys
 from pathlib import Path
@@ -164,6 +184,8 @@ PY
             break
         done
         bash "$BASH_SOURCE" record "$material_run" "$index"
+    done
+    [[ -f "$material_run/ai-paused.json" ]] || break
     done
     bash "$BASH_SOURCE" finish "$material_run"
     state=$("$material_python" -c 'import json,sys;print(json.load(open(sys.argv[1]))["state"])' "$material_run/queue_status.json")
@@ -184,7 +206,10 @@ publication=json.loads((root/'publication.json').read_text())
 assert subprocess.check_output(['git','branch','--show-current'],text=True).strip()==publication['branch']
 assert subprocess.check_output(['git','remote','get-url','origin'],text=True).strip()==publication['remote']
 files=publication['files']
-subprocess.run(['git','add','--',*files],check=True)
+if any(Path(name).is_absolute() or '..' in Path(name).parts or not
+       (name=='README.md' or name.startswith('docs/results/') or name.startswith('figures/') and name.endswith('.png')) for name in files):
+    raise ValueError('publication paths must be declared public scientific outputs')
+subprocess.run(['git','add','--force','--',*files],check=True)
 if subprocess.run(['git','diff','--cached','--quiet','--',*files]).returncode:
     subprocess.run(['git','commit','--only','-m',publication.get('commit_message','Report fresh full-scale material studies'),'--',*files],check=True)
 commit=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
@@ -212,6 +237,14 @@ if (run/'queue-config.json').is_file(): config_path=Path(records.load_document(r
 if not config_path.is_absolute(): config_path=(source if (run/'source-ready.json').is_file() else repo)/config_path
 cfg=records.load_document(config_path)
 optimization=cfg.get('schema')=='material-scan-optimization-1'
+refinement={}
+if optimization and cfg.get('refinement_file'):
+    refinement=records.load_document((source if (run/'source-ready.json').is_file() else repo)/cfg['refinement_file'])
+    cfg['original_methods']=list(cfg['methods'])
+    extra=refinement['additional_methods']
+    if set(extra)&set(cfg['methods']) or len(set(extra))!=len(extra): raise ValueError('additional methods must have distinct new names')
+    cfg['methods']+=extra
+    cfg['method_settings'].update(refinement['method_settings'])
 defaults=cfg['defaults']
 max_sites=int(defaults.get('max_sites',1024))
 initial_checks=bool(cfg['execution'].get('stop_after_initial_checks',False))
@@ -327,7 +360,7 @@ def require_ai_evidence(step,report):
     options=records.load_document(definition).get('search',{}).get('options',{}) if definition.is_file() else {}
     reason=None
     if not ai.get('required') or not ai.get('valid'):
-        reason='AI search has no valid inference evidence; old BO fallback results cannot be used as AI results'
+        reason=report.get('incomplete_reason') or ai.get('error') or 'AI search has no valid inference evidence; old BO fallback results cannot be used as AI results'
     elif ai.get('model')!=bench.get('chosen_model') or ai.get('digest')!=bench.get('digest') or ai.get('model')!=options.get('model') or ai.get('digest')!=options.get('model_digest'):
         reason='AI result model identity differs from its frozen inputs'
     elif stats.get('calls',0)<1 or stats.get('accepted',0)<1 or not ai.get('records'):
@@ -339,7 +372,9 @@ def require_ai_evidence(step,report):
     elif not isinstance(ai.get('selected_llm_points'),int) or ai['selected_llm_points']<0:
         reason='AI result is missing its measured LLM-selection count'
     if reason:
-        records.write_json(run/'queue_status.json',{'state':'paused','stage':step['id'],'reason':reason,'updated':time.time()},overwrite=True)
+        records.write_json(run/'queue_status.json',{'state':'paused','stage':step['id'],'reason':reason,
+            'previous_inference':{'calls':stats.get('calls',0),'accepted':stats.get('accepted',0),'tools':stats.get('tools',0),
+                                  'measured_llm_points':ai.get('measured_llm_points',0)},'updated':time.time()},overwrite=True)
         print(reason,file=sys.stderr)
         raise SystemExit(75)
 
@@ -427,6 +462,54 @@ if mode=='verify-source':
     if actual!=snapshot['files_sha256']: raise ValueError('frozen source or physical inputs changed; retain this run and inspect the difference')
     print('Verified frozen source, executable, libraries, lattice maps and Geant4 data.')
     raise SystemExit(0)
+if mode=='reuse':
+    previous=Path(sys.argv[-1]).resolve()
+    if previous==run.resolve(): raise ValueError('reuse requires a different, preserved run')
+    old_source=records.load_document(previous/'source-ready.json')
+    new_source=records.load_document(run/'source-ready.json')
+    for name in ('scan.py','physics.py','analysis.py','records.py','parameters.yaml'):
+        if old_source['source_sha256'][name]!=new_source['source_sha256'][name]:
+            raise ValueError('physical evaluation changed; cannot reuse measurements: '+name)
+    immutable=lambda name: name.startswith(('bin/','lib/','CrystalMaps/','geant4-data/','legacy/')) or name in ('studies/reference.yaml',cfg['calibration_file'])
+    old_inputs={name:digest for name,digest in old_source['files_sha256'].items() if immutable(name)}
+    new_inputs={name:digest for name,digest in new_source['files_sha256'].items() if immutable(name)}
+    if old_inputs!=new_inputs: raise ValueError('transport executable, libraries, maps or physical input records changed')
+    for n in defaults['design_counts']:
+        if records.sha256_file(previous/'designs'/f'stratified_{n}.json')!=records.sha256_file(run/'designs'/f'stratified_{n}.json'):
+            raise ValueError('source positions or weights changed')
+    old_queue={step['id']:step for step in json.loads((previous/'queue.json').read_text())}
+    copied=[]; omitted=[]
+    for step in queue:
+        identifier=step['id']; path=previous/'studies'/identifier/'summary.json'
+        ai=step.get('method','').startswith('llm_') or identifier.startswith('drift-llm_')
+        if ai or old_queue.get(identifier)!=step or not path.is_file():
+            omitted.append(identifier); continue
+        report=records.load_document(path)
+        if not report.get('complete') or not report.get('archive',{}).get('verified'):
+            omitted.append(identifier); continue
+        receipt=verify_saved_archive(report)
+        destination=run/'studies'/identifier; destination.mkdir(parents=True,exist_ok=True)
+        for name in ('summary.json','resolved.json','build.json','archive.json'):
+            original=path.parent/name
+            if original.is_file():
+                target=destination/name
+                if target.exists() and records.sha256_file(target)!=records.sha256_file(original):
+                    raise ValueError('reuse would replace different existing evidence: '+str(target))
+                if not target.exists(): shutil.copy2(original,target)
+        definition=previous/'definitions'/(identifier+'.yaml')
+        (run/'definitions').mkdir(exist_ok=True)
+        if definition.is_file(): shutil.copy2(definition,run/'definitions'/definition.name)
+        copied.append({'id':identifier,'summary':str(path),'sha256':records.sha256_file(path),
+                       'archive':receipt['path'],'independent_copy':receipt['independent_copy']})
+        print('Verified retained measurements:',identifier,flush=True)
+    for name in ('calibration-background.json','initial-observations','gpu_benchmark.json','ollama-service.json'):
+        original=previous/name
+        if original.is_dir(): shutil.copytree(original,run/name,dirs_exist_ok=True)
+        elif original.is_file(): shutil.copy2(original,run/name)
+    records.write_json(run/'reuse.json',{'previous_run':str(previous),'retained':copied,'not_reused':omitted,
+        'ai_protocol':'All AI stages repeat from their shared starts under protocol 4; earlier partial and complete AI records remain untouched.',
+        'physical_code_unchanged':True,'position_files_unchanged':True,'created':time.time()},overwrite=True)
+    raise SystemExit(0)
 if mode in ('check','prepare'):
     requested=list(defaults['design_counts'])
     for group in cfg['studies']:
@@ -465,7 +548,7 @@ if mode in ('check','prepare'):
         validation=scan.load_study(base_study('calibration-check',{'kind':'sobol','sites':16,'replicas':2,'events_per_task':1}))
         for point in calibration['candidates']: physics.prepare_values(validation,point)
     if mode=='check':
-        stages=3+len(cfg['pilot_methods'])+len(cfg['search_seeds'])*(1+2*len(cfg['methods']))+len(defaults['confirmation_position_seeds']) if optimization else len(cfg['studies'])
+        stages=3+len(cfg['pilot_methods'])+len(cfg['search_seeds'])*(1+2*len(cfg['methods']))+len(defaults['confirmation_position_seeds'])+len(refinement.get('fixed_studies',[])) if optimization else len(cfg['studies'])
         print(records.canonical_json({'search_dimensions':len(space['names']),'native_material_cases':18,'stages':stages,'max_sites':max_sites,'stop_after_initial_checks':initial_checks,'cpu_cap':cap,'workers':limits['workers'],'memory':scan.memory_headroom(),'source_region_mm':8,'temperature_K':defaults['temperature_K']}))
         raise SystemExit(0)
     run.mkdir(parents=True,exist_ok=True)
@@ -558,15 +641,27 @@ if mode in ('check','prepare'):
         for k,seed in enumerate(cfg['search_seeds']):
             initial=f'initial-{seed}'
             queue.append({'id':initial,'kind':'optimization_initial','count':24,'seed':seed,'sampling':sampling,'bank':3200+100*k})
-            methods=cfg['methods'][k:]+cfg['methods'][:k]
+            methods=cfg.get('original_methods',cfg['methods'])
+            methods=methods[k:]+methods[:k]
             for j,method in enumerate(methods):
                 identifier=f'{method}-{seed}'
                 queue.append({'id':identifier,'kind':'optimization_search','method':method,'initial':initial,'seed':seed,'count':32,'sampling':sampling,'bank':3210+100*k+j})
                 queue.append({'id':'drift-'+identifier,'kind':'optimization_drift','sampling':sampling,'bank':3250+100*k+j})
+        for k,seed in enumerate(cfg['search_seeds']):
+            for j,method in enumerate(refinement.get('additional_methods',[])):
+                identifier=f'{method}-{seed}'
+                queue.append({'id':identifier,'kind':'optimization_search','method':method,'initial':f'initial-{seed}',
+                              'seed':seed,'count':32,'sampling':sampling,'bank':3800+10*k+j})
+                queue.append({'id':'drift-'+identifier,'kind':'optimization_drift','sampling':sampling,'bank':3850+10*k+j})
+        queue.extend({**group,'kind':'optimization_fixed'} for group in refinement.get('fixed_studies',[]))
         for k,seed in enumerate(defaults['confirmation_position_seeds'],1):
             queue.append({'id':f'optimization-confirmation-{k:02d}','kind':'optimization_confirmation',
                           'sampling':{'design':1024,'design_file':f'unused-stream-confirmation-{k:02d}_1024.json','replicas':8,'events_per_task':62500},'bank':3600+k,'position_seed':seed})
-        records.write_json(run/'planned-computation.json',{'primaries_upper_bound':106240000000,'new_measurements_screening':744,'confirmation_targets_upper_bound':27,
+        targets=len(cfg['methods'])*len(cfg['search_seeds'])+len(cfg['search_seeds'])+len(cfg['confirmation_anchors'])+len(refinement.get('fixed_studies',[]))
+        added=106240000000+len(refinement.get('additional_methods',[]))*len(cfg['search_seeds'])*33*64000000
+        added+=sum(len(group['candidates'])*group['sampling']['design']*group['sampling']['replicas']*group['sampling']['events_per_task'] for group in refinement.get('fixed_studies',[]))
+        added+=(targets-27)*4*1024*8*62500
+        records.write_json(run/'planned-computation.json',{'primaries_upper_bound':added,'new_measurements_screening':len(cfg['search_seeds'])*(24+len(cfg['methods'])*32),'confirmation_targets_upper_bound':targets,
             'interpretation':'Failed attempts add transport. Identical confirmation vectors are measured once. Model timing is measured separately.'})
     groups=[g for g in cfg['studies'] if g['kind'] in ('convergence','independent_positions','event_count_convergence')]+[g for g in cfg['studies'] if g['kind'] not in ('convergence','independent_positions','event_count_convergence')]
     for group in groups:
@@ -596,7 +691,19 @@ if mode in ('check','prepare'):
     print(records.canonical_json({'prepared_studies':len(queue),'source':str(source),'resources':limits}))
     raise SystemExit(0)
 
-index=int(sys.argv[6]) if mode in ('stage','record','failed','pause','check-ai') or mode=='verify-ai' and len(sys.argv)>6 else None
+index=int(sys.argv[6]) if mode in ('stage','record','failed','pause','check-ai','defer-ai') or mode=='verify-ai' and len(sys.argv)>6 else None
+if mode=='defer-ai':
+    step=queue[index]
+    if step['kind']!='optimization_search' or not step.get('method','').startswith('llm_'): raise SystemExit(1)
+    path=run/'studies'/step['id']/'summary.json'
+    report=records.load_document(path) if path.is_file() else {}
+    state=records.load_document(run/'queue_status.json')
+    paused=records.load_document(run/'ai-paused.json') if (run/'ai-paused.json').is_file() else {}
+    paused[step['id']]={'reason':report.get('incomplete_reason') or state.get('reason'),
+        'stats':report.get('ai',{}).get('stats',{}),'measured':report.get('search_counts',{}).get('measured',0),'updated':time.time()}
+    records.write_json(run/'ai-paused.json',paused,overwrite=True)
+    print('AI stage retained for retry; independent CPU studies continue:',step['id'],file=sys.stderr)
+    raise SystemExit(0)
 if mode=='verify-ai':
     for step in ([queue[index]] if index is not None else queue):
         if step['kind']=='optimization_search' and step.get('method','').startswith('llm_'):
@@ -612,6 +719,23 @@ if mode=='check-ai':
     raise SystemExit(0)
 if mode=='stage':
     step=queue[index]; identifier=step['id']; output=run/'studies'/identifier
+    if step['kind']=='optimization_confirmation':
+        pending=[]
+        for entry in queue:
+            if entry['kind']=='optimization_confirmation': continue
+            path=run/'studies'/entry['id']/'summary.json'
+            report=records.load_document(path) if path.is_file() else {}
+            if not (report.get('complete') or report.get('terminated_search')): pending.append(entry['id'])
+        if pending:
+            records.write_json(run/'confirmation-waiting.json',{'pending':pending,'updated':time.time()},overwrite=True)
+            print('SKIP'); raise SystemExit(0)
+    if step['kind']=='optimization_drift':
+        parent=identifier.removeprefix('drift-')
+        if parent.startswith('llm_'):
+            path=run/'studies'/parent/'summary.json'
+            report=records.load_document(path) if path.is_file() else {}
+            if not (report.get('complete') or report.get('terminated_search')) or not report.get('ai',{}).get('valid'):
+                print('SKIP'); raise SystemExit(0)
     if (output/'summary.json').is_file():
         old=records.load_document(output/'summary.json')
         if 'archive' not in old and (output/'archive.json').is_file():
@@ -634,6 +758,15 @@ if mode=='stage':
             if len(raw['candidates'])!=(4 if names else 12): raise ValueError('declared calibration cases are absent')
         elif kind=='optimization_drift':
             raw['candidates']=[{'name':'reference','values':{}}]
+        elif kind=='optimization_fixed':
+            if step['background']=='calibration':
+                background=records.load_document(run/'calibration-background.json')['candidate']
+                raw['realization']=background.get('realization',{})
+                raw['parameters'].update({name:{'value':value} for name,value in background['values'].items() if name in reference['parameter_table']['parameters']})
+            raw['candidates']=copy.deepcopy(step['candidates'])
+            raw['sampling']['independent_candidate_streams']=False
+            raw['analysis'].update(comparisons=True,diagnostics=True)
+            raw['provenance']={'question':step.get('question',identifier),'background':step['background'],'selection_uses_confirmation':False}
         elif kind in ('optimization_initial','optimization_search'):
             background=records.load_document(run/'calibration-background.json')['candidate']
             raw['realization']=background.get('realization',{})
@@ -695,16 +828,18 @@ if mode=='stage':
             if not selection.is_file():
                 points=[point for point in calibration['candidates'] if point['name'] in cfg['confirmation_anchors']]
                 for entry in queue:
-                    if entry['kind'] not in ('optimization_initial','optimization_search') or entry['id'].startswith('pilot-'): continue
+                    if entry['kind'] not in ('optimization_initial','optimization_search','optimization_fixed') or entry['id'].startswith('pilot-'): continue
                     report=records.load_document(run/'studies'/entry['id']/'summary.json')
                     measured=[point for point in [*report.get('initial_results',[]),*report['results']] if point.get('status','complete')=='complete']
                     if not measured: continue
                     point=min(measured,key=lambda row:row['value'])
                     definition=records.load_document(run/'definitions'/(entry['id']+'.yaml'))
-                    points.append({'name':entry['id'],'values':point.get('parameters',point.get('values')),'realization':definition.get('realization',{}),
+                    original=next((p for p in definition.get('candidates',[]) if p['name']==point.get('name')), {})
+                    points.append({**{key:original[key] for key in ('materials',) if key in original},
+                                   'name':entry['id'],'values':point.get('parameters',point.get('values')),'realization':definition.get('realization',{}),
                                    'selection':{'candidate_id':point['candidate_id'],'search_value':point['value'],'search_target_reached':report.get('search_counts',{}).get('target_reached')}})
                 distinct={}; aliases={}
-                study=scan.load_study(raw)
+                study=scan.load_study({**raw,'candidates':points})
                 for point in points:
                     prepared=physics.prepare_values(study,point)
                     key=records.content_hash({k:prepared[k] for k in ('values','derived','fixed','top_film','bottom_film')})
@@ -971,6 +1106,11 @@ elif mode=='record':
     receipt['summary_content_hash']=records.content_hash({key:value for key,value in report.items() if key not in ('archive','raw_files_present')})
     receipt['compressed_bytes']=archive.stat().st_size
     compact_study(output,report,receipt)
+    paused=run/'ai-paused.json'
+    if paused.is_file():
+        pending=records.load_document(paused); pending.pop(step['id'],None)
+        if pending: records.write_json(paused,pending,overwrite=True)
+        else: paused.unlink()
     records.write_json(run/'queue_status.json',{'state':'recorded','index':index,'stage':step['id'],'updated':time.time()},overwrite=True)
     print(records.canonical_json({'stage':step['id'],'compressed_archive_bytes':receipt['compressed_bytes'],'uncompressed_member_bytes':receipt['bytes'],'members':receipt['members']}))
 elif mode=='finish':
@@ -980,7 +1120,11 @@ elif mode=='finish':
         if path.exists():
             reports[step['id']]=records.load_document(path)
             require_ai_evidence(step,reports[step['id']])
-        elif not (run/(step['id']+'-skipped.json')).is_file(): raise ValueError('a declared study has no final record')
+        elif not (run/(step['id']+'-skipped.json')).is_file():
+            records.write_json(run/'queue_status.json',{'state':'paused','stage':step['id'],
+                'reason':'Unfinished studies remain; independent completed measurements are preserved. Inspect ai-paused.json and logs.',
+                'updated':time.time()},overwrite=True)
+            raise SystemExit(75)
     if any(not report['complete'] and not (optimization and report.get('terminated_search')) for report in reports.values()):
         raise ValueError('all declared measured studies must finish or have an explicitly terminated search record')
     for report in reports.values(): verify_saved_archive(report)
@@ -1009,7 +1153,9 @@ elif mode=='finish':
                 'gain_from_initial':mean_interval([row['gain_from_initial'] for row in by_seed],replicates='search seeds') if all(row['gain_from_initial'] is not None for row in by_seed) else None,
                 'gain_from_sobol':mean_interval([row['gain_from_sobol'] for row in by_seed],replicates='search seeds') if all(row['gain_from_sobol'] is not None for row in by_seed) else None}
         contrasts={}
-        for a,b in [('bo_improved','bo'),('llm_proposals','bo_improved'),('llm_tools','llm_proposals')]:
+        pairs=[('bo_improved','bo'),('llm_proposals','bo_improved'),('llm_tools','llm_proposals')]
+        pairs.extend((words[0],words[2]) for text in refinement.get('scientific_limits',{}).get('primary_contrasts',[]) if len(words:=text.split())==3)
+        for a,b in pairs:
             contrasts[a+' versus '+b]=analysis.compare_repeated([row['value'] for row in comparisons[a]['by_seed']],
                 [row['value'] for row in comparisons[b]['by_seed']],paired=True)
         result={'run_id':cfg['id'],'date':time.strftime('%Y-%m-%d'),'state':'complete','objective':defaults['objective'],
@@ -1042,7 +1188,7 @@ elif mode=='finish':
                   '',*[f'- {text}' for text in result['limitations']], '', '[Numerical results, per-seed values and verified archives](optimization_summary.json).','']
         (public/'optimization_summary.md').write_text('\n'.join(lines))
         block=['<!-- optimization-start -->','## Optimization comparison','',
-            f"The seven-method comparison finished on {result['date']}. Three search seeds used common measured starts; selected points were confirmed on four unused 1024-site layouts.",
+            f"The {len(cfg['methods'])}-method comparison finished on {result['date']}. Three search seeds used common measured starts; selected points were confirmed on four unused 1024-site layouts.",
             '', '![Confirmed optimization responses](figures/optimization_results.png)', '',
             '[Additional gains, uncertainties, failed attempts and model identities](docs/results/optimization_summary.md).','<!-- optimization-end -->']
         readme=repo/'README.md'; text=readme.read_text()

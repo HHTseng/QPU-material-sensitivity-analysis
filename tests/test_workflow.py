@@ -1598,6 +1598,43 @@ class LongRunTests(unittest.TestCase):
         self.assertEqual(report['search_counts']['measured'],1)
         self.assertEqual(len(self.calls.read_text().splitlines()),4)
 
+    def test_later_ai_failure_retains_measured_history_and_precise_cause(self):
+        from unittest.mock import patch
+        import search
+        raw=self.search_input(method='llm_bo',evaluations=3)
+        raw['search'].update(measured_evaluations=True,parallel_candidates=1)
+        raw['search']['options'].update(n_init=1,n_candidates=16,extra_candidates=1,n_restarts=1,
+                                       llm_every=1,model='local:1',model_digest='weights')
+        output=self.root/'ai-later-failure'
+        calls=[]
+        reason='Ollama final output exhausted the generation limit; no candidate JSON'
+        def proposals(state,space,*args,**kwargs):
+            calls.append(True)
+            if len(calls)>1:
+                state['unavailable']=reason
+                state['llm_records'].append({'model':'local:1','digest':'weights','error':reason})
+                raise RuntimeError(reason)
+            state['llm_stats']={'calls':1,'accepted':1,'tools':0}
+            state['llm_model']='local:1'; state['llm_digest']='weights'
+            state['llm_records']=[{'model':'local:1','digest':'weights','elapsed_s':1.}]
+            return [physics.from_unit([.75],space)]
+        with patch('search.ollama_proposals',side_effect=proposals):
+            paused=scan.run_study(raw,output)
+        self.assertEqual(paused['status'],'paused')
+        self.assertEqual(paused['incomplete_reason'],reason)
+        self.assertEqual(paused['search_counts']['measured'],2)
+        self.assertEqual(paused['ai']['stats']['calls'],1)
+        self.assertEqual(paused['ai']['stats']['accepted'],1)
+        self.assertEqual(paused['ai']['records'][-1]['error'],reason)
+        self.assertEqual(len(self.calls.read_text().splitlines()),8)
+        self.assertTrue(all(row['status']=='complete' and row['value'] is not None for row in paused['results']))
+        with records.Results(output/'results.sqlite',create=False) as database:
+            saved=search.load_state(database.read('state','search_progress')['optimizer'])
+        self.assertEqual(len(saved['Y']),2)
+        self.assertEqual(saved['pending'],[])
+        self.assertEqual(saved['unavailable'],reason)
+        self.assertEqual(analysis.read_analysis(output)['incomplete_reason'],reason)
+
     def test_shared_measured_starts_count_only_new_responses_and_resume(self):
         from unittest.mock import patch
         import search
@@ -2013,6 +2050,149 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(planned['primaries_upper_bound'],106240000000)
         self.assertEqual(552+192,planned['new_measurements_screening'])
 
+    def test_physical_change_study_accepts_varied_inputs_and_keeps_matched_streams(self):
+        fixed=records.load_document(ROOT/'studies/optimization/refinement.yaml')['fixed_studies'][0]
+        raw=copy.deepcopy(self.raw)
+        raw.setdefault('parameters',{})
+        raw['sampling'].update(independent_candidate_streams=True)
+        reference=scan.load_study(raw)
+        background=physics.prepare_values(reference)['values']
+        records.write_json(self.root/'calibration-background.json',{'candidate':{'values':background}})
+        namespace=self.queue_python(branch="kind == 'optimization_fixed'",scope='stage',
+                                    step=fixed,raw=raw,reference=reference,identifier=fixed['id'],run=self.root)
+        prepared_study=scan.load_study(namespace['raw'])
+        self.assertFalse(prepared_study['sampling']['independent_candidate_streams'])
+        self.assertFalse(prepared_study['provenance']['selection_uses_confirmation'])
+        points=[physics.prepare_values(prepared_study,point) for point in prepared_study['candidates']]
+        self.assertEqual(len(points),17)
+        self.assertEqual(len({records.content_hash(point['values']) for point in points}),17)
+        plans=[scan.task_plan(prepared_study,point,{'build':'same'}) for point in points]
+        streams=[[(task['site_mm'],task['replica'],task['seeds'],task['events']) for task in plan]
+                 for plan in plans]
+        self.assertTrue(all(stream==streams[0] for stream in streams))
+        self.assertTrue(all(point['fixed']['gun_energy_eV']==.01 for point in points))
+
+    def test_added_methods_preserve_original_comparisons_and_reserved_confirmation(self):
+        cfg=records.load_document(ROOT/'studies/optimization/queue.yaml')
+        refinement=records.load_document(ROOT/'studies/optimization/refinement.yaml')
+        original_dir=self.root/'original'; original_dir.mkdir()
+        added_dir=self.root/'added'; added_dir.mkdir()
+        original=self.queue_python(scope="mode in ('check', 'prepare')",start='queue =',stop='groups =',
+            cfg=cfg,defaults=cfg['defaults'],optimization=True,source=ROOT,run=original_dir)['queue']
+        extended=copy.deepcopy(cfg)
+        extended['original_methods']=list(cfg['methods'])
+        extended['methods']+=refinement['additional_methods']
+        extended['method_settings'].update(refinement['method_settings'])
+        added=self.queue_python(scope="mode in ('check', 'prepare')",start='queue =',stop='groups =',
+            cfg=extended,defaults=extended['defaults'],optimization=True,source=ROOT,run=added_dir,
+            refinement=refinement)['queue']
+        self.assertEqual(len(original),56)
+        self.assertEqual(len(added),70)
+        by_id={step['id']:step for step in added}
+        self.assertTrue(all(by_id[step['id']]==step for step in original))
+        extra=[step for step in added if step['kind']=='optimization_search'
+               and step['method'] in refinement['additional_methods']]
+        self.assertEqual(len(extra),6)
+        self.assertTrue(all(step['count']==32 and step['initial']==f"initial-{step['seed']}" for step in extra))
+        main_sampling=next(step['sampling'] for step in original
+                           if step['kind']=='optimization_search' and not step['id'].startswith('pilot-'))
+        self.assertTrue(all(step['sampling']==main_sampling for step in extra))
+        fixed=[step for step in added if step['kind']=='optimization_fixed']
+        self.assertEqual(sum(len(step['candidates']) for step in fixed),23)
+        confirmation=[step for step in added if step['kind']=='optimization_confirmation']
+        self.assertEqual(len(confirmation),4)
+        self.assertTrue(all(step['sampling']['design']==1024 for step in confirmation))
+        self.assertTrue(all(step['bank'] not in {row['bank'] for row in added if row['kind']!='optimization_confirmation'}
+                            for step in confirmation))
+        planned=records.load_document(added_dir/'planned-computation.json')
+        self.assertEqual(planned['new_measurements_screening'],936)
+        self.assertEqual(planned['confirmation_targets_upper_bound'],35)
+        self.assertEqual(planned['primaries_upper_bound'],136768000000)
+
+    def test_native_material_winner_keeps_its_lattice_and_films_in_confirmation(self):
+        germanium=self.root/'maps/Ge'; germanium.mkdir()
+        text=(self.root/'maps/Si/config.txt').read_text()
+        (germanium/'config.txt').write_text(text.replace('5.43095','5.658')
+            .replace('165.6','128.5').replace('63.9','48.3').replace('79.5','66.8'))
+        native={'name':'Ge-Nb-Au','materials':['Ge','Nb','Au']}
+        native_raw={**copy.deepcopy(self.raw),'candidates':[native]}
+        prepared=physics.prepare_values(scan.load_study(native_raw),native)
+        records.write_json(self.root/'studies/native-materials/summary.json',{
+            'complete':True,'results':[{'name':native['name'],'status':'complete','value':.1,
+                'candidate_id':'measured-native','parameters':prepared['values']}]})
+        records.write_json(self.root/'definitions/native-materials.yaml',native_raw)
+        raw=copy.deepcopy(self.raw)
+        namespace=self.queue_python(branch="kind == 'optimization_confirmation'",scope='stage',
+            run=self.root,raw=raw,queue=[{'id':'native-materials','kind':'optimization_fixed'}],
+            cfg={'confirmation_anchors':['reference']},calibration={'candidates':[{'name':'reference','values':{}}]},
+            step={'position_seed':20261025},defaults={'bootstrap_draws':32})
+        selection=records.load_document(self.root/'selected-leaders.json')
+        self.assertFalse(selection['selection_uses_confirmation'])
+        winner=next(point for point in namespace['raw']['candidates'] if point['name']=='native-materials')
+        self.assertEqual(winner['materials'],['Ge','Nb','Au'])
+        confirmed=physics.prepare_values(scan.load_study(namespace['raw']),winner)
+        self.assertEqual(confirmed['derived']['g4_material_name'],'G4_Ge')
+        self.assertEqual(confirmed['derived']['lattice_map_name'],'Ge')
+        self.assertEqual(confirmed['derived']['config_mode'],'native_g4cmp')
+        self.assertEqual(confirmed['values'],prepared['values'])
+        self.assertEqual(confirmed['top_film'],prepared['top_film'])
+        self.assertEqual(confirmed['bottom_film'],prepared['bottom_film'])
+
+    def test_restart_reuses_verified_cpu_measurements_only_with_identical_physical_inputs(self):
+        from unittest.mock import patch
+        previous=self.root/'previous'; restarted=self.root/'restarted'
+        queue=[{'id':'bo-101','kind':'optimization_search','method':'bo'},
+               {'id':'llm_proposals-101','kind':'optimization_search','method':'llm_proposals'},
+               {'id':'bo-202','kind':'optimization_search','method':'bo'}]
+        snapshot={'source_sha256':{name:'same-code' for name in
+                                  ['scan.py','physics.py','analysis.py','records.py','parameters.yaml']},
+                  'files_sha256':{'bin/Main':'same-transport','lib/libG4CMP.so':'same-library',
+                                  'CrystalMaps/Si/config.txt':'same-lattice','studies/reference.yaml':'same-reference',
+                                  'studies/optimization/calibration.yaml':'same-calibration'}}
+        for run in (previous,restarted):
+            records.write_json(run/'source-ready.json',snapshot)
+            records.write_json(run/'designs/stratified_2.json',{'sites_mm':[[0,0,0],[1,1,0]]})
+        records.write_json(previous/'queue.json',queue)
+        output=previous/'studies/bo-101'
+        report={'complete':True,'results':[{'status':'complete','value':.1,'candidate_id':'measured'}]}
+        records.write_json(output/'summary.json',report)
+        (output/'measured.txt').write_text('saved complete numerical fixture\n')
+        receipt=records.create_archive(output,None,previous/'archives/bo-101.tar.gz',include_manifest=False)
+        independent=previous/'second/bo-101.tar.gz'; independent.parent.mkdir()
+        shutil.copy2(receipt['path'],independent)
+        receipt.update(independent_copy=str(independent),independent_copy_verified=True,
+                       summary_content_hash=records.content_hash(report))
+        records.write_json(output/'summary.json',{**report,'archive':receipt},overwrite=True)
+        records.write_json(previous/'studies/llm_proposals-101/summary.json',{
+            **report,'archive':{'verified':True},'ai':{'protocol':3,'valid':True}})
+        records.write_json(previous/'studies/bo-202/summary.json',{'complete':False,'results':[]})
+        before=records.inventory(previous)
+        def reuse():
+            return self.queue_python('verify_saved_archive',scope='reuse',start='previous =',
+                run=restarted,queue=queue,defaults={'design_counts':[2]},
+                cfg={'calibration_file':'studies/optimization/calibration.yaml'})
+        with patch.object(sys,'argv',['-',str(previous)]):
+            for change,message in [('code','physical evaluation'),('library','transport executable'),
+                                   ('design','source positions')]:
+                changed=copy.deepcopy(snapshot)
+                if change=='code': changed['source_sha256']['physics.py']='changed-equation'
+                if change=='library': changed['files_sha256']['lib/libG4CMP.so']='changed-library'
+                records.write_json(restarted/'source-ready.json',changed,overwrite=True)
+                records.write_json(restarted/'designs/stratified_2.json',
+                    {'sites_mm':[[0,0,0],[2 if change=='design' else 1,1,0]]},overwrite=True)
+                with self.subTest(change=change),self.assertRaisesRegex(ValueError,message): reuse()
+                self.assertFalse((restarted/'studies').exists())
+            records.write_json(restarted/'source-ready.json',snapshot,overwrite=True)
+            shutil.copy2(previous/'designs/stratified_2.json',restarted/'designs/stratified_2.json')
+            with self.assertRaises(SystemExit) as stopped: reuse()
+            self.assertEqual(stopped.exception.code,0)
+        retained=records.load_document(restarted/'reuse.json')
+        self.assertEqual([row['id'] for row in retained['retained']],['bo-101'])
+        self.assertEqual(set(retained['not_reused']),{'llm_proposals-101','bo-202'})
+        self.assertEqual(records.load_document(restarted/'studies/bo-101/summary.json')['archive']['path'],receipt['path'])
+        self.assertFalse((restarted/'studies/llm_proposals-101').exists())
+        self.assertEqual(records.inventory(previous),before)
+
     def test_queue_memory_guard_includes_only_the_identified_llm_service(self):
         script=(ROOT/'run_all.sh').read_text()
         fragment=script[script.index("    service=root/'ollama-service.json'"):]
@@ -2045,6 +2225,54 @@ class QueueTests(unittest.TestCase):
             with self.subTest(change=change),self.assertRaises(SystemExit) as stopped: gate(step,report)
             self.assertEqual(stopped.exception.code,75)
             self.assertEqual(records.load_document(self.root/'queue_status.json')['state'],'paused')
+
+    def test_ai_pause_reports_current_failure_despite_successful_prior_inference(self):
+        step={'kind':'optimization_search','method':'llm_tools','id':'llm_tools-101'}
+        reason='Ollama final output reached the generation limit without candidate JSON'
+        report={'complete':False,'status':'paused','incomplete_reason':reason,
+                'ai':{'required':True,'valid':False,'model':'local:1','digest':'weights',
+                      'stats':{'calls':15,'accepted':16,'tools':12},
+                      'records':[{'model':'local:1','digest':'weights','phase':'tools'},
+                                 {'model':'local:1','digest':'weights','output_error':reason}],
+                      'selected_llm_points':4,'measured_llm_points':4}}
+        before=copy.deepcopy(report)
+        gate=self.queue_python('require_ai_evidence',run=self.root)['require_ai_evidence']
+        with self.assertRaises(SystemExit) as stopped:
+            gate(step,report)
+        self.assertEqual(stopped.exception.code,75)
+        status=records.load_document(self.root/'queue_status.json')
+        self.assertEqual(status['state'],'paused')
+        self.assertEqual(status['stage'],step['id'])
+        self.assertEqual(status['reason'],reason)
+        self.assertEqual(report,before)
+
+    def test_only_ai_failures_are_deferred_and_confirmation_waits_for_screening(self):
+        queue=[{'id':'llm_tools-101','kind':'optimization_search','method':'llm_tools'},
+               {'id':'bo-202','kind':'optimization_search','method':'bo'},
+               {'id':'confirmation-01','kind':'optimization_confirmation'}]
+        reason='Ollama final output exhausted the generation limit'
+        report={'complete':False,'status':'paused','incomplete_reason':reason,
+                'search_counts':{'measured':20},'ai':{'valid':False,'stats':{'calls':15,'tools':12,'accepted':16}}}
+        records.write_json(self.root/'studies/llm_tools-101/summary.json',report)
+        records.write_json(self.root/'studies/bo-202/summary.json',{'complete':True})
+        records.write_json(self.root/'queue_status.json',{'state':'paused','reason':reason})
+        with self.assertRaises(SystemExit) as stopped:
+            self.queue_python(scope='defer-ai',start='step =',queue=queue,index=0,run=self.root)
+        self.assertEqual(stopped.exception.code,0)
+        saved=records.load_document(self.root/'ai-paused.json')
+        self.assertEqual(saved['llm_tools-101']['reason'],reason)
+        self.assertEqual(saved['llm_tools-101']['stats'],report['ai']['stats'])
+        self.assertEqual(saved['llm_tools-101']['measured'],20)
+        with self.assertRaises(SystemExit) as stopped:
+            self.queue_python(scope='defer-ai',start='step =',queue=queue,index=1,run=self.root)
+        self.assertEqual(stopped.exception.code,1)
+        self.assertEqual(records.load_document(self.root/'ai-paused.json'),saved)
+        with self.assertRaises(SystemExit) as stopped:
+            self.queue_python(scope='stage',start='step =',stop="if step['kind'] == 'optimization_drift':",
+                              queue=queue,index=2,run=self.root)
+        self.assertEqual(stopped.exception.code,0)
+        self.assertEqual(records.load_document(self.root/'confirmation-waiting.json')['pending'],['llm_tools-101'])
+        self.assertFalse((self.root/'selected-leaders.json').exists())
 
     def test_nonzero_search_cannot_reuse_a_stale_exhaustion_summary(self):
         from unittest.mock import patch
@@ -2092,7 +2320,7 @@ class QueueTests(unittest.TestCase):
         namespace={'records':records,'analysis':analysis,'scan':scan,'physics':physics,
                    'np':np,'copy':copy,'math':math,'itertools':itertools,'Path':Path,
                    'os':os,'time':time,'sys':sys,'json':json,'shutil':shutil,
-                   'max_sites':1024,'initial_checks':False,'optimization':False,**values}
+                   'max_sites':1024,'initial_checks':False,'optimization':False,'refinement':{},**values}
         exec(compile(ast.Module(body=code,type_ignores=[]),'isolated queue Python','exec'),namespace)
         return namespace
 

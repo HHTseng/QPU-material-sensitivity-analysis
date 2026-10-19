@@ -293,7 +293,7 @@ def expected_improvement(mu, sigma, best, xi=0.0):
 
 
 def new_state(method, seed=0, options=None):
-    if method not in ('random', 'sobol', 'bo_gp', 'cmaes', 'tpe_optuna', 'llm_agent', 'llm_bo'):
+    if method not in ('random', 'sobol', 'corners', 'bo_gp', 'cmaes', 'tpe_optuna', 'llm_agent', 'llm_bo'):
         raise ValueError(f'unknown search method {method!r}')
     return {'method': method, 'seed': int(seed), 'options': dict(options or {}),
             'rng': np.random.default_rng(seed), 'iteration': 0, 'U': [], 'Y': [],
@@ -302,7 +302,7 @@ def new_state(method, seed=0, options=None):
             'rejected': [], 'proposals': {}, 'used': {}, 'sobol_draws': 0,
             'design_cursor': 0, 'gp_fits': 0, 'algorithm_version': 3,
             'attempts': [], 'initial_count': 0, 'gp_pool_round': 0,
-            'llm_protocol_version': 3}
+            'llm_protocol_version': 4}
 
 
 def import_observations(state, space, observations):
@@ -366,10 +366,13 @@ def _feasible(point, space):
 
 def _duplicate(point, state, space, extra=()):
     u = to_unit(point, space)
+    distance = float(state['options'].get('proposal_min_distance', 1e-6))
+    if not math.isfinite(distance) or not 0 < distance < 1:
+        raise ValueError('proposal_min_distance must be finite and between zero and one')
     observed = np.asarray(state['U'])
-    if observed.size and np.any(np.max(np.abs(observed - u), axis=1) < 1e-6):
+    if observed.size and np.any(np.max(np.abs(observed - u), axis=1) < distance):
         return True
-    return any(np.max(np.abs(to_unit(p, space) - u)) < 1e-6
+    return any(np.max(np.abs(to_unit(p, space) - u)) < distance
                for p in [*state['pending'], *extra])
 
 
@@ -424,15 +427,15 @@ def _tag(state, space, point, source, **details):
     return point
 
 
-def _feasible_pool(U, space, excluded):
+def _feasible_pool(U, space, excluded, minimum_distance=1e-6):
     """Remove invalid and repeated normalized vectors with bounded array work."""
     U = np.asarray([u for u in U if _feasible(from_unit(u, space), space)])
     if not U.size:
         return np.empty((0, len(space['names'])))
     if len(excluded):
         distance, _ = cKDTree(np.asarray(excluded)).query(U, p=np.inf)
-        U = U[distance >= 1e-6]
-    repeated = {j for _, j in cKDTree(U).query_pairs(1e-6, p=np.inf)}
+        U = U[distance >= minimum_distance]
+    repeated = {j for _, j in cKDTree(U).query_pairs(minimum_distance, p=np.inf)}
     return U[[i for i in range(len(U)) if i not in repeated]]
 
 
@@ -464,6 +467,9 @@ def _runtime_weights(state, U):
 
 def _gp_points(state, space, count, pool=None):
     options = state['options']
+    minimum_distance = float(options.get('proposal_min_distance', 1e-6))
+    if not math.isfinite(minimum_distance) or not 0 < minimum_distance < 1:
+        raise ValueError('proposal_min_distance must be finite and between zero and one')
     n_init = int(options.get('n_init', 24))
     n_observed = len(state['Y'])
     dispatched = n_observed + sum(
@@ -520,35 +526,41 @@ def _gp_points(state, space, count, pool=None):
         local_rng = np.random.default_rng(seed)
         width = float(state.get('local_width', options.get('local_width', 0.08)))
         raw = engine.random_base2(int(math.ceil(math.log2(n))))[:n]
-        raw[-(n // 4):] = np.clip(incumbent + local_rng.normal(0, width, (n // 4, d)), 0, 1)
+        global_only = state.get('local_global_remaining', 0) > 0
+        if not global_only:
+            raw[-(n // 4):] = np.clip(incumbent + local_rng.normal(0, width, (n // 4, d)), 0, 1)
         observed = np.asarray([*state['U'], *[to_unit(p, space) for p in [*state['pending'], *out]]])
-        U = _feasible_pool(raw, space, observed)
+        U = _feasible_pool(raw, space, observed, minimum_distance)
         attempts = 0
         while len(U) < n:
             attempts += 1
             if attempts > 1000:
                 raise RuntimeError('could not fill the feasible GP pool')
             fill = _feasible_pool(local_rng.random((2 * (n - len(U)), d)), space,
-                                  np.vstack([observed, U]))
+                                  np.vstack([observed, U]), minimum_distance)
             U = np.vstack([U, fill[:n - len(U)]])
         sources = ['ordinary'] * n
         n_model = 0
         for point in additional:
             u = to_unit(point, space)
             if (n_model < extra and _feasible(point, space) and not _duplicate(point, state, space, out)
-                    and not np.any(np.max(np.abs(U - u), axis=1) < 1e-6)):
+                    and not np.any(np.max(np.abs(U - u), axis=1) < minimum_distance)):
                 U = np.vstack([U, u]); sources.append('llm'); n_model += 1
         while len(U) < n + extra:
             attempts += 1
             if attempts > 1000:
                 raise RuntimeError('could not fill the additional GP pool')
             fill = _feasible_pool(engine.random(2 * (n + extra - len(U))), space,
-                                  np.vstack([observed, U]))
+                                  np.vstack([observed, U]), minimum_distance)
             fill = fill[:n + extra - len(U)]
             U = np.vstack([U, fill]); sources.extend(['sobol_extra'] * len(fill))
         state['gp_pool_round'] += 1
         state['last_pool'] = {'ordinary': n, 'additional': extra, 'llm': n_model,
                               'total': len(U), 'seed': seed, 'local_width': width}
+        if options.get('local_restart_after', 0):
+            state['last_pool']['global_only'] = global_only
+            if global_only:
+                state['local_global_remaining'] -= 1
         mu, sd = gp.predict(U)
         scores = expected_improvement(mu, sd, best, xi)
         if options.get('runtime_aware', False):
@@ -596,6 +608,50 @@ def _gp_points(state, space, count, pool=None):
         out.append(point)
         mu, _ = gp.predict(u[None, :])
         gp.add_fantasy(u, float(mu[0]), median_noise)
+    return out
+
+
+def _corner_points(state, space, count):
+    """Valid u∈{0,1}^d, then coordinate changes about the measured best; no fitted model."""
+    d, options = len(space['names']), state['options']
+    if d > 12:
+        raise ValueError('the corner comparison supports at most twelve coordinates')
+    if 'corner_design' not in state:
+        best = state['points'][int(np.argmin(state['values']))] if state['values'] else space['baseline']
+        anchor = to_unit(best, space)
+        U = ((np.arange(1 << d)[:, None] >> np.arange(d)) & 1).astype(float)
+        U = np.asarray([u for u in U if _feasible(from_unit(u, space), space)])
+        order = np.argsort(np.sum((U - anchor) ** 2, axis=1), kind='stable') if U.size else []
+        take = max(0, int(options.get('corner_count', 16)))
+        state['corner_design'] = U[order[:take]].tolist() if U.size else []
+        state['corner_cursor'] = state['coordinate_cursor'] = 0
+    steps = [float(step) for step in options.get('coordinate_steps', [0.25, 0.125, 0.0625])]
+    if not steps or any(not math.isfinite(step) or not 0 < step <= 1 for step in steps):
+        raise ValueError('coordinate_steps must be positive normalized changes no larger than one')
+    out = []
+    while len(out) < count:
+        cursor = state['corner_cursor']
+        if cursor < len(state['corner_design']):
+            state['corner_cursor'] += 1
+            point = from_unit(np.asarray(state['corner_design'][cursor]), space)
+            if not _duplicate(point, state, space, out):
+                out.append(_tag(state, space, point, 'corner', corner_index=cursor))
+            continue
+        cursor = state['coordinate_cursor']
+        if cursor >= 2 * d * len(steps):
+            for point in _draw_points(state, space, count - len(out), out, sobol=True):
+                out.append(_tag(state, space, point, 'sobol_filler', reason='corner and coordinate sequence exhausted'))
+            break
+        state['coordinate_cursor'] += 1
+        step = steps[cursor // (2 * d)]
+        axis, sign = (cursor % (2 * d)) // 2, (-1 if cursor % 2 == 0 else 1)
+        best = state['points'][int(np.argmin(state['values']))] if state['values'] else space['baseline']
+        u = to_unit(best, space).copy()
+        u[axis] = np.clip(u[axis] + sign * step, 0, 1)
+        point = from_unit(u, space)
+        if _feasible(point, space) and not _duplicate(point, state, space, out):
+            out.append(_tag(state, space, point, 'coordinate_refinement',
+                            coordinate=space['names'][axis], coordinate_step=sign * step))
     return out
 
 
@@ -685,6 +741,18 @@ def ollama_proposals(state, space, count, options=None):
     options = options or state['options']
     host = options.get('host', os.environ.get('OLLAMA_HOST', 'http://localhost:11434')).rstrip('/')
     model = options.get('model', os.environ.get('STAGE4_LLM_MODEL', 'qwen3:32b'))
+    settings = {name: options.get(name, default) for name, default in {
+        'model': model, 'host': host, 'model_digest': None, 'temperature': 0.7,
+        'num_ctx': 16384, 'num_predict': 4096, 'num_thread': 8, 'think': True,
+        'final_think': False, 'agent_tools': False, 'max_tool_calls': 2, 'retries': 2,
+        'source_records': {}, 'objective': 'device_junction_qps_per_eV', 'units': {},
+        'proposal_min_distance': 1e-6, 'llm_every': 4, 'extra_candidates': 8,
+        'require_gpu': False, 'timeout': 180}.items()}
+    identity = hashlib.sha256(json.dumps(settings, sort_keys=True, allow_nan=False).encode()).hexdigest()
+    if state.get('llm_settings_sha256', identity) != identity:
+        raise ValueError('AI settings changed; retain this checkpoint and start a new AI comparison')
+    state['llm_settings_sha256'], state['llm_settings'] = identity, settings
+    state['llm_option_inputs'] = {name: copy.deepcopy(options[name]) for name in settings if name in options}
     hostname = urllib.parse.urlsplit(host).hostname
     try:
         loopback = ipaddress.ip_address(hostname).is_loopback
@@ -718,7 +786,8 @@ def ollama_proposals(state, space, count, options=None):
         raise ValueError('agent_tools requires at least one permitted tool call')
     best = sorted(range(len(state['values'])), key=state['values'].__getitem__)[:8]
     indices = sorted(set(best + list(range(max(0, len(state['values']) - 8), len(state['values'])))))
-    measured = [{'point': state['points'][i], 'J': state['values'][i], 'transport_se': state['se'][i],
+    measured = [{'point': {name: state['points'][i][name] for name in space['names']},
+                 'J': state['values'][i], 'transport_se': state['se'][i],
                  'proposal_id': state['observation_ids'][i]} for i in indices]
     objective = options.get('objective', 'device_junction_qps_per_eV')
     definition = ('J=E_position,transport[sum_e w_e Q_e]/E_g; sum_e w_e=1; '
@@ -766,10 +835,22 @@ def ollama_proposals(state, space, count, options=None):
                 {'role': 'user', 'content': json.dumps(prompt, allow_nan=False)}]
     events = state.setdefault('llm_records', [])
     out, errors, tool_count, performed_tools, repairs, finish_tools = [], [], 0, 0, 0, False
+    checked_answers = []
     max_repairs = min(1, max(0, int(options.get('retries', 2)) - 1))
     for step in range(allowed_tools + max_repairs + 1):
         use_tools = not finish_tools and tool_count < allowed_tools
-        payload = {'model': model, 'stream': False, 'messages': messages,
+        if not use_tools:
+            # Final x uses the original data and short check results, without repeated tables or reasoning.
+            final_request = {'checks': checked_answers, 'errors': errors,
+                             'already_accepted': [{name: p[name] for name in space['names']} for p in out],
+                             'request': f'Return only candidate JSON. Supply {count - len(out)} further distinct vectors.'}
+            request_messages = [
+                {'role': 'system', 'content': 'Minimize J using only the supplied physical data and check results. '
+                 'Return only the requested candidate JSON. Never invent measured responses or material identities.'},
+                messages[1], {'role': 'user', 'content': json.dumps(final_request, allow_nan=False)}]
+        else:
+            request_messages = messages
+        payload = {'model': model, 'stream': False, 'messages': request_messages,
                    'options': {'temperature': float(options.get('temperature', 0.7)),
                                'seed': state['seed'] * 1000 + state['iteration'] * 10 + step,
                                'num_ctx': int(options.get('num_ctx', 16384)),
@@ -780,7 +861,7 @@ def ollama_proposals(state, space, count, options=None):
             payload['tools'] = tools
         else:
             payload['format'] = schema
-        payload['think'] = options.get('think', True)
+        payload['think'] = options.get('think', True) if use_tools else options.get('final_think', False)
         request = urllib.request.Request(host + '/api/chat', data=json.dumps(payload).encode(),
                                          headers={'Content-Type': 'application/json'})
         started = time.perf_counter()
@@ -794,6 +875,8 @@ def ollama_proposals(state, space, count, options=None):
             message = result.get('message')
             if not isinstance(message, dict):
                 raise ValueError('Ollama response has no message object')
+            if not isinstance(message.get('content', ''), str):
+                raise ValueError('Ollama response content must be a string')
             stats['calls'] += 1
             if options.get('require_gpu', False):
                 with opener.open(host + '/api/ps', timeout=5) as response:
@@ -809,11 +892,15 @@ def ollama_proposals(state, space, count, options=None):
             state['unavailable'] = f'Ollama request failed: {exc}'
             events.append({'model': model, 'digest': digest, 'iteration': state['iteration'],
                            'error': state['unavailable'], 'elapsed_s': time.perf_counter() - started,
+                           'phase': 'tools' if use_tools else 'final', 'think': payload['think'],
+                           'llm_protocol_version': 4, 'settings_sha256': identity,
                            'gpu_residency': residency})
             raise RuntimeError(state['unavailable']) from exc
         try:
             event = {'model': model, 'digest': digest, 'iteration': state['iteration'],
                      'elapsed_s': time.perf_counter() - started, 'tools_enabled': use_tools,
+                     'phase': 'tools' if use_tools else 'final', 'think': payload['think'],
+                     'llm_protocol_version': 4, 'settings_sha256': identity,
                      'prompt_sha256': hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest(),
                      'prompt_eval_count': result.get('prompt_eval_count'), 'eval_count': result.get('eval_count'),
                      'done_reason': result.get('done_reason'), 'thinking_characters': len(message.get('thinking') or ''),
@@ -825,6 +912,14 @@ def ollama_proposals(state, space, count, options=None):
             event['requested_tool_count'] = len(calls) if isinstance(calls, list) else None
             if isinstance(calls, list):
                 stats['tool_requests'] += len(calls)
+            if result.get('done_reason') == 'length':
+                event['output_error'] = ('Ollama output token limit exhausted; '
+                                         + ('empty candidate content' if not message.get('content', '').strip()
+                                            else 'truncated response content'))
+                raise ValueError(event['output_error'])
+            if not calls and not message.get('content', '').strip():
+                event['output_error'] = 'Ollama returned empty candidate content'
+                raise ValueError(event['output_error'])
             if calls:
                 if not use_tools or not isinstance(calls, list) or len(calls) > allowed_tools - tool_count:
                     raise ValueError('tool request exceeds the permitted tools or count')
@@ -857,6 +952,12 @@ def ollama_proposals(state, space, count, options=None):
                     if performed:
                         performed_tools += 1; stats['tools'] += 1
                     event['tool_results'].append({'name': name, 'arguments': arguments, 'answer': answer, 'performed': performed})
+                    compact = answer
+                    if name == 'summarize_measurements' and performed:
+                        compact = {'measured_count': len(measured), 'records': 'Use the measured table already supplied.'}
+                    elif name == 'read_source' and performed:
+                        compact = {'source_id': arguments['source_id'], 'record': 'Use this supplied source record.'}
+                    checked_answers.append({'name': name, 'answer': compact, 'performed': performed})
                     messages.append({'role': 'tool', 'tool_name': name, 'content': json.dumps(answer)})
                 messages.append({'role': 'user', 'content': f'Use the tool answers and return final candidate JSON. '
                                  f'At most {allowed_tools - tool_count} further tool calls are permitted.'})
@@ -905,6 +1006,7 @@ def ollama_proposals(state, space, count, options=None):
                 errors = [f'Only {len(out)} valid distinct proposals; {count} requested']
         except (ValueError, KeyError, TypeError) as exc:
             stats['malformed'] += 1; errors = [str(exc)]
+            event.setdefault('output_error', str(exc))
         if repairs >= max_repairs:
             break
         repairs += 1; stats['repairs'] += 1
@@ -915,6 +1017,8 @@ def ollama_proposals(state, space, count, options=None):
     stats['accepted'] += len(out)
     if errors:
         state.setdefault('llm_rejected', []).append({'iteration': state['iteration'], 'reasons': errors})
+    if not out:
+        state['unavailable'] = 'Ollama supplied no valid physical proposals: ' + '; '.join(errors or ['no candidates'])
     return out
 
 def propose(method, state, space, count=1, options=None):
@@ -926,8 +1030,12 @@ def propose(method, state, space, count=1, options=None):
         state['options'].update(options)
     if state.get('algorithm_version', 2) < 3 and method in ('bo_gp', 'llm_bo', 'llm_agent'):
         raise ValueError('older GP/LLM checkpoints use a different proposal pool; start a new comparison')
-    if method in ('llm_bo', 'llm_agent') and state.get('llm_protocol_version', 1) < 3:
-        raise ValueError('older AI checkpoints did not require verified inference and minimization; start a new AI comparison')
+    if method in ('llm_bo', 'llm_agent') and state.get('llm_protocol_version', 1) < 4:
+        raise ValueError('older AI checkpoints use different final-output settings; start a new AI comparison')
+    if method in ('llm_bo', 'llm_agent') and 'llm_option_inputs' in state:
+        supplied = {name: state['options'][name] for name in state['llm_settings'] if name in state['options']}
+        if json.dumps(supplied, sort_keys=True) != json.dumps(state['llm_option_inputs'], sort_keys=True):
+            raise ValueError('AI settings changed; retain this checkpoint and start a new AI comparison')
     if 'space' in state:
         old = state['space']
         for name in ('names', 'low', 'high', 'scales', 'baseline', 'constraints',
@@ -945,6 +1053,8 @@ def propose(method, state, space, count=1, options=None):
         points = [_tag(state, space, p, 'random_baseline') for p in _draw_points(state, space, count)]
     elif method == 'sobol':
         points = _draw_points(state, space, count, sobol=True)
+    elif method == 'corners':
+        points = _corner_points(state, space, count)
     elif method == 'bo_gp':
         points = _gp_points(state, space, count)
     elif method == 'cmaes':
@@ -963,7 +1073,7 @@ def propose(method, state, space, count=1, options=None):
                     try:
                         supplied = ollama_proposals(state, space, wanted)
                         if not supplied:
-                            state['unavailable'] = 'Ollama supplied no valid physical proposals; AI search is paused'
+                            state.setdefault('unavailable', 'Ollama supplied no valid physical proposals; AI search is paused')
                             raise RuntimeError(state['unavailable'])
                     except RuntimeError as exc:
                         state.setdefault('llm_rejected', []).append({'iteration': state['iteration'], 'reasons': [str(exc)]})
@@ -989,7 +1099,7 @@ def propose(method, state, space, count=1, options=None):
             try:
                 supplied = ollama_proposals(state, space, count)
                 if not supplied:
-                    state['unavailable'] = 'Ollama supplied no valid physical proposals; AI search is paused'
+                    state.setdefault('unavailable', 'Ollama supplied no valid physical proposals; AI search is paused')
                     raise RuntimeError(state['unavailable'])
             except RuntimeError:
                 state['iteration'] -= 1
@@ -1026,6 +1136,7 @@ def update(method, state, point, value, se=None, rejected_reason=None, proposal_
     if elapsed_s is not None and (not math.isfinite(float(elapsed_s)) or float(elapsed_s) < 0):
         raise ValueError('elapsed_s must be finite and nonnegative')
     previous_best = min(state['values'], default=math.inf)
+    previous_error = state['se'][int(np.argmin(state['values']))] if state['values'] else None
     if rejected_reason is None:
         if value is None or not math.isfinite(float(value)) or float(value) < 0:
             raise ValueError('yield must be finite and nonnegative; use rejected_reason for an unmeasured trial')
@@ -1073,13 +1184,30 @@ def update(method, state, point, value, se=None, rejected_reason=None, proposal_
     initial = shared or state['proposals'][key]['proposal_source'].endswith('_init')
     if rejected_reason is None and not initial and state['options'].get('local_adapt', False):
         gained = float(value) < previous_best * (1 - float(state['options'].get('improve_rel', 0.001)))
+        z = float(state['options'].get('local_success_z', 0))
+        if not math.isfinite(z) or z < 0:
+            raise ValueError('local_success_z must be finite and nonnegative')
+        if z:
+            # Conditional transport errors: require ΔJ > z sqrt(s_old²+s_new²), and the declared effect.
+            gained = (gained and previous_error is not None and se is not None
+                      and previous_best - float(value) > z * math.hypot(previous_error, float(se)))
         state['local_successes'] = state.get('local_successes', 0) + 1 if gained else 0
         state['local_failures'] = 0 if gained else state.get('local_failures', 0) + 1
+        if gained and state['options'].get('local_restart_after', 0):
+            state['local_shrinks'] = 0
         width = float(state.get('local_width', state['options'].get('local_width', 0.08)))
         if state['local_successes'] >= 3 or state['local_failures'] >= 4:
             factor = 2.0 if state['local_successes'] >= 3 else 0.5
             state['local_width'] = float(np.clip(width * factor, 0.01, 0.4))
             state['local_successes'] = state['local_failures'] = 0
+            restart_after = int(state['options'].get('local_restart_after', 0))
+            if restart_after > 0 and factor < 1:
+                state['local_shrinks'] = state.get('local_shrinks', 0) + 1
+                if state['local_shrinks'] >= restart_after:
+                    state['local_width'] = float(state['options'].get('local_width', 0.08))
+                    state['local_global_remaining'] = max(1, int(state['options'].get('local_global_steps', 4)))
+                    state['local_restarts'] = state.get('local_restarts', 0) + 1
+                    state['local_shrinks'] = 0
     if method == 'cmaes' and not shared:
         cma = state['_cma']
         used = cma.update()
@@ -1180,7 +1308,7 @@ def load_state(record_or_path):
             rng = record['tpe'][field]
             sampler._rng.rng.set_state((rng[0], np.asarray(rng[1], dtype=np.uint32), *rng[2:]))
         state['_study'] = study
-    if state['method'] not in ('random', 'sobol', 'bo_gp', 'cmaes', 'tpe_optuna', 'llm_agent', 'llm_bo'):
+    if state['method'] not in ('random', 'sobol', 'corners', 'bo_gp', 'cmaes', 'tpe_optuna', 'llm_agent', 'llm_bo'):
         raise ValueError('unknown saved search method')
     if (len(state['pending_ids']) != len(state['pending'])
             or len(set(state['pending_ids'])) != len(state['pending_ids'])

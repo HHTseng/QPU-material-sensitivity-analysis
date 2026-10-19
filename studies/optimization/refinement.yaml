@@ -1,0 +1,95 @@
+schema: material-scan-optimization-refinement-1
+id: optimization-refinement-20261019
+description: Test distinct noise-aware BO proposals against valid corners and coordinate
+  refinement; measure physical changes and complete native material records separately.
+additional_methods:
+- bo_robust
+- corners
+method_settings:
+  bo_robust:
+    method: bo_gp
+    options:
+      proposal_min_distance: 0.01
+      local_adapt: true
+      runtime_aware: false
+      local_success_z: 1.645
+      improve_rel: 0.05
+      local_restart_after: 2
+      local_global_steps: 4
+  corners:
+    method: corners
+    options:
+      corner_count: 16
+      proposal_min_distance: 0.01
+      coordinate_steps: [0.25, 0.125, 0.0625]
+fixed_studies:
+- id: physical-changes
+  background: calibration
+  sampling: {design: 512, replicas: 4, events_per_task: 31250}
+  bank: 3900
+  candidates:
+  - name: corner
+    values: &corner
+      sub_c11: 450.0
+      sub_c12: 0.0
+      sub_c44: 5.0
+      topfilm_gap: 0.0015384
+      topfilm_ph_lifetime: 0.001
+      bot_ph_lifetime: 0.5
+  - name: gap-2meV
+    values: {<<: *corner, topfilm_gap: 0.002}
+  - name: gap-2.75meV
+    values: {<<: *corner, topfilm_gap: 0.00275}
+  - name: gap-3.5meV
+    values: {<<: *corner, topfilm_gap: 0.0035}
+  - name: C11-350GPa
+    values: {<<: *corner, sub_c11: 350.0}
+  - name: C11-400GPa
+    values: {<<: *corner, sub_c11: 400.0}
+  - name: C44-10GPa
+    values: {<<: *corner, sub_c44: 10.0}
+  - name: C44-20GPa
+    values: {<<: *corner, sub_c44: 20.0}
+  - name: C12-10GPa
+    values: {<<: *corner, sub_c12: 10.0}
+  - name: C12-25GPa
+    values: {<<: *corner, sub_c12: 25.0}
+  - name: upper-lifetime-0.002ns
+    values: {<<: *corner, topfilm_ph_lifetime: 0.002}
+  - name: upper-lifetime-0.004ns
+    values: {<<: *corner, topfilm_ph_lifetime: 0.004}
+  - name: lower-lifetime-1ns
+    values: {<<: *corner, bot_ph_lifetime: 1.0}
+  - name: lower-lifetime-2ns
+    values: {<<: *corner, bot_ph_lifetime: 2.0}
+  - name: normal-001-rotation-0deg
+    values: {<<: *corner, lattice_deg: 0.0}
+  - name: normal-110-rotation-45deg
+    values: {<<: *corner, miller: [1, 1, 0]}
+  - name: normal-111-rotation-45deg
+    values: {<<: *corner, miller: [1, 1, 1]}
+- id: native-materials
+  background: reference
+  sampling: {design: 512, replicas: 4, events_per_task: 31250}
+  bank: 3901
+  candidates:
+  - {name: Si-Nb-Cu, materials: [Si, Nb, Cu]}
+  - {name: Ge-Nb-Cu, materials: [Ge, Nb, Cu]}
+  - {name: GaAs-Nb-Cu, materials: [GaAs, Nb, Cu]}
+  - {name: Si-Nb-Au, materials: [Si, Nb, Au]}
+  - {name: Ge-Nb-Au, materials: [Ge, Nb, Au]}
+  - {name: GaAs-Nb-Au, materials: [GaAs, Nb, Au]}
+scientific_limits:
+  meaningful_additional_reduction: 0.05
+  primary_contrasts: [bo_robust vs bo, bo_robust vs corners]
+  comparison_note: The new methods are exploratory comparisons chosen after the original
+    screening results; they do not replace the seven original methods.
+  streams_note: Each fixed group uses matched positions, primary counts and streams
+    across its candidates. Search candidates retain independent screening streams.
+  confirmation_note: Select at most one physical-change winner and one native-material
+    winner before reading confirmation. The four reserved layouts and streams stay
+    absent from optimization, model prompts and physical-change decisions.
+  material_note: Continuous property targets retain borrowed background fields. Native
+    Si, Ge and GaAs use their own complete G4CMP lattice records and measured simulator
+    density. Film lifetimes include baseline or supplied inputs, not universal measured
+    constants; representative sound speeds and interface probabilities remain modeled.

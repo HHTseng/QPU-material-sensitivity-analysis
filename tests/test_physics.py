@@ -725,6 +725,110 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(state['llm_records'][-1]['eval_count'], 234)
         self.assertEqual(state['llm_records'][-1]['num_predict'], 4096)
         self.assertEqual(state['llm_records'][-1]['num_ctx'], 16384)
+        self.assertTrue(payloads[0]['think'])
+        self.assertTrue(payloads[1]['think'])
+        self.assertFalse(payloads[-1]['think'])
+        self.assertEqual(state['llm_records'][-1]['phase'], 'final')
+        self.assertFalse(state['llm_records'][-1]['think'])
+
+    def test_thinking_exhaustion_after_tools_gets_one_schema_only_repair(self):
+        import io
+        import records
+        import search
+        space = physics.search_space({'topfilm_vsound': {'mode': 'search'}}, kind='fixed',
+                    table=records.load_document(ROOT / 'parameters.yaml')['parameters'])
+        state = search.new_state('llm_bo', options={'model': 'test:1', 'agent_tools': True,
+                    'think': True, 'final_think': False, 'num_predict': 8192,
+                    'source_records': {'fixed-physics': {'unit': 'km/s'}}})
+        point = physics.from_unit([.4], space)
+        candidate = {'values': {'topfilm_vsound': point['topfilm_vsound']},
+                     'rationale': 'Test the permitted film speed.', 'source_ids': ['fixed-physics']}
+        replies = [{'models': [{'name': 'test:1', 'digest': 'abc'}]},
+                   {'message': {'tool_calls': [
+                       {'function': {'name': 'read_source', 'arguments': {'source_id': 'fixed-physics'}}},
+                       {'function': {'name': 'summarize_measurements', 'arguments': {}}}]}},
+                   {'done_reason': 'length', 'eval_count': 8192,
+                    'message': {'thinking': 'Long reasoning without a final answer.', 'content': ''}},
+                   {'done_reason': 'stop', 'message': {'content': json.dumps({'candidates': [candidate]})}}]
+        payloads = []
+        def respond(request, **kwargs):
+            if not isinstance(request, str): payloads.append(json.loads(request.data))
+            return io.BytesIO(json.dumps(replies.pop(0)).encode())
+        with patch('urllib.request.build_opener') as build:
+            build.return_value.open.side_effect = respond
+            self.assertEqual(search.ollama_proposals(state, space, 1), [point])
+        self.assertEqual(replies, [])
+        self.assertEqual(state['llm_stats']['tools'], 2)
+        self.assertEqual(state['llm_stats']['calls'], 3)
+        self.assertEqual(state['llm_stats']['repairs'], 1)
+        self.assertEqual(state['llm_stats']['accepted'], 1)
+        self.assertTrue(payloads[0]['think'])
+        for payload in payloads[1:]:
+            self.assertFalse(payload['think'])
+            self.assertIn('format', payload)
+            self.assertNotIn('tools', payload)
+        truncated = state['llm_records'][1]
+        self.assertEqual(truncated['done_reason'], 'length')
+        self.assertEqual(truncated['phase'], 'final')
+        self.assertTrue(truncated['output_error'])
+        self.assertNotIn('thinking', truncated)
+        self.assertEqual(state['values'], [])
+
+    def test_repeated_empty_final_output_has_precise_bounded_failure_records(self):
+        import io
+        import records
+        import search
+        space = physics.search_space({'topfilm_vsound': {'mode': 'search'}}, kind='fixed',
+                    table=records.load_document(ROOT / 'parameters.yaml')['parameters'])
+        state = search.new_state('llm_bo', options={'model': 'test:1', 'final_think': False})
+        exhausted = {'done_reason': 'length', 'eval_count': 4096,
+                     'message': {'thinking': 'Unfinished calculation.', 'content': ''}}
+        replies = [{'models': [{'name': 'test:1', 'digest': 'abc'}]}, exhausted, exhausted]
+        payloads = []
+        def respond(request, **kwargs):
+            if not isinstance(request, str): payloads.append(json.loads(request.data))
+            return io.BytesIO(json.dumps(replies.pop(0)).encode())
+        with patch('urllib.request.build_opener') as build:
+            build.return_value.open.side_effect = respond
+            self.assertEqual(search.ollama_proposals(state, space, 1), [])
+        self.assertEqual(len(payloads), 2)
+        self.assertTrue(all(payload['think'] is False for payload in payloads))
+        self.assertEqual(state['llm_stats']['repairs'], 1)
+        self.assertEqual(state['llm_stats']['accepted'], 0)
+        self.assertTrue(all(row['output_error'] for row in state['llm_records']))
+        self.assertTrue(any('length' in row['output_error'].lower()
+                            or 'limit' in row['output_error'].lower() for row in state['llm_records']))
+        self.assertEqual(state['pending'], [])
+        self.assertEqual(state['values'], [])
+
+    def test_ai_settings_remain_fixed_across_a_saved_comparison(self):
+        import io
+        import records
+        import search
+        space = physics.search_space({'topfilm_vsound': {'mode': 'search'}}, kind='fixed',
+                    table=records.load_document(ROOT / 'parameters.yaml')['parameters'])
+        state = search.new_state('llm_bo', options={'model': 'test:1', 'model_digest': 'abc',
+                    'final_think': False, 'source_records': {'physics': {'units': 'km/s'}}})
+        candidate = {'values': {'topfilm_vsound': physics.from_unit([.4], space)['topfilm_vsound']},
+                     'rationale': 'Test the permitted film speed.', 'source_ids': ['physics']}
+        replies = [{'models': [{'name': 'test:1', 'digest': 'abc'}]},
+                   {'message': {'content': json.dumps({'candidates': [candidate]})}}]
+        with patch('urllib.request.build_opener') as build:
+            build.return_value.open.side_effect = lambda *a, **k: io.BytesIO(json.dumps(replies.pop(0)).encode())
+            self.assertEqual(len(search.ollama_proposals(state, space, 1)), 1)
+        frozen = search.save_state(state)
+        for field, value in [('final_think', True), ('temperature', .01),
+                             ('source_records', {'physics': {'units': 'm/s'}}),
+                             ('model_digest', 'other-weights')]:
+            restored = search.load_state(frozen)
+            restored['options'][field] = value
+            with self.subTest(field=field), patch('urllib.request.build_opener') as build:
+                with self.assertRaisesRegex(ValueError, 'AI settings changed'):
+                    search.ollama_proposals(restored, space, 1)
+                with self.assertRaisesRegex(ValueError, 'AI settings changed'):
+                    search.propose('llm_bo', restored, space, 1)
+                build.assert_not_called()
+            self.assertEqual(restored['llm_settings_sha256'], state['llm_settings_sha256'])
 
     def test_ollama_repairs_unknown_sources_once_without_accepting_fabricated_response(self):
         import io
@@ -881,13 +985,13 @@ class SearchTests(unittest.TestCase):
         space = physics.search_space({'topfilm_vsound': {'mode': 'search'}}, kind='fixed',
                     table=records.load_document(ROOT / 'parameters.yaml')['parameters'])
         for method in ('llm_bo', 'llm_agent'):
-            for version in (None, 2):
+            for version in (None, 2, 3):
                 state = search.new_state(method)
                 if version is None:
                     state.pop('llm_protocol_version')
                 else:
                     state['llm_protocol_version'] = version
-                with self.assertRaisesRegex(ValueError, 'verified inference and minimization'):
+                with self.assertRaisesRegex(ValueError, 'different final-output settings'):
                     search.propose(method, state, space)
         for method in ('bo_gp', 'cmaes'):
             state = search.new_state(method)
@@ -910,6 +1014,127 @@ class SearchTests(unittest.TestCase):
         old = search.new_state('bo_gp'); old.pop('algorithm_version')
         with self.assertRaisesRegex(ValueError, 'different proposal pool'):
             search.propose('bo_gp', old, space)
+
+    def test_minimum_input_distance_filters_observed_and_pending_vectors(self):
+        import records
+        import search
+        space = physics.search_space({'topfilm_vsound': {'mode': 'search'},
+                                     'bot_vsound': {'mode': 'search'}}, kind='fixed',
+                    table=records.load_document(ROOT / 'parameters.yaml')['parameters'])
+        state = search.new_state('random', seed=8, options={'proposal_min_distance': .02})
+        initial = [{'values': physics.from_unit([.4, .6], space), 'value': 1.,
+                    'transport_standard_error': .01}]
+        search.import_observations(state, space, initial)
+        self.assertTrue(search._duplicate(physics.from_unit([.419, .619], space), state, space))
+        self.assertFalse(search._duplicate(physics.from_unit([.421, .6], space), state, space))
+        pending = search.propose('random', state, space, 1)[0]
+        self.assertTrue(search._duplicate(pending, state, space))
+        restored = search.load_state(search.save_state(state))
+        self.assertTrue(search._duplicate(pending, restored, space))
+        separated = search.propose('random', state, space, 12)
+        points = np.array([physics.to_unit(row, space) for row in
+                           [initial[0]['values'], pending, *separated]])
+        distance = np.max(np.abs(points[:, None] - points[None]), axis=2)
+        np.fill_diagonal(distance, np.inf)
+        self.assertGreaterEqual(distance.min(), .02)
+
+    def test_local_adaptation_requires_improvement_larger_than_transport_error(self):
+        import records
+        import search
+        space = physics.search_space({'topfilm_vsound': {'mode': 'search'}}, kind='fixed',
+                    table=records.load_document(ROOT / 'parameters.yaml')['parameters'])
+        state = search.import_observations(search.new_state('random', seed=31,
+                    options={'local_adapt': True, 'local_success_z': 1.96}), space,
+                    [{'values': physics.from_unit([.4], space), 'value': 1.,
+                      'transport_standard_error': .05}])
+        points = search.propose('random', state, space, 4)
+        for point, value in zip(points, [.99, .98, .97, .96]):
+            search.update('random', state, point, value, .05)
+        self.assertEqual(state['local_width'], .04)
+        for point, value in zip(search.propose('random', state, space, 3), [.7, .4, .1]):
+            search.update('random', state, point, value, .005)
+        self.assertEqual(state['local_width'], .08)
+        before = search.save_state(state)
+        point = search.propose('random', state, space, 1)[0]
+        search.update('random', state, point, None, rejected_reason='unmeasured timeout')
+        self.assertEqual(state['local_width'], before['state']['local_width'])
+        self.assertEqual(state['local_successes'], before['state']['local_successes'])
+        self.assertEqual(state['local_failures'], before['state']['local_failures'])
+
+    def test_local_stagnation_restores_width_and_records_global_search_steps(self):
+        import records
+        import search
+        space = physics.search_space({'topfilm_vsound': {'mode': 'search'}}, kind='fixed',
+                    table=records.load_document(ROOT / 'parameters.yaml')['parameters'])
+        state = search.import_observations(search.new_state('random', seed=31,
+                    options={'local_adapt': True, 'local_success_z': 1.96,
+                             'local_restart_after': 2, 'local_global_steps': 4}), space,
+                    [{'values': physics.from_unit([.4], space), 'value': 1.,
+                      'transport_standard_error': .05}])
+        for point in search.propose('random', state, space, 8):
+            search.update('random', state, point, 1., .05)
+        self.assertEqual(state['local_width'], .08)
+        self.assertEqual(state['local_global_remaining'], 4)
+        restored = search.load_state(search.save_state(state))
+        self.assertEqual(restored['local_global_remaining'], 4)
+        self.assertEqual(restored['local_width'], .08)
+
+    def test_restarted_gp_uses_global_sobol_pool_and_resumes_remaining_steps(self):
+        from scipy.stats import qmc
+        import records
+        import search
+        space = physics.search_space({'topfilm_vsound': {'mode': 'search'}}, kind='fixed',
+                    table=records.load_document(ROOT / 'parameters.yaml')['parameters'])
+        state = search.import_observations(search.new_state('bo_gp', seed=31,
+                    options={'n_init': 3, 'n_candidates': 16, 'extra_candidates': 4,
+                             'n_restarts': 1, 'n_polish': 1, 'local_restart_after': 2}), space,
+                    [{'values': physics.from_unit([u], space), 'value': 1.+u,
+                      'transport_standard_error': .01} for u in [.2, .5, .8]])
+        state['local_global_remaining'] = 2
+        pools = []
+        original = search.GaussianProcess.predict
+        def observe(gp, U, *args, **kwargs):
+            if len(np.atleast_2d(U)) == 20: pools.append(np.asarray(U).copy())
+            return original(gp, U, *args, **kwargs)
+        with patch.object(search.GaussianProcess, 'predict', observe):
+            point = search.propose('bo_gp', state, space, 1)[0]
+        self.assertEqual(len(pools), 1)
+        seed = state['last_pool']['seed']
+        expected = qmc.Sobol(d=1, scramble=True, seed=seed).random_base2(4)
+        np.testing.assert_array_equal(pools[0][:16], expected)
+        self.assertTrue(state['last_pool']['global_only'])
+        self.assertEqual(state['local_global_remaining'], 1)
+        search.update('bo_gp', state, point, 2., .01)
+        restored = search.load_state(search.save_state(state))
+        self.assertEqual(search.propose('bo_gp', state, space, 1),
+                         search.propose('bo_gp', restored, space, 1))
+        self.assertEqual(state['local_global_remaining'], 0)
+        self.assertTrue(state['last_pool']['global_only'])
+
+    def test_corner_search_omits_unstable_inputs_and_resumes_coordinate_refinement(self):
+        import records
+        import search
+        space = physics.search_space({'sub_c11': {'mode': 'search', 'bounds': [20., 450.]},
+                                     'sub_c12': {'mode': 'search', 'bounds': [0., 250.]}}, kind='fixed',
+                    table=records.load_document(ROOT / 'parameters.yaml')['parameters'])
+        initial_point = physics.from_unit([.5, .2], space)
+        state = search.import_observations(search.new_state('corners', seed=31), space,
+                    [{'values': initial_point, 'value': 1., 'transport_standard_error': .01}])
+        corners = search.propose('corners', state, space, 3)
+        self.assertEqual(len(corners), 3)
+        units = np.array([physics.to_unit(point, space) for point in corners])
+        self.assertTrue(np.isin(units, [0., 1.]).all())
+        self.assertEqual(len(np.unique(units, axis=0)), 3)
+        self.assertTrue(all(point['sub_c11']>point['sub_c12'] for point in corners))
+        for point, value in zip(corners, [.8, .5, .9]):
+            search.update('corners', state, point, value, .01)
+        restored = search.load_state(search.save_state(state))
+        refined = search.propose('corners', state, space, 2)
+        self.assertEqual(refined, search.propose('corners', restored, space, 2))
+        self.assertTrue(all(point['sub_c11']>point['sub_c12'] for point in refined))
+        self.assertFalse(any(point == previous for point in refined for previous in corners))
+        self.assertTrue(any(np.any((physics.to_unit(point, space)>0)
+                                  & (physics.to_unit(point, space)<1)) for point in refined))
 
 
 

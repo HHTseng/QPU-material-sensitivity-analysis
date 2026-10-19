@@ -1,0 +1,601 @@
+{
+  "ai_protocol": 4,
+  "cpu_equivalence": {
+    "absolute_tolerance": 1e-12,
+    "all_passed": true,
+    "current_sha256": "64af23964f6d2362cc1048075ccda600dc23dbd18e7d81a662594b87cd1ded7d",
+    "elapsed_s": 7.68927319906652,
+    "frozen_source": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261016_fixed/source/search.py",
+    "old_sha256": "c48194379134521aff75a69721cc092e90c6b437f80a729362675affcf04266d",
+    "results": [
+      {
+        "common_starts": 24,
+        "max_absolute_physical_difference": 0.0,
+        "max_normalized_difference": 0.0,
+        "method": "random",
+        "pass": true,
+        "rounds": 2,
+        "save_load_equal": true,
+        "seed": 101,
+        "vectors_compared": 2
+      },
+      {
+        "common_starts": 24,
+        "max_absolute_physical_difference": 0.0,
+        "max_normalized_difference": 0.0,
+        "method": "sobol",
+        "pass": true,
+        "rounds": 2,
+        "save_load_equal": true,
+        "seed": 101,
+        "vectors_compared": 2
+      },
+      {
+        "common_starts": 24,
+        "max_absolute_physical_difference": 0.0,
+        "max_normalized_difference": 0.0,
+        "method": "cmaes",
+        "pass": true,
+        "rounds": 2,
+        "save_load_equal": true,
+        "seed": 101,
+        "vectors_compared": 16
+      },
+      {
+        "common_starts": 24,
+        "max_absolute_physical_difference": 0.0,
+        "max_normalized_difference": 0.0,
+        "method": "bo",
+        "pass": true,
+        "rounds": 2,
+        "save_load_equal": true,
+        "seed": 101,
+        "vectors_compared": 2
+      },
+      {
+        "common_starts": 24,
+        "max_absolute_physical_difference": 0.0,
+        "max_normalized_difference": 0.0,
+        "method": "bo_improved",
+        "pass": true,
+        "rounds": 2,
+        "save_load_equal": true,
+        "seed": 101,
+        "vectors_compared": 2
+      },
+      {
+        "common_starts": 24,
+        "max_absolute_physical_difference": 0.0,
+        "max_normalized_difference": 0.0,
+        "method": "random",
+        "pass": true,
+        "rounds": 2,
+        "save_load_equal": true,
+        "seed": 202,
+        "vectors_compared": 2
+      },
+      {
+        "common_starts": 24,
+        "max_absolute_physical_difference": 0.0,
+        "max_normalized_difference": 0.0,
+        "method": "sobol",
+        "pass": true,
+        "rounds": 2,
+        "save_load_equal": true,
+        "seed": 202,
+        "vectors_compared": 2
+      },
+      {
+        "common_starts": 24,
+        "max_absolute_physical_difference": 0.0,
+        "max_normalized_difference": 0.0,
+        "method": "cmaes",
+        "pass": true,
+        "rounds": 2,
+        "save_load_equal": true,
+        "seed": 202,
+        "vectors_compared": 16
+      },
+      {
+        "common_starts": 24,
+        "max_absolute_physical_difference": 0.0,
+        "max_normalized_difference": 0.0,
+        "method": "bo",
+        "pass": true,
+        "rounds": 2,
+        "save_load_equal": true,
+        "seed": 202,
+        "vectors_compared": 2
+      },
+      {
+        "common_starts": 24,
+        "max_absolute_physical_difference": 0.0,
+        "max_normalized_difference": 0.0,
+        "method": "bo_improved",
+        "pass": true,
+        "rounds": 2,
+        "save_load_equal": true,
+        "seed": 202,
+        "vectors_compared": 2
+      }
+    ],
+    "scope": "Deterministic proposal/update/save-load comparison using measured common starts; no transport run."
+  },
+  "date": "2026-10-19",
+  "digest": "25b843619e944cd0ae6069f94ff4e5e26a16e109ccbc0a66a0f05979ed70098e",
+  "eta": {
+    "days_from_restart": [
+      4,
+      6
+    ],
+    "expected_dates_EDT": [
+      "2026-10-23",
+      "2026-10-25"
+    ],
+    "historical_evaluation_seconds": 70278.94,
+    "historical_pooled_primaries_per_second": 359709.4663066916,
+    "historical_primaries": 25280000000,
+    "historical_rate_transport_days": 3.700517322433193,
+    "interpretation": "Planning range, not a confidence interval; includes variable transport, inference and archive checks. Deduplication can shorten and failed attempts can extend it."
+  },
+  "final_audit": "No critical launch blocker found in AI checks, preservation, resource limits, confirmation separation or declared public publication paths.",
+  "launch": {
+    "inference_gpu_indices": [
+      1
+    ],
+    "observed_progress": {
+      "ai_protocol": 4,
+      "ai_stats": {
+        "accepted": 8,
+        "calls": 2,
+        "clipped": 0,
+        "fallbacks": 0,
+        "infeasible": 0,
+        "malformed": 0,
+        "proposed": 8,
+        "repairs": 0,
+        "request_attempts": 2,
+        "request_failures": 0,
+        "tool_requests": 2,
+        "tools": 2
+      },
+      "completed_responses": 3,
+      "inference_phases": [
+        {
+          "done_reason": "stop",
+          "elapsed_s": 47.041392432991415,
+          "phase": "tools",
+          "think": true,
+          "thinking_characters": 3382
+        },
+        {
+          "done_reason": "stop",
+          "elapsed_s": 41.317795866169035,
+          "phase": "final",
+          "think": false,
+          "thinking_characters": 0
+        }
+      ],
+      "observed_at": 1792430753.7130082,
+      "resource_measurement": {
+        "free_disk_bytes": 169890852864,
+        "memory": {
+          "available_bytes": 449627607040,
+          "limiting_cgroup": "/sys/fs/cgroup/user.slice",
+          "raw_unreclaimed_headroom_bytes": 45224239104
+        },
+        "rss_bytes": 16300118016,
+        "updated": 1792430752.3451827
+      },
+      "stage": "pilot-llm_tools",
+      "tasks": {
+        "complete": 1708,
+        "planned": 168,
+        "running": 172
+      }
+    },
+    "observed_stage": {
+      "driver_pid": 648251,
+      "driver_starttime": 304038199,
+      "index": 6,
+      "stage": "pilot-llm_tools",
+      "state": "running",
+      "updated": 1792430573.0779548
+    },
+    "reserved_gpu_indices": [
+      6,
+      7
+    ],
+    "started_local": "2026-10-19 13:22:41 EDT",
+    "tmux_session": "optimization_20261019_restart",
+    "tmux_socket": "material-scan"
+  },
+  "model": "qwen3.8:27b-q4_K_M",
+  "native_execution_check": {
+    "cases": 6,
+    "complete_tasks": 24,
+    "primaries": 24,
+    "scope": "Execution only, excluded from optimization data"
+  },
+  "new_methods": {
+    "bo_robust": {
+      "global_steps": 4,
+      "local_success_sigma": 1.645,
+      "meaningful_relative_gain": 0.05,
+      "min_coordinate_distance": 0.01,
+      "restart_after_shrinks": 2
+    },
+    "corners": {
+      "coordinate_steps": [
+        0.25,
+        0.125,
+        0.0625
+      ],
+      "valid_corners": 16
+    }
+  },
+  "nominal_work": {
+    "confirmation_targets_upper_bound": 35,
+    "interpretation": "Failed attempts add transport. Identical confirmation vectors are measured once. Model timing is measured separately.",
+    "new_confirmation_primaries_upper_bound": 71680000000,
+    "new_measurements_screening": 936,
+    "new_primaries_before_deduplication": 115008000000,
+    "new_screening_and_checks_primaries": 43328000000,
+    "primaries_upper_bound": 136768000000,
+    "screening_response_count_note": "936 planned main responses includes 72 shared starting responses and 864 selected method responses; completed CPU observations are retained where verified."
+  },
+  "preservation": "Earlier runs and partial AI data remain unchanged; new AI arms start from common measured starts with a new identity.",
+  "real_gpu_checks": [
+    {
+      "calls": 1,
+      "elapsed_s": 50.21236809808761,
+      "final_output_thinking_characters": [
+        0
+      ],
+      "history_count": 44,
+      "mode": "proposals",
+      "passed": true,
+      "repairs": 0,
+      "tools": 0,
+      "valid_vectors": 8
+    },
+    {
+      "calls": 4,
+      "elapsed_s": 192.5343701057136,
+      "final_output_thinking_characters": [
+        0,
+        0
+      ],
+      "history_count": 44,
+      "mode": "tools",
+      "passed": true,
+      "repairs": 1,
+      "tools": 1,
+      "valid_vectors": 8
+    },
+    {
+      "calls": 1,
+      "elapsed_s": 39.915474032983184,
+      "final_output_thinking_characters": [
+        0
+      ],
+      "history_count": 24,
+      "mode": "proposals",
+      "passed": true,
+      "repairs": 0,
+      "tools": 0,
+      "valid_vectors": 8
+    },
+    {
+      "calls": 2,
+      "elapsed_s": 128.0774922366254,
+      "final_output_thinking_characters": [
+        0
+      ],
+      "history_count": 24,
+      "mode": "tools",
+      "passed": true,
+      "repairs": 0,
+      "tools": 2,
+      "valid_vectors": 8
+    }
+  ],
+  "resources": {
+    "all_cpus": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63,
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84,
+      85,
+      86,
+      87,
+      88,
+      89,
+      90,
+      91,
+      92,
+      93,
+      94,
+      95
+    ],
+    "cpu_cap": 96,
+    "cpus": [
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63,
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84,
+      85,
+      86,
+      87,
+      88,
+      89,
+      90,
+      91,
+      92,
+      93,
+      94,
+      95
+    ],
+    "llm_cpus": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "minimum_free_disk_gb": 20.0,
+    "per_task_mem_gb": 2.0,
+    "system_mem_reserve_gb": 16.0,
+    "total_mem_gb": 64.0,
+    "workers": 86
+  },
+  "reuse": {
+    "independent_archives_verified": true,
+    "physical_code_unchanged": true,
+    "position_files_unchanged": true,
+    "previous_run": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261016_fixed",
+    "retained_ids": [
+      "calibration",
+      "calibration-resolution",
+      "pilot-initial",
+      "pilot-bo",
+      "pilot-cmaes",
+      "pilot-sobol",
+      "initial-101",
+      "random-101",
+      "drift-random-101",
+      "sobol-101",
+      "drift-sobol-101",
+      "cmaes-101",
+      "drift-cmaes-101",
+      "bo-101",
+      "drift-bo-101",
+      "bo_improved-101",
+      "drift-bo_improved-101",
+      "initial-202",
+      "sobol-202",
+      "drift-sobol-202",
+      "cmaes-202",
+      "drift-cmaes-202",
+      "bo-202"
+    ],
+    "retained_primaries": 21760000000,
+    "retained_studies": 23
+  },
+  "run": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261019_restart",
+  "source_archive": {
+    "bytes": 2150962808,
+    "independent_copy": "/data/htseng/material-scan-archives/optimization_20261019_restart/frozen-source.tar.gz",
+    "independent_copy_verified": true,
+    "manifest_sha256": "3001fd941cec6c4770b450b3548a6574e69b2c6c97d5b4813defa700a329978c",
+    "members": 67433,
+    "path": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/optimization_20261019_restart/archives/frozen-source.tar.gz",
+    "schema": "material-scan-archive-1",
+    "separate_filesystem": true,
+    "sha256": "0491677e6d7f407343cdcda2ce37b57dad0301d20babf483d0e60489ad384cb1",
+    "verified": true
+  },
+  "source_identity": {
+    "parameters.yaml": {
+      "frozen_sha256": "902b657893d5fc9fc99d1b7d23b4987e1aa9355cd4bad91f092fd69e8d020900",
+      "working_sha256": "902b657893d5fc9fc99d1b7d23b4987e1aa9355cd4bad91f092fd69e8d020900"
+    },
+    "physics.py": {
+      "frozen_sha256": "5132113c77d22c5dc6a3caff0b22909e3fde35503cc3a4e5198e1f37c9749edf",
+      "working_sha256": "5132113c77d22c5dc6a3caff0b22909e3fde35503cc3a4e5198e1f37c9749edf"
+    },
+    "search.py": {
+      "frozen_sha256": "64af23964f6d2362cc1048075ccda600dc23dbd18e7d81a662594b87cd1ded7d",
+      "working_sha256": "64af23964f6d2362cc1048075ccda600dc23dbd18e7d81a662594b87cd1ded7d"
+    }
+  },
+  "state": "running",
+  "tests": {
+    "final_verification": {
+      "affinity_test_separately": {
+        "allowed_cpus": [
+          88,
+          89,
+          90,
+          91,
+          92,
+          93,
+          94,
+          95
+        ],
+        "log_sha256": "c55d9db48982230666bfe76dc025a8fb35606d1d1aec6d36a649b4833eda4c7f",
+        "passed": 1
+      },
+      "all_tests_passed": true,
+      "distinct_tests_passed": 200,
+      "environment_note": "The local mock HTTP test needs host sockets. The affinity check also verifies rejection when too few CPUs remain after the half-CPU limit.",
+      "full_suite": {
+        "log_sha256": "a66a19703f33b1c9e1578502453d36d8bff04ccfa6b6c9eb85d9d09b9abe5980",
+        "passed": 199,
+        "reason": "The affinity-specific test requires a wider CPU set than the two-CPU main test allocation.",
+        "run": 200,
+        "skipped": 1
+      }
+    },
+    "log_sha256": "17fff4e328cd79608415b00e32be4a56f109ccc01397916a50f89522e49c60ce",
+    "passed": 200
+  },
+  "updated": 1792430785.69572
+}

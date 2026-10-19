@@ -386,102 +386,125 @@ source definitions and recorded inputs before using them for a new study.
 
 
 <!-- optimization-start -->
-## New optimization experiments
+## Optimization experiments: October 19 restart
 
-The original queue began on **2026-10-15**. A corrected run on **2026-10-16**
-uses `optimization_20261016_fixed`, with the [fixed inputs](studies/optimization/queue.yaml)
-define 56 sequential stages at 20 mK, with the same 1.5384 meV upper-film gap
-limit and at most 1,024 source positions. Historical physical inputs are measured
-again; historical response values are never imported as new observations.
+The current run is `optimization_20261019_restart`: **70 sequential stages**
+using the [recorded search inputs](studies/optimization/queue_restart.yaml) and
+[additional physical comparisons](studies/optimization/refinement.yaml).
+The temperature is 20 mK, the upper-film gap is at least 1.5384 meV, and every
+source layout has at most **1,024 positions**. The calculation minimizes
+$J$, the area- and junction-weighted quasiparticle response per injected eV;
+it does not calculate qubit error.
 
-Twelve calibration cases select a fixed background. Search varies only
+The restart retains **23 complete CPU studies**, representing **21.76 billion
+primary phonons**, after checking unchanged physical code, executable, material
+records, positions, stage definitions and two archive copies. All AI studies
+repeat from their shared measured starts under the revised inference procedure.
+Earlier measurements, including partial AI studies, remain unchanged.
+
+Twelve calibration cases select the fixed physical background. Search varies
 $C_{11},C_{12},C_{44}$, upper-film gap $\Delta_t$, and upper- and lower-film
-phonon lifetimes $\tau_t,\tau_b$. Four resolution cases and a small search pilot
-precede the main comparison. Three independent search seeds each share **24
-measured starting points** across all seven methods, followed by **32 new
-complete responses per method**:
+phonon lifetimes $\tau_t,\tau_b$. Three independent search seeds share **24
+measured starting points per seed**, followed by **32 new complete responses
+per method**:
 
-| Method | Selection of the next physical point |
+| Method | Selection of the next point |
 |---|---|
 | Random | Uniform draws in normalized coordinates |
 | Sobol | Scrambled Sobol points |
-| CMA-ES | Covariance adaptation from the best common starting point |
-| BO | GP expected improvement |
+| CMA-ES | Covariance adaptation from the best shared starting point |
+| BO | Gaussian-process expected improvement |
 | Improved BO | Adaptive local range; completion probability and predicted time |
 | LLM proposals + improved BO | Eight bounded model proposals added to the ordinary pool |
 | LLM checks + improved BO | Same proposals, with at most two source or numerical checks |
+| BO with noise-aware refinement (`bo_robust`) | Distinct proposals; local improvement must exceed transport error |
+| Corners and coordinate refinement (`corners`) | Sixteen valid corners, followed by decreasing coordinate steps |
 
-All BO variants retain 4,096 ordinary candidates plus eight additional candidates.
-The model cannot supply a measured response. Three compact Ollama models were
-compared on **24 fixed physics cases × three seeds**. Qwen3.8-27B passed
-70/72 cases (97.22%) and was selected under the original criteria. These scalar
-checks used 16,384 context tokens and at most 4,096 output tokens. Full proposal
-requests use 32,768 context tokens, at most 8,192 output tokens and a 420 s
-request timeout. Both proposal modes must pass an eight-vector test using the
-actual 24 shared measurements before AI-assisted transport begins. Tags, digests, prompts and replies are
-retained locally. Compact models use one GPU when they fit; the service can see
-only physical GPUs **0–5**, leaving **6 and 7** for other users.
+The first seven methods preserve the original comparison. The two added methods
+are exploratory responses to the earlier screening results. In particular, the
+original local BO repeatedly measured nearly identical boundary points. For the
+new BO method, normalized coordinates $u\in[0,1]^6$ obey
+$\min_j\|u-u_j\|_\infty\geq0.01$ relative to earlier and pending proposals.
+A local step counts as successful only when both
 
-Search estimates $J_D(x)$ on a fixed 512-position set $D$. Its GP uses transport
-error $s_T=\operatorname{sd}_r(\widehat J_{D,r})/\sqrt R$, where $r$ labels the
+$$
+J_{\rm old}-J_{\rm new}>0.05J_{\rm old},\qquad
+J_{\rm old}-J_{\rm new}>1.645\sqrt{s_{T,\rm old}^2+s_{T,\rm new}^2}.
+$$
+
+Here $s_T$ is transport standard error at fixed positions. This rule guides
+search; independent confirmation determines the reported improvement. Two
+local-range reductions trigger a fresh local range and four global proposal
+steps. The new method omits predicted-time weighting so that low response,
+rather than short transport time, determines the comparison.
+
+Two further studies use common positions and matched transport streams within
+each group. **Seventeen physical changes** test the best boundary target,
+elastic constants, gap, film lifetimes and crystal orientation. **Six native
+material combinations** use Si, Ge or GaAs with Nb and Cu or Au, retaining each
+substrate's density and lattice records. Borrowed interface inputs and film
+lifetimes remain model assumptions. Independently varying elastic constants
+defines a physical-property target, not an identified material.
+
+Search estimates $J_D(x)$ on a fixed 512-position set $D$. The GP uses
+$s_T=\operatorname{sd}_r(\widehat J_{D,r})/\sqrt R$, where $r$ labels the
 $R$ transport realizations; position uncertainty is reported separately.
-Independent candidate streams limit repeated fitting to the same transport noise.
-Selected leaders and common starting winners are then measured on **four unused
-1,024-position layouts**, with matched streams across candidates. Reported gains
-will be $1-J(x_{\mathrm{leader}})/J(x_{\mathrm{initial}})$ and the corresponding
-reduction against Sobol, with paired layout errors and variation across search
-seeds. Three search seeds give exploratory comparisons, not a definitive ranking.
+Search candidates use independent transport streams. Selected method leaders,
+shared starting winners and the two physical-study winners are then measured
+on **four unused 1,024-position layouts**, with matched streams across
+candidates. These observations stay out of search and model prompts.
+Reported reductions are $1-J(x_{\rm leader})/J(x_{\rm initial})$ and the
+corresponding reductions against BO, Sobol and corner refinement, with paired
+layout errors and variation across search seeds. Three search seeds remain
+an exploratory comparison.
 
-The full plan contains **106.24 billion nominal primary phonons** before
-confirmation deduplication and failed attempts. The initial completion estimate
-was **4–8 days** at launch. The October 16 estimate is **October 19–21 EDT**,
-including repeated AI stages and independent confirmation. About 21.76 billion
-primaries from verified CPU studies can be retained, leaving at most 84.48
-billion new primaries before confirmation deduplication. Parameter-dependent
-slow transport, failed attempts and model calls can extend this estimate.
-The [original launch checks](verification/optimization_launch_20261015.json)
-retain the initial timing assumptions.
+Qwen3.8-27B (`qwen3.8:27b-q4_K_M`, recorded digest) supplies proposed inputs;
+only transport supplies responses. The October 16 tool-assisted search paused
+when reasoning exhausted the output limit before producing its final JSON.
+The revised procedure keeps bounded reasoning for numerical checks and turns
+reasoning off for the final structured proposal. Both AI modes passed real GPU
+checks on the actual 24-point starting history and the previously failing
+44-point history: **eight valid vectors in each of four checks**. Model
+identity, prompts, settings, reasons, rejected inputs and tool calls are saved.
+Unavailable inference pauses its AI stage while independent CPU studies can
+continue. Reports distinguish accepted proposals, selected LLM points and
+measured improvement; valid inference alone does not establish an AI gain.
+
+The plan contains **136.768 billion nominal primaries**, including at most
+35 distinct confirmation targets. Retaining completed CPU studies leaves
+**115.008 billion new primaries** before confirmation deduplication and failed
+attempts. Historical throughput gives approximately **4–6 days after the
+October 19 restart**, or **October 23–25 EDT**. This is a planning estimate:
+confirmation accounts for up to 62% of the new transport, and slow physical
+points, failures, archive checks or host load can extend it.
 
 The allocation is **86 transport workers on CPUs 8–95**, with **eight LLM CPUs
-0–7**: no more than half of the 192 logical CPUs. Combined process RSS is limited
-to **64 GiB**, individual transport processes to 2 GiB, with 16 GiB host-memory
-and 20 GiB disk reserves. Each search stops at its complete-response target,
-three times as many attempts, or 24 hours. Missing responses remain absent.
-Completed raw data are cleared only after two verified archives exist on
-separate filesystems. Frozen source and physical inputs are preserved likewise.
+0–7**, within half of the 192 logical CPUs. Ollama can see only RTX A6000 GPUs
+**0–5**; GPUs **6 and 7** remain excluded. The selected model fits on one GPU;
+GPU use is intermittent between proposal requests. Combined process RSS is
+limited to **64 GiB**, each transport process to 2 GiB, with 16 GiB host-memory,
+20 GiB disk and 2 GiB GPU-memory reserves. Search stops at its measured target,
+three times as many attempts, or 24 hours. Failed or missing responses remain
+absent. Raw outputs are removed only after two verified archives on separate
+filesystems preserve them.
 
-The [additional analysis of saved layouts](verification/optimization_spatial_subsets.json)
-keeps candidate ordering in all four balanced 512/1,024 comparisons, but regional
-spatial equivalence still fails. This result supports an exploratory screening
-comparison; it does not establish spatial convergence or identify a new material.
+The [restart verification](verification/optimization_restart_20261019.json)
+records **200 passing tests**, exact agreement of **48 original-method
+proposal vectors**, four real GPU checks and an execution check of all six
+native material combinations. The
+[spatial comparison](verification/optimization_spatial_subsets.json) retains
+candidate ordering in four balanced 512/1,024 comparisons, but regional spatial
+equivalence still fails. These experiments therefore screen physical targets;
+they do not yet establish spatial convergence or a realizable new material.
 
 ```bash
-bash run_all.sh status material_scan_data/optimization_20261016_fixed
-tmux -L material-scan attach -t optimization_20261016_fixed
+bash run_all.sh status material_scan_data/optimization_20261019_restart
+tmux -L material-scan attach -t optimization_20261019_restart
 # A controlled stop retains measurements for restart.
-bash run_all.sh stop material_scan_data/optimization_20261016_fixed
+bash run_all.sh stop material_scan_data/optimization_20261019_restart
 ```
 
-The original AI pilot and both seed-101 AI stages made no inference calls:
-the process excluded `localhost` from its proxy but not `127.0.0.1`, and the
-optimizer continued with ordinary BO proposals. Their transport observations
-remain saved, but they are excluded from AI comparisons. These three stages
-and two associated reference checks are repeated; verified CPU-only results,
-calibration and shared starting measurements retain their original records.
-
-Local model requests now bypass the proxy. The model is explicitly instructed
-to **minimize $J$**, use at most two permitted checks in the tool-assisted mode,
-and return only proposed inputs. Unavailable inference, zero valid proposals
-or unverified GPU residency pause the AI stage. Saved evidence distinguishes
-successful inference, valid proposed vectors, selected LLM-origin points and
-completed transport. Zero selected LLM points can be a valid negative result;
-a stage with no working inference cannot become an AI result.
-
-[Repair, reuse and rerun verification](verification/ai_rerun_20261016.json)
-records the source changes, model checks, excluded studies and completion
-estimate. Original snapshots and the failed checking attempts remain local.
-
-Completed experiments will generate confirmed comparisons, a summary figure
-and the final README update. The queue then commits and pushes those public
-results. Private coding rules and restructuring notes stay local.
+After confirmation, the queue generates measured comparisons and a summary
+figure, updates this section, and commits and pushes the public results.
+Private coding rules, development plans and slides remain local.
 <!-- optimization-end -->
