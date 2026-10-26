@@ -1,0 +1,239 @@
+schema: material-scan-focused-1
+id: orientation-materials-20261026
+description: Matched crystal rotation and native Si/Ge/GaAs-Nb-Cu comparison on eight unused source layouts.
+question:
+  rotation: At identical properties, does 0 degree rotation reduce J by at least 5 percent relative to
+    45 degrees?
+  materials: Do native Ge-Nb-Cu or GaAs-Nb-Cu reduce J by at least 5 percent relative to Si-Nb-Cu on new
+    layouts?
+  previous_run: optimization_20261019_restart
+  selection_uses_new_measurements: false
+defaults:
+  temperature_K: 0.02
+  gun_energy_eV: 0.01
+  junction_gap_eV: 0.000191
+  cutoff_eV: 3.82e-05
+  nb_gap_min_eV: 0.0015384
+  source_half_span_mm: 4.0
+  source_law: uniform_surface
+  objective: device_junction_qps_per_eV
+  seed_base: 20261026
+  bootstrap_draws: 1000
+  design_counts:
+  - 1024
+  allocations:
+    '1024':
+    - 136
+    - 128
+    - 256
+    - 256
+    - 248
+  position_seed: 2026102600
+  independent_position_seeds:
+  - 2026102601
+  - 2026102602
+  - 2026102603
+  - 2026102604
+  - 2026102605
+  - 2026102606
+  - 2026102607
+  - 2026102608
+  confirmation_position_seeds: []
+  area_seed: 0
+  area_samples: 8000000
+  design_note: Retain the recorded 512-site layout; append to 1024. All layouts keep the same recorded
+    region area fractions.
+  source_note: The chip is 10x10 mm2; the declared injection region is 8x8 mm2.
+  max_sites: 1024
+  base_design_file: figures/spatial_sites.json
+execution:
+  independent_archive_root: /data/htseng/material-scan-archives
+  max_cpu_fraction: 0.5
+  max_memory_fraction: 0.5
+  workers: 86
+  total_mem_gb: 64.0
+  reserved_mem_gb: 16.0
+  minimum_free_disk_gb: 20.0
+  per_task_mem_gb: 2.0
+  blas_threads: 1
+  timeout_s: 21600
+  stall_timeout_s: 7200
+  failed_response: missing
+  timeout_note: A task exceeding six hours is right-censored; it never supplies a zero response.
+  queue_order: sequential_studies
+  stop_after_initial_checks: false
+  llm_cpu_count: 8
+  max_gpus: 0
+search_bounds: {}
+candidates:
+- name: target-45deg
+  values:
+    bot_density: 7184.383239418074
+    bot_gap_thres: 0.00012981738953147298
+    bot_ph_lifetime: 0.5
+    bot_vsound: 3.174554206770729
+    lattice_deg: 45.0
+    orientation_azimuth_turns: 0.0
+    orientation_polar_cos: 1.0
+    sub_c11: 450.0
+    sub_c12: 0.0
+    sub_c44: 5.0
+    sub_decay: 6.129072648276415e-56
+    sub_decayTT: 0.8174135229343212
+    sub_lattice_a: 5.431
+    sub_scat: 9.99999999999994e-45
+    temperature: 0.02
+    topfilm_density: 15010.886904864794
+    topfilm_gap: 0.0015384
+    topfilm_ph_lifetime: 0.001
+    topfilm_vsound: 6.0
+- name: target-0deg
+  values:
+    bot_density: 7184.383239418074
+    bot_gap_thres: 0.00012981738953147298
+    bot_ph_lifetime: 0.5
+    bot_vsound: 3.174554206770729
+    lattice_deg: 0.0
+    orientation_azimuth_turns: 0.0
+    orientation_polar_cos: 1.0
+    sub_c11: 450.0
+    sub_c12: 0.0
+    sub_c44: 5.0
+    sub_decay: 6.129072648276415e-56
+    sub_decayTT: 0.8174135229343212
+    sub_lattice_a: 5.431
+    sub_scat: 9.99999999999994e-45
+    temperature: 0.02
+    topfilm_density: 15010.886904864794
+    topfilm_gap: 0.0015384
+    topfilm_ph_lifetime: 0.001
+    topfilm_vsound: 6.0
+- name: Si-Nb-Cu
+  materials:
+  - Si
+  - Nb
+  - Cu
+- name: Ge-Nb-Cu
+  materials:
+  - Ge
+  - Nb
+  - Cu
+- name: GaAs-Nb-Cu
+  materials:
+  - GaAs
+  - Nb
+  - Cu
+comparison:
+  family_error: 0.05
+  meaningful_reduction: 0.05
+  pairs:
+  - candidate: target-0deg
+    reference: target-45deg
+  - candidate: Ge-Nb-Cu
+    reference: Si-Nb-Cu
+  - candidate: GaAs-Nb-Cu
+    reference: Si-Nb-Cu
+  uncertainty: Paired Student-t intervals of independent layout means and layout response ratios. Bonferroni
+    correction over three fixed contrasts; report all outcomes.
+  stopping: Complete all eight layouts. No early selection, no optional stopping and no expansion beyond
+    1024 sites.
+expected_work:
+  layouts: 8
+  candidates: 5
+  primaries: 20480000000
+  tasks: 327680
+  nominal_cpu_hours: 1122
+  elapsed_hours:
+  - 14
+  - 20
+  allow_hours: 24
+  gpus: 0
+  working_disk_gib:
+  - 20
+  - 30
+  disk_reserve_gib: 20
+  expectation: Rotation may retain a substantial gain. Native ranking may remain unresolved or reverse.
+    These expectations do not define success.
+  precision_note: At equal variance, eight layouts reduce the unadjusted mean standard error by sqrt(4/8)
+    relative to four. For a 5 percent effect, simultaneous intervals may remain too wide.
+limitations:
+- A property target is not an identified material; its calibrated film properties remain fixed.
+- Native materials keep their own density, elasticity and lattice records; film lifetimes and interfaces
+  still include model assumptions.
+- Matched random streams aid comparison but need not induce strong correlation when material paths differ.
+- Eight 1024-site layouts do not establish spatial convergence. Report near-junction means and position
+  variation.
+- No fabrication optimum, global minimum or qubit-error reduction follows from junction-QP yield alone.
+studies:
+- id: matched-layout-01
+  kind: focused
+  position_seed: 2026102601
+  bank: 4001
+  sampling:
+    design: 1024
+    design_file: source-independent-01_1024.json
+    replicas: 8
+    events_per_task: 62500
+- id: matched-layout-02
+  kind: focused
+  position_seed: 2026102602
+  bank: 4002
+  sampling:
+    design: 1024
+    design_file: source-independent-02_1024.json
+    replicas: 8
+    events_per_task: 62500
+- id: matched-layout-03
+  kind: focused
+  position_seed: 2026102603
+  bank: 4003
+  sampling:
+    design: 1024
+    design_file: source-independent-03_1024.json
+    replicas: 8
+    events_per_task: 62500
+- id: matched-layout-04
+  kind: focused
+  position_seed: 2026102604
+  bank: 4004
+  sampling:
+    design: 1024
+    design_file: source-independent-04_1024.json
+    replicas: 8
+    events_per_task: 62500
+- id: matched-layout-05
+  kind: focused
+  position_seed: 2026102605
+  bank: 4005
+  sampling:
+    design: 1024
+    design_file: source-independent-05_1024.json
+    replicas: 8
+    events_per_task: 62500
+- id: matched-layout-06
+  kind: focused
+  position_seed: 2026102606
+  bank: 4006
+  sampling:
+    design: 1024
+    design_file: source-independent-06_1024.json
+    replicas: 8
+    events_per_task: 62500
+- id: matched-layout-07
+  kind: focused
+  position_seed: 2026102607
+  bank: 4007
+  sampling:
+    design: 1024
+    design_file: source-independent-07_1024.json
+    replicas: 8
+    events_per_task: 62500
+- id: matched-layout-08
+  kind: focused
+  position_seed: 2026102608
+  bank: 4008
+  sampling:
+    design: 1024
+    design_file: source-independent-08_1024.json
+    replicas: 8
+    events_per_task: 62500

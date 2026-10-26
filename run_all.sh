@@ -237,6 +237,7 @@ if (run/'queue-config.json').is_file(): config_path=Path(records.load_document(r
 if not config_path.is_absolute(): config_path=(source if (run/'source-ready.json').is_file() else repo)/config_path
 cfg=records.load_document(config_path)
 optimization=cfg.get('schema')=='material-scan-optimization-1'
+focused=cfg.get('schema')=='material-scan-focused-1'
 refinement={}
 if optimization and cfg.get('refinement_file'):
     refinement=records.load_document((source if (run/'source-ready.json').is_file() else repo)/cfg['refinement_file'])
@@ -526,7 +527,7 @@ if mode in ('check','prepare'):
         key=((topology/'physical_package_id').read_text().strip(),(topology/'core_id').read_text().strip()) if topology.is_dir() else ('0',str(cpu))
         physical.setdefault(key,[]).append(cpu)
     ordered=[group[0] for group in physical.values()]+[cpu for group in physical.values() for cpu in group[1:]]
-    reserved=int(cfg['execution'].get('llm_cpu_count',0)) if optimization else 0
+    reserved=int(cfg['execution'].get('llm_cpu_count',0)) if optimization or focused else 0
     if cap<reserved+3: raise ValueError('insufficient CPUs for the declared LLM and transport allocation')
     if optimization and not 1<=int(cfg['execution'].get('max_gpus',6))<=6:
         raise ValueError('at most six GPUs are available to this study')
@@ -542,6 +543,16 @@ if mode in ('check','prepare'):
     native['candidates']=[{'name':'/'.join(row),'materials':list(row)} for row in itertools.product(('Si','Ge','GaAs'),('Nb','Ta','Ti'),('Cu','Au'))]
     native=scan.load_study(native)
     for point in scan.candidate_table(native): physics.prepare_values(native,point)
+    if focused:
+        checked=scan.load_study({**base_study('focused-check',{'kind':'sobol','sites':16,'replicas':2,'events_per_task':1}),
+                                'candidates':cfg['candidates']})
+        for point in scan.candidate_table(checked): physics.prepare_values(checked,point)
+        names={point['name'] for point in cfg['candidates']}
+        pairs=cfg['comparison']['pairs']
+        if not pairs or any(pair[key] not in names for pair in pairs for key in ('candidate','reference')):
+            raise ValueError('every declared comparison must refer to a fixed candidate')
+        if not 0<cfg['comparison']['family_error']<1 or not 0<cfg['comparison']['meaningful_reduction']<1:
+            raise ValueError('comparison probabilities and reduction must lie between zero and one')
     if optimization:
         calibration=records.load_document((source if (run/'source-ready.json').is_file() else repo)/cfg['calibration_file'])
         if len(calibration['candidates'])!=12: raise ValueError('calibration requires twelve declared full-input cases')
@@ -601,7 +612,7 @@ if mode in ('check','prepare'):
     if previous_design.get('design_hash')!=records.content_hash({k:v for k,v in previous_design.items() if k!='design_hash'}):
         raise ValueError('the recorded source design checksum differs')
     records.write_json(run/'base-design.json',{'path':str(base_file),'file_sha256':records.sha256_file(base_file),'design_hash':previous_design['design_hash'],'sites':base_n})
-    convergence_sizes=defaults['design_counts'] if optimization else next(group['sites'] for group in cfg['studies'] if group['kind']=='convergence')
+    convergence_sizes=defaults['design_counts'] if optimization or focused else next(group['sites'] for group in cfg['studies'] if group['kind']=='convergence')
     for n in defaults['design_counts']:
         sampling={'kind':'stratified','sites':n,'position_seed':defaults['position_seed'],
                   'area_samples':defaults['area_samples'],'area_seed':defaults['area_seed'],
@@ -625,7 +636,7 @@ if mode in ('check','prepare'):
     if independent_root.stat().st_dev==run.stat().st_dev: raise ValueError('archive copies require a separate persistent filesystem')
     if shutil.disk_usage(independent_root).free<limits['minimum_free_disk_gb']*1024**3: raise ValueError('independent archive disk reserve unavailable')
     records.write_json(run/'archive-location.json',{'path':str(independent_root),'device':independent_root.stat().st_dev,'working_device':run.stat().st_dev})
-    queue=[] if optimization else [{'id':'pilot','kind':'pilot','sampling':{'design':128,'replicas':2,'events_per_task':31250,'seed_bank':defaults.get('pilot_seed_bank',2100)}}]
+    queue=[] if optimization or focused else [{'id':'pilot','kind':'pilot','sampling':{'design':128,'replicas':2,'events_per_task':31250,'seed_bank':defaults.get('pilot_seed_bank',2100)}}]
     if optimization:
         # One initial table per seed is measured once and imported into every arm.
         calibration=records.load_document(source/cfg['calibration_file'])
@@ -685,9 +696,16 @@ if mode in ('check','prepare'):
             queue.extend({**group,'id':group['id']+f'-{i//4+1:02d}','move_start':i,'move_count':4} for i in range(0,moves,4))
         else: queue.append(group)
     records.write_json(run/'queue.json',queue)
+    if focused:
+        primaries=sum(step['sampling']['design']*step['sampling']['replicas']*step['sampling']['events_per_task']*len(cfg['candidates']) for step in queue)
+        records.write_json(run/'planned-computation.json',{'primaries':primaries,'layouts':len(queue),
+            'candidates':len(cfg['candidates']),'comparisons':cfg['comparison'],
+            'interpretation':'All fixed candidates use matched positions and streams within each independent layout.'})
     records.write_json(run/'queue_status.json',{'state':'prepared','stages':len(queue),'updated':time.time()},overwrite=True)
     files=['README.md','docs/results/optimization_summary.json','docs/results/optimization_summary.md','figures/optimization_results.png'] if optimization else ['README.md','docs/results/full_scale_summary.json','figures/full_scale_finalists.png','figures/full_scale_transport_morris.png','figures/full_scale_density_morris.png','figures/full_scale_methods.png','figures/full_scale_projection.png']
-    records.write_json(run/'publication.json',{'branch':subprocess.check_output(['git','branch','--show-current'],cwd=repo,text=True).strip(),'remote':subprocess.check_output(['git','remote','get-url','origin'],cwd=repo,text=True).strip(),'files':files,'commit_message':'Report confirmed optimization comparisons' if optimization else 'Report fresh full-scale material studies'})
+    if focused:
+        files=['README.md','docs/results/orientation_materials.json','docs/results/orientation_materials.md','figures/orientation_materials.png']
+    records.write_json(run/'publication.json',{'branch':subprocess.check_output(['git','branch','--show-current'],cwd=repo,text=True).strip(),'remote':subprocess.check_output(['git','remote','get-url','origin'],cwd=repo,text=True).strip(),'files':files,'commit_message':'Report matched rotation and native-material comparison' if focused else 'Report confirmed optimization comparisons' if optimization else 'Report fresh full-scale material studies'})
     print(records.canonical_json({'prepared_studies':len(queue),'source':str(source),'resources':limits}))
     raise SystemExit(0)
 
@@ -849,6 +867,12 @@ if mode=='stage':
             raw['sampling']['position_seed']=step['position_seed']
             raw['analysis'].update(comparisons=True,diagnostics=True,bootstrap_draws=defaults['bootstrap_draws'])
         else: raise ValueError('unknown optimization study')
+    elif focused and step['kind']=='focused':
+        raw=base_study(identifier,{**step['sampling'],'seed_bank':step['bank']})
+        raw['sampling'].update(position_seed=step['position_seed'],independent_candidate_streams=False)
+        raw['candidates']=copy.deepcopy(cfg['candidates'])
+        raw['analysis'].update(comparisons=False,diagnostics=True)
+        raw['provenance']=cfg['question']
     else:
         if step['kind'] in ('source_validation','finalist_validation'):
             if (run/(identifier+'.json')).is_file():
@@ -1128,6 +1152,52 @@ elif mode=='finish':
     if any(not report['complete'] and not (optimization and report.get('terminated_search')) for report in reports.values()):
         raise ValueError('all declared measured studies must finish or have an explicitly terminated search record')
     for report in reports.values(): verify_saved_archive(report)
+    if focused:
+        # Layout means are the independent observations; all comparisons were fixed before transport.
+        aggregate=layout_summary([reports[step['id']] for step in queue])
+        values={row['name']:np.asarray(row['estimate']['by_layout']) for row in aggregate['results']}
+        contrasts=[]; confidence=1-cfg['comparison']['family_error']/len(cfg['comparison']['pairs'])
+        for pair in cfg['comparison']['pairs']:
+            a,b=values[pair['candidate']],values[pair['reference']]
+            if not np.all(b>0): raise ValueError('relative comparisons require positive reference responses')
+            delta=analysis.compare_repeated(a,b,paired=True,confidence=confidence)
+            relative=analysis.compare_repeated(a/b,np.ones(len(b)),paired=True,confidence=confidence)
+            contrasts.append({**pair,'difference':delta,'relative_change':relative,
+                'meaningful_reduction_confirmed':relative['confidence_interval'][1]<-cfg['comparison']['meaningful_reduction']})
+        result={'id':cfg['id'],'state':'complete','date':time.strftime('%Y-%m-%d'),'objective':defaults['objective'],
+                'question':cfg['question'],'comparison':cfg['comparison'],'simultaneous_confidence':confidence,
+                'results':aggregate['results'],'contrasts':contrasts,'studies':reports,'resources':limits,
+                'source':records.load_document(run/'source-ready.json'),'limitations':cfg['limitations']}
+        publication=records.load_document(run/'publication.json')
+        if subprocess.check_output(['git','branch','--show-current'],cwd=repo,text=True).strip()!=publication['branch'] or subprocess.check_output(['git','remote','get-url','origin'],cwd=repo,text=True).strip()!=publication['remote']:
+            raise ValueError('publication branch or remote changed; retained results were not published')
+        public=repo/'docs/results'; public.mkdir(parents=True,exist_ok=True)
+        records.write_json(public/'orientation_materials.json',result,overwrite=True)
+        plotted=[{'name':row['candidate']+' / '+row['reference'],
+                  'value':row['relative_change']['difference'],'standard_error':row['relative_change']['standard_error']}
+                 for row in contrasts]
+        analysis.plot_result({'results':plotted,'yield_label':'fractional response change; negative means lower',
+                              'title':'Eight independent layouts; bars show standard errors'},repo/'figures/orientation_materials.png','summary')
+        lines=['# Matched rotation and native-material comparison','',
+               'Three comparisons were fixed before transport. Intervals use paired layout means and Bonferroni family error 0.05.',
+               '', '| Candidate / reference | Response change | Simultaneous interval | At least 5% reduction established |',
+               '|---|---:|---:|---|']
+        for row in contrasts:
+            estimate=row['relative_change']; lo,hi=estimate['confidence_interval']
+            lines.append(f"| {row['candidate']} / {row['reference']} | {100*estimate['difference']:+.2f}% | [{100*lo:+.2f}%, {100*hi:+.2f}%] | {row['meaningful_reduction_confirmed']} |")
+        lines+=['',*['- '+text for text in cfg['limitations']],'','[Measured values, layouts and archives](orientation_materials.json).','']
+        (public/'orientation_materials.md').write_text('\n'.join(lines))
+        block=['<!-- focused-start -->','## Matched rotation and native-material comparison','',
+               'Finished '+result['date']+'. Eight unused 1,024-position layouts compare 0° with 45° at identical properties, and Ge/Nb/Cu and GaAs/Nb/Cu with Si/Nb/Cu.',
+               '', '\n'.join(lines[4:6+len(contrasts)]), '',
+               '![Matched rotation and native-material responses](figures/orientation_materials.png)', '',
+               '[Paired intervals, physical inputs and limits](docs/results/orientation_materials.md).','<!-- focused-end -->']
+        readme=repo/'README.md'; text=readme.read_text()
+        start=text.index('<!-- focused-start -->'); end=text.index('<!-- focused-end -->')+len('<!-- focused-end -->')
+        readme.write_text(text[:start]+'\n'.join(block)+text[end:])
+        records.write_json(run/'queue_status.json',{'state':'complete','studies':len(reports),'updated':time.time()},overwrite=True)
+        print(records.canonical_json({'state':'complete','studies':len(reports),'contrasts':len(contrasts)}))
+        raise SystemExit(0)
     if optimization:
         selection=records.load_document(run/'selected-leaders.json')
         confirmed=[reports[f'optimization-confirmation-{k:02d}'] for k in range(1,5)]

@@ -1,24 +1,26 @@
 # Material properties and phonon-induced quasiparticles
 
-This project calculates how substrate and film properties change phonon-induced
-quasiparticle production in aluminum junction regions. Five Python files run
-sensitivity studies, linked-material comparisons, continuous-property searches,
-confirmation, spatial refinement, and tolerance checks. Geant4/G4CMP supplies
-phonon transport; measured simulation outputs supply every search response.
+This project uses numerical optimization to find substrate and film properties
+that reduce phonon-induced quasiparticles in quantum-device junction regions.
+Geant4/G4CMP calculates transport; every optimization response comes from a
+completed simulation. The present result is a **physical-property target**,
+not an identified new material or a measured reduction in qubit error.
 
-![Illustration of phonon propagation and absorption in a layered device](figures/device_stack.png)
+![Phonon propagation and absorption in a layered device](figures/device_stack.png)
 
-The supplied illustration shows the goal: redirect and absorb substrate phonons
-before they create quasiparticles in junction regions. Paths, layer spacing,
-and glowing markers are illustrative; the measured response and actual device
-dimensions are defined below.
+The illustration shows the goal: redirect or absorb substrate phonons before
+they create quasiparticles near junctions. Paths and layer spacing are illustrative.
+The reference model has a 525 μm Si substrate, 75 nm Nb upper film, 1 μm Cu
+bottom film, and seventeen 10 × 10 μm² Al collection regions of thickness 120 nm.
+The current studies use **20 mK**, **10 meV** injected phonons, and an upper-film
+gap of at least **1.5384 meV**.
 
-## Physical quantity
+## Response and spatial sampling
 
-Let $x\in\mathcal X\subset\mathbb R^d$ denote the selected material properties,
-$\xi$ an injection position in the declared surface region, $\omega$ a transport
-realization, and $e$ a junction region. For $Q_e(x,\xi,\omega)$ quasiparticles per
-primary phonon and source energy $E_g$ in eV, the area-weighted objective is
+Let $x\in\mathcal X$ denote material properties, $\xi$ a uniformly distributed
+source position on the declared 8 × 8 mm² region, $\omega$ a transport realization,
+and $e$ a junction. With $Q_e$ quasiparticles per injected phonon and source
+energy $E_g$ in eV, the minimized response is
 
 $$
 J(x)=\mathbb E_{\xi,\omega}\!\left[
@@ -26,371 +28,250 @@ J(x)=\mathbb E_{\xi,\omega}\!\left[
 \qquad w_e\geq0,\quad\sum_e w_e=1.
 $$
 
-Its units are weighted junction QPs per injected eV. Each recorded junction hit
-with deposited energy $E_k$ contributes $q_k=\operatorname{round}(E_k/\Delta_{\rm Al})$,
-where $\Delta_{\rm Al}=191\,\mu\mathrm{eV}$ in the reference. The separately named
-`total_qps_per_primary` response sums over junctions without energy normalization.
-Studies record which response they use. Density sensitivity instead integrates
-the stated quasiparticle evolution equations and retains its own response units.
+The units are **weighted junction QPs per injected eV**. A recorded junction hit
+with deposited energy $E_k$ contributes
+$q_k=\operatorname{round}(E_k/\Delta_{\rm Al})$, with
+$\Delta_{\rm Al}=191\,\mu\mathrm{eV}$. Only junction hits enter this response.
+The separate `total_qps_per_primary` response sums junctions without energy
+normalization; its numerical values cannot be compared directly with $J$.
 
-![Reference boundary geometry and phonon paths](figures/device_geometry.png)
+![Recorded source positions and region areas](figures/spatial_sampling.png)
 
-The reference uses a 525 μm Si substrate, 75 nm Nb upper film, 1 μm Cu bottom
-film, and seventeen 120 nm Al junction collection regions. Each collection
-rectangle is 10 × 10 μm². The source phonon energy is 10 meV. The drawing shows
-boundary regions and illustrative paths; lengths and thicknesses are not to scale.
-Only junction hits contribute to the recorded junction-QP response.
+Positions near junctions are deliberately sampled more densely. For source
+region $h$, let $W_h$ be its area fraction, $n_h$ its sampled positions,
+$R$ the transport realizations, and $N_{ire}$ the QPs from $N_p$ primaries at
+position $i$, realization $r$, and junction $e$. The estimator is
 
-## Spatial and statistical comparison
+$$
+\widehat J=
+\sum_h\frac{W_h}{n_h}\sum_{i\in h}\frac{1}{R}
+\sum_{r=1}^{R}\frac{\sum_e w_eN_{ire}}{N_pE_g}.
+$$
 
-Uniform injection is defined over the region in the study. In the revised
-512-site search design below, it covers 8 × 8 mm² within the 10 × 10 mm² substrate.
-Near-junction regions are sampled more densely, so their measured means
-$\widehat\mu_h$ must be multiplied by their true area fractions $W_h$:
-$\widehat J=\sum_h W_h\widehat\mu_h$. An equal average over these sites gives
-the wrong spatial integral.
+An unweighted average over these positions gives the wrong spatial integral.
+Transport error at fixed positions and variation between independent position
+layouts are reported separately. Failed, missing or incomplete measurements
+remain absent. A witnessed, complete header-only hit file can represent zero.
 
-![Actual recorded spatial sites and region areas](figures/spatial_sampling.png)
+## Confirmed optimization results
 
-Matched comparisons retain the same sites, source counts, region weights, and
-random streams. Repeated realizations provide uncertainty in the difference.
-Software equivalence requires the entire stated confidence interval to lie
-inside a margin chosen before comparison. An unresolved difference alone does
-not demonstrate equivalence. A complete, header-only hit file is a physical
-zero; failed, timed-out, or incomplete simulations have no measured response.
+The current nine-method comparison finished on **2026-10-21**:
+**70 complete studies**, **118.336 billion primaries in complete measurements**,
+and **26 distinct selected designs confirmed on four unused layouts**.
+The October 19 restart added 96.576 billion primaries, retaining 23 verified CPU
+studies, and finished in 54.6 hours. Every study has two verified archive copies.
+The [search inputs](studies/optimization/queue_restart.yaml),
+[additional physical comparisons](studies/optimization/refinement.yaml),
+[complete results](docs/results/optimization_summary.json), and
+[verification](verification/optimization_restart_20261019.json) retain provenance.
 
-## Surface-hit records
+Each of three search seeds shared **24 measured starting points** across all
+methods, followed by **32 new responses per method**. Screening used 512
+positions, four realizations and 31,250 primaries per task. Confirmation used
+four unused layouts, each with 1,024 positions, eight realizations and 62,500
+primaries per task. Selected designs shared confirmation positions and streams.
+Confirmation data were excluded from search and model prompts.
 
-For file $f$, let $H_f$ be the number of valid surface-hit rows. The histogram
-shows how many files have each count $H_f$. These rows record deposited energy
-and final phonon position and time. A row is a recorded boundary hit; it is
-neither a distinct injected phonon nor the junction-QP response defined above.
+The six search coordinates are $C_{11},C_{12},C_{44}$ in GPa, upper-film gap
+$\Delta_t$ in eV, and film lifetimes $\tau_t,\tau_b$ in ns.
+The map $u\in[0,1]^6\mapsto x\in\mathcal X$ is linear for elastic constants and
+logarithmic for gap and lifetimes. Bounds are $[20,450]$, $[0,250]$, $[5,250]$
+GPa, $[1.5384,3.5]$ meV, $[0.001,1]$ ns and $[0.5,50]$ ns, respectively.
+Cubic elastic stability is required. Other properties remain fixed to the
+recorded calibrated background.
 
-![Surface-hit records in the completed 500,000-primary reference study](figures/surface_hits_events500000_reference.png)
+Let $g=1-J(x_{\rm selected})/J(x_{\rm initial})$ be added improvement relative to
+that seed's shared starting winner. The table averages confirmed results over
+the three search seeds; calibration gains are excluded from $g$.
 
-This new example uses **all 4,096 completed reference files** from the
-`events-500000` study: 512 positions × 8 realizations at 20 mK, with 500,000
-primaries per file. It contains **10,050,999 records**: 5,733,757 upper-surface,
-4,297,824 lower-surface and 19,418 side-boundary records. No file has zero hits;
-the median is 213 records/file and the range is 12–18,762. Bins are equally
-spaced in $\log(1+H_f)$; horizontal labels show raw counts. The file histogram
-retains the deliberate near-junction oversampling and is not an area-weighted
-physical source distribution.
+| Method | Mean confirmed $J$ [QP/eV] | Added reduction $g$ |
+|---|---:|---:|
+| Random | 0.000570905 | 0% |
+| Sobol | 0.000570905 | 0% |
+| CMA-ES | 0.000425301 | 25.5% |
+| BO: Gaussian-process expected improvement | 0.000410339 | 28.1% |
+| Improved BO: local range and predicted-time weighting | 0.000402924 | **29.4%** |
+| BO with transport-error checks and distinct proposals | 0.000407383 | 28.6% |
+| Corners and coordinate refinement | 0.000404828 | 29.1% |
+| LLM proposals + improved BO | 0.000447069 | 21.7% |
+| LLM checks + improved BO | 0.000438348 | 23.2% |
 
-The [per-file counts](figures/surface_hits_events500000_reference.csv) and
-[provenance and reproduction command](figures/surface_hits_events500000_reference.json)
-retain archive-relative paths, positions, realizations and checksums. The
-archive, hit files, completion markers and saved per-file counts agree. All
-recorded boundaries are counted, including zero deposited energy when present;
-this particular cohort has no zero-energy rows. These counts do not establish
-spatial convergence or rank materials.
+![Independent confirmation of optimization methods](figures/optimization_results.png)
 
-The [historical 32-file checking example](figures/surface_hits_histogram.png)
-remains available. To regenerate that small example and the device drawings:
+The figure shows standard errors across three search seeds, conditional on the
+four measured layouts. Paired layout intervals are retained separately.
+**BO contributed approximately 28–29% beyond the shared starting design.**
+The 95% interval for ordinary BO's added gain across these seeds is 26.3–30.0%.
+Improved BO's response was only 1.8% below ordinary BO; that difference remains
+unresolved. The BO variant accounting for transport error reached a similar
+response in 0.94 h per search, compared with 1.27 h for ordinary BO. These times
+include the 32 new responses and depend on the physical points selected.
+Random and Sobol retained the starting winner in every seed; this does not
+imply zero physical response or a general failure of those methods.
 
-```bash
-conda run -n G4CMP python figures/plot.py hits tests/fixtures/random_trial_9a3f0ab28d9d/hits \
-  --output figures/surface_hits_histogram.png \
-  --counts figures/surface_hits_counts.csv
-conda run -n G4CMP python figures/draw.py
+Qwen3.8-27B inference worked: the six main AI searches made 116 model calls,
+accepted 344 proposals and measured 14 LLM-origin points out of 192 new responses.
+None of their selected leaders originated from the LLM. Indirect effects through
+the fitted GP remain possible, but **no added AI improvement was demonstrated**.
+More inference or larger models are not justified by these results alone.
+
+## Physical findings and remaining limits
+
+The strongest controlled screening change was **in-plane crystal rotation from
+45° to 0°**, reducing $J$ by 35.2% at otherwise identical properties. Its selected
+0° target independently confirmed at
+$J=0.000300141$, with a four-layout 95% interval
+$[0.000286310,0.000313972]$. This is 25.5% below the best BO method's mean,
+but that comparison changes more than rotation. A direct matched rotation
+confirmation is the next measurement.
+
+The target has $(C_{11},C_{12},C_{44})=(450,0,5)$ GPa, upper-film lifetime
+1 ps, lower-film lifetime 0.5 ns and gap 1.5384 meV. Its other substrate and film
+inputs remain the calibrated background. Elastic stability does not establish
+that this combined property set exists in a material.
+For example, its upper- and lower-film densities are 15,010.9 and 7,184.4 kg/m³;
+these are calibrated property inputs rather than the native Nb/Cu pair.
+
+For native materials, Ge–Nb–Cu appeared 11.3% below Si–Nb–Cu during screening.
+In independent confirmation, Ge–Nb–Cu instead gave $J=0.00242081$, compared
+with $0.00231736$ for Si–Nb–Cu: approximately 4.5% higher. Its apparent advantage
+did not survive confirmation. Physical inputs were identical between phases;
+source-position and transport variation remain important. Only the selected
+native winner was confirmed, so the complete native ranking is unresolved.
+
+The earlier primary-count test passed at fixed positions, while the spatial
+convergence test failed. Four additional layouts do not establish convergence
+throughout the search domain. All further layouts remain at **1,024 positions
+or fewer**. Materials retain their own density and lattice records; scattering,
+film lifetimes and interface assumptions require independent physical support.
+Junction-QP yield alone does not establish a fabrication optimum, global
+minimum or qubit-error reduction.
+
+<!-- focused-start -->
+## Next measurement: matched rotation and native materials
+
+The [fixed follow-up inputs](studies/focused/queue.yaml) define **five designs**:
+the same property target at 0° and 45°, and native Si–Nb–Cu, Ge–Nb–Cu and
+GaAs–Nb–Cu. The native cases retain their own coupled substrate records and the
+reference film model. They are not assigned the calibrated target's film inputs.
+
+All five designs use **eight new, independent 1,024-position layouts**. Each
+layout has eight transport realizations and 62,500 primaries per task. Positions,
+area fractions and streams are matched across candidates within a layout.
+The three comparisons are fixed before transport: 0° against 45°, Ge against Si,
+and GaAs against Si. No candidate is selected using these observations.
+
+For comparison $a/b$ and layout $k$, the observations are
+$d_k=\widehat J_{a,k}-\widehat J_{b,k}$ and
+$r_k=\widehat J_{a,k}/\widehat J_{b,k}-1$. Intervals describe their means over
+eight layouts; the mean of ratios generally differs from the ratio of means.
+Student-t intervals use a Bonferroni correction
+across the three comparisons: each interval has confidence 98.33%, giving
+family error at most 5% under the stated assumptions. A useful reduction requires
+the entire relative-change interval below −5%. All outcomes are retained;
+the calculation completes all eight layouts without early stopping.
+
+| Quantity | Allocation or estimate |
+|---|---|
+| Transport | **20.48 billion primaries; 327,680 tasks** |
+| CPUs | **86 workers**, inside the 96-CPU total limit; eight CPUs reserved for the model service |
+| GPUs | **0**; no new LLM inference |
+| Host memory | Combined limit **64 GiB**; 2 GiB per task; 16 GiB host reserve |
+| Additional working storage | Approximately **20–30 GiB**, plus a 20 GiB free-disk reserve |
+| Independent archive storage | Approximately **8–12 GiB**, plus the free-disk reserve |
+| CPU time | Approximately **1,100 CPU-hours** at the measured task rates |
+| Elapsed time | **14–20 h after launch**; allow up to 24 h for archive checks and variable load |
+
+These are measured-rate estimates, not guaranteed completion times. The 0°
+effect may remain substantial, but its screening estimate can overstate the
+confirmed gain. Ge or GaAs may fail to improve on Si. At equal variance, eight
+layouts reduce mean standard error by approximately $\sqrt{4/8}=0.707$ relative
+to four; the correction for three comparisons widens the intervals. Small effects
+may remain unresolved. This experiment does not certify spatial convergence.
+
+The run is `orientation_materials_20261026`, launched on **October 26**.
+[Launch verification](verification/orientation_materials_launch_20261026.json)
+records fresh layout hashes, matching physical inputs, execution checks and timing assumptions.
+The expected finish is **October 27 EDT**, conditional on uninterrupted execution.
+Check its recorded state with
+`bash run_all.sh status material_scan_data/orientation_materials_20261026`.
+A persistent tmux session of the same name runs the eight layouts sequentially.
+Two verified archives preserve each completed layout before raw working files
+are removed. Completion generates the paired comparisons and updates this section.
+<!-- focused-end -->
+
+The subsequent optimization should include crystal orientation and physically
+coupled material choices, retaining BO and corner refinement as controls.
+Additional optimizer seeds can then test smaller differences. A bounded LLM
+should propose physical hypotheses or checks; any claimed benefit must be an
+added, independently confirmed reduction under equal measured work.
+
+## Calculation and execution
+
+```mermaid
+flowchart LR
+    A[Material properties and physical limits] --> B[Position layouts and random streams]
+    B --> C[Geant4 and G4CMP transport]
+    C --> D[Checked junction hits]
+    D --> E[Weighted QP response and uncertainty]
+    E --> F[BO or another method proposes properties]
+    F --> A
+    E --> G[Independent matched confirmation]
+    G --> H[Physical targets and measured-material checks]
 ```
 
-A recorded study directory selects completed tasks and checks saved hit-file
-checksums. Direct raw-file input should contain completed measurements; task
-directories also require the post-transport completion marker. Archived studies
-must be recovered before recounting raw hits. The new plot can also be
-regenerated from its tracked count table using the command in its provenance.
-Both figure scripts, all images and the supplied `device_stack.png` are under
-`figures/`. The drawings use the [recorded sites](figures/spatial_sites.json)
-and current reference dimensions.
+The maintained code consists of **ten scripts**:
 
-## Run and verify
+| File | Calculation |
+|---|---|
+| [`scan.py`](scan.py) | Study inputs, physical candidates, simulation tasks and commands |
+| [`physics.py`](physics.py) | Physical maps, validity, elasticity, positions, hit scoring and QPs |
+| [`analysis.py`](analysis.py) | Weighted responses, uncertainty and matched comparisons |
+| [`search.py`](search.py) | Optimizers, Gaussian processes and bounded Ollama interaction |
+| [`records.py`](records.py) | Inputs, hits, SQLite results, archives and recovery |
+| [`run_all.sh`](run_all.sh) | Sequential studies, resource checks, preservation and reporting |
+| [`figures/plot.py`](figures/plot.py) | Measured-result plots and surface-hit counts |
+| [`figures/draw.py`](figures/draw.py) | Device, sampling and workflow drawings |
+| [`tests/test_physics.py`](tests/test_physics.py) | Physical and numerical tests |
+| [`tests/test_workflow.py`](tests/test_workflow.py) | Execution, optimization, records and plotting tests |
 
-Use the existing G4CMP environment from this repository directory. The study's
-`installation` section sets external paths. An optional editable installation,
-`python -m pip install --no-deps -e .`, provides the `material-scan` command.
+Use the existing `G4CMP` environment. External Geant4/G4CMP paths are supplied
+by the study's `installation` record. The small reference example checks software;
+it is not a spatial-convergence study.
 
 ```bash
 conda run -n G4CMP python scan.py check studies/reference-eight.yaml
 conda run -n G4CMP python scan.py run studies/reference-eight.yaml \
   --output material_scan_data/experiments/reference-eight
-conda run -n G4CMP python scan.py analyse \
-  material_scan_data/experiments/reference-eight --output /tmp/reference-analysis.json
-conda run -n G4CMP python scan.py plot \
-  material_scan_data/experiments/reference-eight --kind summary --output figures/reference_summary.png
 conda run -n G4CMP python -m unittest discover -s tests -v
+
+# Full follow-up; prepare freezes source, executable, libraries and inputs.
+MATERIAL_QUEUE_CONFIG=studies/focused/queue.yaml \
+  bash run_all.sh prepare material_scan_data/orientation_materials_20261026
+bash run_all.sh run material_scan_data/orientation_materials_20261026
 ```
 
-`run --prepare-only` writes resolved inputs without simulation. Repeating `run`
-with the same output directory resumes recorded work after checking its physical
-inputs and raw outputs. Give a new physical study a new directory. Retained hit
-files support reanalysis when only scoring changes.
-Older frozen studies require agreement of retained raw files and normalized
-inputs before cached analysis; use their `resolved.json` as the study input.
-New transport after a source change needs a new output directory. Earlier
-search checkpoint schemas require a new study.
+Repeating a run with unchanged inputs resumes recorded work. New physical inputs
+require a new directory. Results stay under ignored `material_scan_data/`;
+figures and figure inputs stay in `figures/`. Completed data are preserved in two
+verified archives on separate filesystems. Use `python scan.py COMMAND --help`
+for analysis, comparison, plotting, archive verification and recovery commands.
 
-The files in [`studies/`](studies/) declare physical limits, source counts,
-sites, realizations, seeds, and responses. The small reference examples test
-software agreement; sixteen sites do not establish a converged spatial integral.
-SALib is needed for Morris sensitivity. Materials Project access, TPE search,
-and presentation export have optional dependencies in [`pyproject.toml`](pyproject.toml).
+## Surface-hit records
 
-Additional commands are `compare`, `catalog`, `project`, `probe-density`,
-`history`, `inventory`, `archive`, `verify-archive`, `recover`, and `convert-copy`.
-Use `python scan.py COMMAND --help` for arguments. Archive creation copies data
-and verifies its contents. Historical raw data should have two independently
-verified copies before any later removal.
+![Surface-hit counts in the completed reference study](figures/surface_hits_events500000_reference.png)
 
-<!-- full-scale-start -->
-## Source and primary-count comparisons up to 1,024 sites
-
-The queue in [`studies/full_scale/queue.yaml`](studies/full_scale/queue.yaml)
-is limited to **1,024 source sites** and stops after the initial comparisons.
-The unfinished 2,653-site study was cancelled on 2026-10-14. Its 6,105 completed
-task measurements are retained separately from 57,567 unmeasured tasks; this
-partial study supplies no complete candidate comparison. Earlier completed
-measurements, including the 2,361-site comparison and the 0 K/20 mK checks,
-remain historical evidence. No further study above 1,024 sites will start.
-
-The source remains uniform over 8 × 8 mm² at 20 mK, with 10 meV primary phonons.
-The upper-film gap restriction remains 1.5384 meV. The five spatial regions are
-junction rectangles ($S_0$), successive distance bands of 0.05, 0.20 and 0.50 mm
-($S_1,S_2,S_3$), and the remaining source area ($S_4$):
-
-| Sites | $S_0$ | $S_1$ | $S_2$ | $S_3$ | $S_4$ |
-|---|---:|---:|---:|---:|---:|
-| 128 | 34 | 16 | 24 | 24 | 30 |
-| 512 | 68 | 64 | 128 | 128 | 124 |
-| 1,024 | 136 | 128 | 256 | 256 | 248 |
-
-The recorded corrected 512 sites and region area fractions $W_h$ remain fixed.
-The 1,024-site layout appends positions within each region. Its nested comparison
-recomputes the 512-site estimate from the shared prefix of the same outputs,
-retaining covariance. A separate 512-site study uses its own transport streams.
-Four independently generated 1,024-site layouts measure position uncertainty.
-
-| Comparison | Sites | Realizations | Primaries per task | Candidates |
-|---|---:|---:|---:|---:|
-| Pilot | 128 | 2 | 31,250 | 1 |
-| Nested layouts | 512 and 1,024 | 8 | 62,500 | 3 |
-| Four independent layouts | 1,024 each | 8 | 62,500 | 3 |
-| Primary-count variation | 512 | 8 | 31,250; 125,000; 500,000 | 2 |
-
-The spatial candidates are the reference, the $C_{44}=1$ GPa test and the
-SiC-derived model. Primary-count checks use the first two. Spatial checks
-report 95% intervals for the total and each refined region, a ±5% equivalence
-margin, a 2% relative standard-error criterion for independent layouts, and a
-10% upper limit on any single site's contribution to the estimated total.
-Primary-count errors condition on the fixed source positions. All results and
-failed criteria are retained. **The 1,024-site limit does not establish spatial
-convergence.** The queue stops for review after these checks, regardless of
-whether they pass. These diagnostic checks are retained. The newly authorized optimization comparison
-is described below; linked-material, tolerance and model-range extensions remain
-separate future studies.
-
-[`run_all.sh`](run_all.sh) freezes the scientific code, physical inputs,
-executable, libraries, lattice maps and Geant4 datasets before transport.
-The new run directory and tmux session are `initial_checks_1024_20261014`:
+This histogram counts boundary-hit rows per file, not unique injected phonons
+or junction QPs. It uses all **4,096 completed reference files** from the
+500,000-primary study: **10,050,999 surface-hit records**, median 213 per file,
+range 12–18,762. Bins are uniform in $\log(1+H_f)$, where $H_f$ is the row count
+for file $f$; axis labels show raw counts. Near-junction oversampling remains
+visible in the file distribution and is not an area-weighted physical result.
+[Per-file counts](figures/surface_hits_events500000_reference.csv) and
+[checksums and reproduction command](figures/surface_hits_events500000_reference.json)
+retain provenance.
 
 ```bash
-MATERIAL_QUEUE_CONFIG=studies/full_scale/queue.yaml bash run_all.sh check \
-  material_scan_data/initial_checks_1024_20261014
-bash run_all.sh status material_scan_data/initial_checks_1024_20261014
+conda run -n G4CMP python figures/plot.py hits STUDY_DIRECTORY \
+  --output figures/hits.png --counts figures/hits.csv
 ```
-
-All **10 measured studies and one source-validation step are complete**:
-160,000 completed tasks and **13.832 billion primary phonons**. The queue ran
-from October 14 at 22:55:40 to October 15 at **10:38:38 EDT**, taking **11 h 43 min**.
-This falls within the earlier 11–19 h estimate. This diagnostic queue has no remaining transport. The new optimization queue
-uses a separate directory and immutable source snapshot.
-
-At most half the available CPU affinity is used: 96 of 192 logical CPUs on this
-machine, with 94 transport workers and one numerical thread per process.
-The total RSS limit is 64 GiB, each transport process is limited to 2 GiB,
-and 16 GiB of available memory and 20 GiB of free disk are reserved. Memory
-checks include ancestor cgroup limits. Failed, incomplete or timed-out tasks
-have no measured response.
-
-Completed studies have two fully verified archive copies: under
-`material_scan_data/` and on the independent persistent filesystem at
-`/data/htseng/material-scan-archives`. Raw working files are removed only after
-both copies pass verification. The cancelled partial study is also preserved
-in two verified archives, with its raw files retained. Recovery uses
-`python scan.py recover ARCHIVE --output DIRECTORY`.
-
-<!-- initial-checks-start -->
-### Completed source and primary-count checks
-
-Primary-count comparisons passed at 125,000 and 500,000 primaries per task.
-Spatial equivalence remains unconfirmed: nested total changes are small
-(0.71–2.75%), but their 95% intervals extend beyond ±5%; some near-junction
-regional changes are larger. Four independent 1,024-site layouts give:
-
-| Predefined case | $J$, QPs/injected eV | Standard error | Paired reduction from reference, 95% interval |
-|---|---:|---:|---:|
-| Reference | 0.00234472 | 0.00000806 | — |
-| $C_{44}=1$ GPa | 0.00223919 | 0.00000840 | 4.50% [2.99%, 6.00%] |
-| SiC-derived model | 0.00154571 | 0.00000634 | 34.08% [32.98%, 35.17%] |
-
-These are specified test points, not optimizer discoveries. The SiC rates and
-interfaces remain model assumptions. Increasing primaries mainly reduces
-transport noise; uncertainty from source positions still needs examination.
-The 1,024-site cap remains a chosen stopping point.
-
-![Completed source-position checks](figures/initial_source_checks.png)
-
-Error bars are standard errors. The four-layout means include variation between
-independent source layouts. [Measured results and uncertainty definitions](docs/results/initial_checks_summary.md)
-and [regional checks and archive verification](verification/initial_1024_results.json)
-retain the failed criteria. All twenty study-archive copies match their recorded
-checksums. The queue is stopped at `awaiting_review`.
-<!-- initial-checks-end -->
-
-<!-- full-scale-end -->
-
-## What optimization has contributed
-
-The strongest relevant historical result is the 20 mK, Nb-gap-constrained
-CMA-ES search. Three runs improved a shared measured starting point; their
-independent confirmations reduced $J$ by **38.7–48.3% beyond the compatible
-starting anchor**. That anchor was already 74.8% below its matched reference.
-CMA-ES added another **9.8–12.2 percentage points of reference-relative reduction**,
-reaching **84.6–87.0% total reduction**. Seeds 101 and 303 remain statistically
-tied, and all finalists reach the $C_{44}=5$ GPa search limit. These are
-historical model results, not fresh confirmations or a proven global minimum.
-
-Earlier reported screening values place Bayesian search **23.8% below the best
-Sobol value and 45.1% below the best random value**. Those lowest points violate
-the present gap requirement, and the archived tables do not establish equal
-fresh computation. The later constrained BO attempt stalled before completing
-a new measurement: its improvement is unmeasured. No fresh BO, CMA-ES, TPE or
-agentic optimization ran in the completed diagnostic queue.
-
-The next useful steps are to analyze balanced 512-site subsets of the saved
-independent 1,024-site outputs, then compare BO, CMA-ES, Sobol and random over
-three seeds with common starting measurements and recorded runtime. Initially
-vary only four to six supported properties and use moderate primary counts;
-confirm leaders with independent layouts at at most 1,024 sites. Selecting
-expected improvement per predicted time, with completion probability, addresses
-the earlier BO stall. No new simulations have been started.
-
-Agentic AI has **no measured optimization gain here yet**. It may help with
-physical ranges, literature and candidate proposals, but should be compared
-against reliable GP search using the same measurements and including inference
-time. The local model service is unavailable; its prompt also needs the correct
-objective units and measurement errors before testing.
-
-[Detailed measured contributions and proposed comparisons](material_scan/docs/optimization.md)
-include exact values, uncertainties, code changes needed and primary research
-sources. The [numerical audit](verification/optimizer_contributions.json)
-identifies the original historical records.
-
-## Calculation and source files
-
-![Scientific calculation and verification](figures/workflow.png)
-
-```mermaid
-flowchart LR
-    A[Study and material records] --> B[Physical checks and spatial sites]
-    B --> C[Geant4 / G4CMP transport]
-    C --> D[Checked junction hits]
-    D --> E[QP response and uncertainty]
-    E --> F[Convergence, tolerance and confirmation]
-    E --> G[Search proposes properties]
-    G --> B
-    F --> H[Measured-material comparison]
-```
-
-| File | Responsibility |
-|---|---|
-| [`scan.py`](scan.py) | Study loading, candidate tables, simulation tasks, execution and commands |
-| [`physics.py`](physics.py) | Property maps, physical checks, elasticity, interfaces, sites, QPs and density evolution |
-| [`analysis.py`](analysis.py) | Scoring, area weights, uncertainty, sensitivity, convergence and projection |
-| [`search.py`](search.py) | Random, Sobol, Gaussian-process and CMA-ES search; optional TPE and Ollama |
-| [`records.py`](records.py) | Input records, hit reading, SQLite results, archives and recovery |
-| [`figures/plot.py`](figures/plot.py) | Hit-file counts and plots of recorded results |
-| [`figures/draw.py`](figures/draw.py) | Device schematic, recorded spatial sites and workflow diagram |
-| [`run_all.sh`](run_all.sh) | Sequential full-scale studies, resource checks, verified preservation and final report |
-| [`tests/`](tests/) | Two test files and small numerical fixtures |
-
-[`verification/round2_results.json`](verification/round2_results.json) records
-the numerical comparisons, timing measurements, and source-size counts for this
-rewrite. The round-two comparison passed 108 tests and eight example study checks;
-the later queue and preservation checks extend that suite. Against revision
-`803943e`, the eight-realization reference differs by −0.13%; its paired 95%
-interval, [−1.39%, +1.13%], lies within the predefined ±5% margin.
-
-| Source measure at the round-two comparison | Previous | Round two |
-|---|---:|---:|
-| Working Python files | 8 | 5 |
-| Functions and methods, including private definitions | 150 | 126 |
-| Project import connections | 13 | 7 |
-| Lines, including blanks | 4,391 | 4,300 |
-
-At the original queue launch, the five core modules including restart, memory and archive
-checks contained 4,466 lines and 128 functions/methods. The Bash driver added
-555 lines. That version had eight active scripts including the two test files.
-The current layout has **ten scripts**: five scientific modules, two figure
-scripts, one Bash driver and two test files. Plotting now lives in
-[`figures/`](figures/) together with images and their recorded inputs.
-
-Short code annotations use $x$ for physical properties, $u\in[0,1]^d$ for
-normalized coordinates, and $N_{ire}$ for summed QPs at site $i$, realization
-$r$, and junction $e$. Thus $Q_{ire}=N_{ire}/N_p$ per primary, with $N_p$
-primaries per task. The junction weights $w_e$ and area fractions $W_h$ retain
-the definitions above. Density evolution uses $z_e=n_{{\rm qp},e}/n_{\rm cp}$.
-
-Measured medians give 13.0× faster task preparation, 2.9× faster density
-evolution, and 1.26× faster complete reference reanalysis. These measurements
-have different scopes and cannot be added into a whole-run gain. Software
-agreement does not establish new material predictions or a measured transport
-speedup. The line count exceeds the earlier estimate because the explicit
-verification and preservation checks remain.
-The figures above use the [recorded source data](figures/provenance.json);
-their [SVG originals](figures/) are also available.
-
-Scientific definitions, earlier measurements, and data instructions remain in
-[`material_scan/docs/`](material_scan/docs/). Historical source is preserved in
-Git; [`legacy/`](legacy/) contains retained input tables, macros, and notes.
-Old simulation outputs were removed after two archive copies passed full content
-verification. Their receipt is stored locally at
-`material_scan_data/backups/old-runs-verified.json`; the copies are
-`material_scan_data/backups/material-old-runs-20261014.tar.gz` and
-`/data/htseng/material-scan-archives/historical/material-old-runs-20261014.tar.gz`. Numerical test fixtures and input-only
-spatial designs remain in Git. New output belongs under the ignored
-`material_scan_data/` directory; software and model files under that directory
-are retained.
-
-## Scientific limits and next measurements
-
-The response is junction quasiparticle yield under the stated source and
-interface models. A qubit-error prediction additionally needs a calibrated
-mapping from local quasiparticle density to qubit dynamics. A searched property
-set is a target; comparison with measured materials must state missing fields
-and retain each material's own density and lattice record.
-
-Later local reports inherited from the previous code describe a 2,361-site
-comparison and full-spatial CMA-ES confirmations. Their leading candidates are
-statistically tied and reach the $C_{44}=5$ GPa lower search limit. Those reports
-are historical evidence, not experiments rerun by this rewrite; verify their
-source definitions and recorded inputs before using them for a new study.
-
-1. Fix the intended operating temperature and the Nb-compatible upper-film gap
-   limit. Test physical support and tolerance near the $C_{44}$ lower limit.
-2. Compare independent GP and CMA-ES searches with equal measured evaluations
-   and several optimizer seeds. Confirm finalists on a converged spatial design
-   with unused random streams.
-3. Obtain measured SiC scattering and decay constants, bracket film lifetimes,
-   and test independently justified interface models before fabrication advice.
-
-
-<!-- optimization-start -->
-## Optimization comparison
-
-The 9-method comparison finished on 2026-10-21. Three search seeds used common measured starts; selected points were confirmed on four unused 1024-site layouts.
-
-![Confirmed optimization responses](figures/optimization_results.png)
-
-[Additional gains, uncertainties, failed attempts and model identities](docs/results/optimization_summary.md).
-<!-- optimization-end -->

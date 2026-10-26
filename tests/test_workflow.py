@@ -2026,6 +2026,62 @@ class QueueTests(unittest.TestCase):
     tearDown = WorkflowTests.tearDown
     make_executable = WorkflowTests.make_executable
 
+    def test_focused_inputs_keep_exact_rotation_pair_and_matched_native_streams(self):
+        cfg=records.load_document(ROOT/'studies/focused/queue.yaml')
+        self.assertEqual(len(set(cfg['defaults']['independent_position_seeds'])),8)
+        self.assertEqual(sum(step['sampling']['design']*step['sampling']['replicas']*
+            step['sampling']['events_per_task']*len(cfg['candidates']) for step in cfg['studies']),20480000000)
+        namespace=self.queue_python('base_study',scope='stage',branch="focused and step['kind'] == 'focused'",focused=True,
+            cfg=cfg,defaults=cfg['defaults'],source=ROOT,run=self.root,identifier='matched',
+            step=cfg['studies'][0],limits={key:cfg['execution'][key] for key in
+                ('workers','total_mem_gb','per_task_mem_gb')}|{'system_mem_reserve_gb':16})
+        raw=namespace['raw'];raw['installation']=self.raw['installation']
+        raw['sampling'].update(kind='sobol',sites=4,replicas=2);raw['sampling'].pop('design_file')
+        silicon=(self.root/'maps/Si/config.txt').read_text()
+        for name in ('Ge','GaAs'):
+            path=self.root/'maps'/name;path.mkdir();(path/'config.txt').write_text(silicon)
+        study=scan.load_study(raw);points=[physics.prepare_values(study,p) for p in raw['candidates']]
+        a,b=points[:2]
+        self.assertEqual({k:v for k,v in a['values'].items() if k!='lattice_deg'},
+                         {k:v for k,v in b['values'].items() if k!='lattice_deg'})
+        self.assertEqual([a['values']['lattice_deg'],b['values']['lattice_deg']],[45.,0.])
+        self.assertEqual([p['derived']['lattice_map_name'] for p in points[2:]],['Si','Ge','GaAs'])
+        streams=[[t['seeds'] for t in scan.task_plan(study,p,{'build':'fixture'})] for p in points]
+        self.assertTrue(all(seeds==streams[0] for seeds in streams))
+        self.assertFalse(raw['sampling']['independent_candidate_streams'])
+
+    def test_focused_report_uses_paired_layouts_and_corrects_three_intervals(self):
+        from unittest.mock import patch
+        cfg=records.load_document(ROOT/'studies/focused/queue.yaml');reports={}
+        names=[point['name'] for point in cfg['candidates']]
+        for i,step in enumerate(cfg['studies']):
+            base=10.+i
+            values=[base,.7*base,2*base,2*base*[.99,1.02,.98,1.03,.97,1.01,1.,.99][i],1.88*base]
+            reports[step['id']]={'id':step['id'],'complete':True,'results':[
+                {'name':name,'value':value,'standard_error':99.,'units':'weighted_junction_QPs_per_injected_eV',
+                 'estimate':{'means_by_stratum':{'test':value},'maximum_site_leverage':.1}}
+                for name,value in zip(names,values)]}
+        records.write_json(self.root/'source-ready.json',{'source':'fixture'})
+        records.write_json(self.root/'publication.json',{'branch':'fixture','remote':'fixture'})
+        (self.root/'README.md').write_text('before\n<!-- focused-start -->\nold\n<!-- focused-end -->\nafter\n')
+        with patch.object(subprocess,'check_output',return_value='fixture'),patch.object(analysis,'plot_result'):
+            with self.assertRaises(SystemExit) as stopped:
+                self.queue_python('mean_interval','layout_summary',scope='finish',branch='focused',
+                    focused=True,cfg=cfg,defaults=cfg['defaults'],queue=cfg['studies'],reports=reports,
+                    repo=self.root,run=self.root,limits={'workers':86},subprocess=subprocess)
+        self.assertEqual(stopped.exception.code,0)
+        result=records.load_document(self.root/'docs/results/orientation_materials.json')
+        self.assertAlmostEqual(result['simultaneous_confidence'],1-.05/3)
+        self.assertEqual([c['meaningful_reduction_confirmed'] for c in result['contrasts']],[True,False,True])
+        for row in result['contrasts']:
+            self.assertEqual(row['relative_change']['n_new'],8)
+            self.assertEqual(row['relative_change']['degrees_of_freedom'],7)
+            self.assertTrue(row['relative_change']['paired'])
+        self.assertEqual(result['results'][0]['estimate']['n_layouts'],8)
+        text=(self.root/'README.md').read_text()
+        self.assertTrue(text.startswith('before\n'));self.assertTrue(text.endswith('\nafter\n'))
+        self.assertNotIn('\nold\n',text)
+
     def test_optimization_configuration_keeps_equal_work_and_reserved_resources(self):
         cfg=records.load_document(ROOT/'studies/optimization/queue.yaml')
         self.assertEqual(len(cfg['search_bounds']),6)
@@ -2320,7 +2376,7 @@ class QueueTests(unittest.TestCase):
         namespace={'records':records,'analysis':analysis,'scan':scan,'physics':physics,
                    'np':np,'copy':copy,'math':math,'itertools':itertools,'Path':Path,
                    'os':os,'time':time,'sys':sys,'json':json,'shutil':shutil,
-                   'max_sites':1024,'initial_checks':False,'optimization':False,'refinement':{},**values}
+                   'max_sites':1024,'initial_checks':False,'optimization':False,'focused':False,'refinement':{},**values}
         exec(compile(ast.Module(body=code,type_ignores=[]),'isolated queue Python','exec'),namespace)
         return namespace
 

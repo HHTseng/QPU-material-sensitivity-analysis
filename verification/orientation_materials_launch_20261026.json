@@ -1,0 +1,715 @@
+{
+  "allow_completion_local": "2026-10-27T12:59:07.430351-04:00",
+  "date": "2026-10-26",
+  "eta": {
+    "allow_elapsed_hours": 24,
+    "approx_cpu_hours": 1121.7192004940134,
+    "approx_seconds_per_case_layout": {
+      "GaAs-Nb-Cu": 1162.1873041551232,
+      "Ge-Nb-Cu": 1349.8070926718403,
+      "Si-Nb-Cu": 1044.7332243235933,
+      "target-0deg": 1093.6408996670398,
+      "target-45deg": 1219.0924119999156
+    },
+    "error_scale_if_variance_unchanged": 0.7071067811865476,
+    "estimate_source": "Complete 20261019 screening and 1024-site confirmation task times; each elapsed_s sums task time / 86 workers.",
+    "gpus": 0,
+    "not_guaranteed": true,
+    "planned_elapsed_hours": [
+      14,
+      20
+    ],
+    "primaries": 20480000000,
+    "simultaneous_confidence": 0.9833333333333333,
+    "simultaneous_critical_value": 3.1275522742463706,
+    "student_t_df": 7,
+    "tasks": 327680,
+    "transport_hours_for_eight_layouts": 13.043246517372248
+  },
+  "expected_completion_local": [
+    "2026-10-27T02:59:07.430351-04:00",
+    "2026-10-27T08:59:07.430351-04:00"
+  ],
+  "fresh_layouts": [
+    {
+      "design_hash": "8df5c039087d1455e32270a6fd2e7d60b997231088dc5906b0b0d5ee59142b36",
+      "file": "material_scan_data/orientation_materials_20261026/designs/source-independent-01_1024.json",
+      "position_sha256": "8aaedf461dce7b8707662357cdb7042a1f01c12568eac960ed95bff3e163ed84",
+      "sites": 1024,
+      "unused_positions": true
+    },
+    {
+      "design_hash": "ef34d6bc9f4b9caf527a3ec4a1afeec08fa4dc96e9ac62965280b51298786376",
+      "file": "material_scan_data/orientation_materials_20261026/designs/source-independent-02_1024.json",
+      "position_sha256": "561d6201f83dacc03ebeaf8e7d1798f96e193a9e9e4821e1236d5c2148871867",
+      "sites": 1024,
+      "unused_positions": true
+    },
+    {
+      "design_hash": "86b1085ad6c0c1e661a86ccba3f000e301468bce46a537612c35629319bc81ab",
+      "file": "material_scan_data/orientation_materials_20261026/designs/source-independent-03_1024.json",
+      "position_sha256": "86cf7248bd201b9bfa603f68f6d543d10388824f2eb62cd4f92d6609fa4b98bc",
+      "sites": 1024,
+      "unused_positions": true
+    },
+    {
+      "design_hash": "d7cbfbf1d93d310bac8d501371a1300b98d9a6fd1842ea0e44cebd8f5d47f9f9",
+      "file": "material_scan_data/orientation_materials_20261026/designs/source-independent-04_1024.json",
+      "position_sha256": "827f75475d4620d834979cec50b5fb518bed53d626d0fa465881d86ddceb2da2",
+      "sites": 1024,
+      "unused_positions": true
+    },
+    {
+      "design_hash": "093f53af2c7a96a016cfe4555987323f21d554ecd8094d35ab95aec2aa72e4a1",
+      "file": "material_scan_data/orientation_materials_20261026/designs/source-independent-05_1024.json",
+      "position_sha256": "05a7776cf9ddb79306d19b87808e28efdab265958d59513ed270cbadaa821d1d",
+      "sites": 1024,
+      "unused_positions": true
+    },
+    {
+      "design_hash": "f6bb4cae78d93f027097d48ea7ea385ce61d7e6eec3bc7a060b009a4a8ffcaf7",
+      "file": "material_scan_data/orientation_materials_20261026/designs/source-independent-06_1024.json",
+      "position_sha256": "3e1540277a26ed9583e326a1901d6c5ec23ba31f3329779fc304cd5446f415c1",
+      "sites": 1024,
+      "unused_positions": true
+    },
+    {
+      "design_hash": "ff6b7f83e0bb4a7390c403f54d17bb617c70401b56aa0b79a2cbcf013734f974",
+      "file": "material_scan_data/orientation_materials_20261026/designs/source-independent-07_1024.json",
+      "position_sha256": "7293847546c380cb1477ddc6f2eef114389ab063e1a0128ad7cfbe4e6ab85c63",
+      "sites": 1024,
+      "unused_positions": true
+    },
+    {
+      "design_hash": "40575c030aad1e6692343db8f42ae7ba25a88a2171c7caa8b13fed04c33a6dbc",
+      "file": "material_scan_data/orientation_materials_20261026/designs/source-independent-08_1024.json",
+      "position_sha256": "50b513e54f4e3aa9c355af2566b28ad01885004547ca8475adb14c3694d86372",
+      "sites": 1024,
+      "unused_positions": true
+    }
+  ],
+  "launch_observed_local": "2026-10-26T12:59:07.430351-04:00",
+  "native_and_rotation_execution": {
+    "cases": 5,
+    "complete": true,
+    "included_in_scientific_results": false,
+    "primaries": 20,
+    "tasks": 20
+  },
+  "observed_queue": {
+    "driver_pid": 222532,
+    "driver_starttime": 364372068,
+    "index": 0,
+    "stage": "matched-layout-01",
+    "state": "running",
+    "updated": 1793033911.7513394
+  },
+  "observed_resources": {
+    "free_disk_bytes": 138511593472,
+    "memory": {
+      "available_bytes": 293429780480,
+      "limiting_cgroup": "/sys/fs/cgroup/user.slice",
+      "raw_unreclaimed_headroom_bytes": 53507678208
+    },
+    "rss_bytes": 6418694144,
+    "updated": 1793034105.7662668
+  },
+  "observed_task_counts": {
+    "complete": 1330,
+    "planned": 39458,
+    "running": 172
+  },
+  "physical_identity": {
+    "GaAs-Nb-Cu": {
+      "identical": true,
+      "physical_sha256": "eb193016dc4817b08908c0a040570b71ee4a495386dfa7d922465e7f7a1920e7"
+    },
+    "Ge-Nb-Cu": {
+      "identical": true,
+      "physical_sha256": "a7ed07da81f31771d26f4f1590125b63e44bc336a2abcdd6fdf9d71d76106de3"
+    },
+    "Si-Nb-Cu": {
+      "identical": true,
+      "physical_sha256": "60675abd4cb13dc04de9a02c26d48cf2a60aa2ecef610faa828ac5cf63062e75"
+    },
+    "target-0deg": {
+      "identical": true,
+      "physical_sha256": "386d1b2caf7b71125384d5e11b2661d89f0c7aad6ac46562f5e2b54a8e726f2c"
+    },
+    "target-45deg": {
+      "identical": true,
+      "physical_sha256": "2edc1939056195e886cc77dae40761409bdcf1cc46b3f254f829e22a6c07ca8b"
+    }
+  },
+  "previous_results": {
+    "complete_primaries": 118336000000,
+    "completed_studies": 70,
+    "confirmed_targets": 26,
+    "methods": {
+      "bo": {
+        "gain_from_initial": {
+          "by_seed": [
+            0.27564570351985884,
+            0.27849163267352384,
+            0.2896089487546808
+          ],
+          "confidence_interval_95": [
+            0.2629191959761052,
+            0.29957832732260375
+          ],
+          "n_seeds": 3,
+          "relative_standard_error": 0.015146952382207533,
+          "standard_error": 0.004260061600257608,
+          "uncertainty_method": "Student-t interval across independent search seeds",
+          "value": 0.2812487616493545
+        },
+        "mean_confirmed_J": 0.00041033871284566303,
+        "seed_variation": {
+          "by_seed": [
+            0.00041353752703641506,
+            0.00041191277170598303,
+            0.0004055658397945909
+          ],
+          "confidence_interval_95": [
+            0.0003998742712084692,
+            0.0004208031544828569
+          ],
+          "n_seeds": 3,
+          "relative_standard_error": 0.005927032014627724,
+          "standard_error": 2.4320906878773772e-06,
+          "uncertainty_method": "Student-t interval across independent search seeds",
+          "value": 0.00041033871284566303
+        }
+      },
+      "bo_improved": {
+        "gain_from_initial": {
+          "by_seed": [
+            0.29486937851365014,
+            0.2915559561743072,
+            0.296285843635845
+          ],
+          "confidence_interval_95": [
+            0.28820677771433606,
+            0.3002673411681988
+          ],
+          "n_seeds": 3,
+          "relative_standard_error": 0.004763256133638885,
+          "standard_error": 0.0014015264781274863,
+          "uncertainty_method": "Student-t interval across independent search seeds",
+          "value": 0.29423705944126743
+        },
+        "mean_confirmed_J": 0.00040292362802407737,
+        "seed_variation": {
+          "by_seed": [
+            0.00040256263387140683,
+            0.00040445428342314894,
+            0.0004017539667776764
+          ],
+          "confidence_interval_95": [
+            0.00039948090972337017,
+            0.00040636634632478457
+          ],
+          "n_seeds": 3,
+          "relative_standard_error": 0.0019858317822949736,
+          "standard_error": 8.001385463678105e-07,
+          "uncertainty_method": "Student-t interval across independent search seeds",
+          "value": 0.00040292362802407737
+        }
+      },
+      "bo_robust": {
+        "gain_from_initial": {
+          "by_seed": [
+            0.2907752386199087,
+            0.2907752386199087,
+            0.2777270816755002
+          ],
+          "confidence_interval_95": [
+            0.26771195694008626,
+            0.3051397490034588
+          ],
+          "n_seeds": 3,
+          "relative_standard_error": 0.015185031668788679,
+          "standard_error": 0.004349385648136176,
+          "uncertainty_method": "Student-t interval across independent search seeds",
+          "value": 0.28642585297177253
+        },
+        "mean_confirmed_J": 0.0004073830852569017,
+        "seed_variation": {
+          "by_seed": [
+            0.00040489999901885767,
+            0.00040489999901885767,
+            0.0004123492577329898
+          ],
+          "confidence_interval_95": [
+            0.00039669922747657813,
+            0.0004180669430372252
+          ],
+          "n_seeds": 3,
+          "relative_standard_error": 0.0060952119219141645,
+          "standard_error": 2.4830862380440417e-06,
+          "uncertainty_method": "Student-t interval across independent search seeds",
+          "value": 0.0004073830852569017
+        }
+      },
+      "cmaes": {
+        "gain_from_initial": {
+          "by_seed": [
+            0.22751746087756342,
+            0.27966333824345035,
+            0.257942402946419
+          ],
+          "confidence_interval_95": [
+            0.1899722371555378,
+            0.3201098975560841
+          ],
+          "n_seeds": 3,
+          "relative_standard_error": 0.05929616233125186,
+          "standard_error": 0.015122956531065905,
+          "uncertainty_method": "Student-t interval across independent search seeds",
+          "value": 0.25504106735581095
+        },
+        "mean_confirmed_J": 0.0004253008179096391,
+        "seed_variation": {
+          "by_seed": [
+            0.00044101418388737504,
+            0.00041124383907707924,
+            0.000423644430764463
+          ],
+          "confidence_interval_95": [
+            0.00038815269404410876,
+            0.0004624489417751694
+          ],
+          "n_seeds": 3,
+          "relative_standard_error": 0.020300389549512247,
+          "standard_error": 8.633772279291849e-06,
+          "uncertainty_method": "Student-t interval across independent search seeds",
+          "value": 0.0004253008179096391
+        }
+      },
+      "corners": {
+        "gain_from_initial": {
+          "by_seed": [
+            0.2931094423609504,
+            0.2724575464620469,
+            0.30713566482259935
+          ],
+          "confidence_interval_95": [
+            0.2475670072153703,
+            0.3342347618816941
+          ],
+          "n_seeds": 3,
+          "relative_standard_error": 0.03462152650479396,
+          "standard_error": 0.010071432684665016,
+          "uncertainty_method": "Student-t interval across independent search seeds",
+          "value": 0.2909008845485322
+        },
+        "mean_confirmed_J": 0.0004048282671234888,
+        "seed_variation": {
+          "by_seed": [
+            0.000403567390311544,
+            0.0004153576620061362,
+            0.00039555974905278613
+          ],
+          "confidence_interval_95": [
+            0.0003800887376469125,
+            0.00042956779660006505
+          ],
+          "n_seeds": 3,
+          "relative_standard_error": 0.014203138130066288,
+          "standard_error": 5.749831796910284e-06,
+          "uncertainty_method": "Student-t interval across independent search seeds",
+          "value": 0.0004048282671234888
+        }
+      },
+      "llm_proposals": {
+        "gain_from_initial": {
+          "by_seed": [
+            0.27511248709710967,
+            0.08698970119169536,
+            0.2886339626802824
+          ],
+          "confidence_interval_95": [
+            -0.06309743774517193,
+            0.4969215383912302
+          ],
+          "n_seeds": 3,
+          "relative_standard_error": 0.30002177273891645,
+          "standard_error": 0.06507833786634826,
+          "uncertainty_method": "Student-t interval across independent search seeds",
+          "value": 0.21691205032302915
+        },
+        "mean_confirmed_J": 0.00044706886634765676,
+        "seed_variation": {
+          "by_seed": [
+            0.00041384194298577906,
+            0.0005212421917874493,
+            0.00040612246426974187
+          ],
+          "confidence_interval_95": [
+            0.0002872100351028682,
+            0.0006069276975924453
+          ],
+          "n_seeds": 3,
+          "relative_standard_error": 0.08310476223416986,
+          "standard_error": 3.715355184012188e-05,
+          "uncertainty_method": "Student-t interval across independent search seeds",
+          "value": 0.00044706886634765676
+        }
+      },
+      "llm_tools": {
+        "gain_from_initial": {
+          "by_seed": [
+            0.2880521272821971,
+            0.14157573005043378,
+            0.26693553256561064
+          ],
+          "confidence_interval_95": [
+            0.03549510283543164,
+            0.4288804904300627
+          ],
+          "n_seeds": 3,
+          "relative_standard_error": 0.196884960427935,
+          "standard_error": 0.04571428515188784,
+          "uncertainty_method": "Student-t interval across independent search seeds",
+          "value": 0.23218779663274716
+        },
+        "mean_confirmed_J": 0.00043834786561189375,
+        "seed_variation": {
+          "by_seed": [
+            0.0004064546370377308,
+            0.0004900787521631218,
+            0.00041851020763482847
+          ],
+          "confidence_interval_95": [
+            0.0003260550131026622,
+            0.0005506407181211253
+          ],
+          "n_seeds": 3,
+          "relative_standard_error": 0.05953836752191108,
+          "standard_error": 2.6098516325246216e-05,
+          "uncertainty_method": "Student-t interval across independent search seeds",
+          "value": 0.00043834786561189375
+        }
+      },
+      "random": {
+        "gain_from_initial": {
+          "by_seed": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "confidence_interval_95": [
+            0.0,
+            0.0
+          ],
+          "n_seeds": 3,
+          "relative_standard_error": null,
+          "standard_error": 0.0,
+          "uncertainty_method": "Student-t interval across independent search seeds",
+          "value": 0.0
+        },
+        "mean_confirmed_J": 0.0005709050516382939,
+        "seed_variation": {
+          "by_seed": [
+            0.0005709050516382939,
+            0.0005709050516382939,
+            0.0005709050516382939
+          ],
+          "confidence_interval_95": [
+            0.0005709050516382939,
+            0.0005709050516382939
+          ],
+          "n_seeds": 3,
+          "relative_standard_error": 0.0,
+          "standard_error": 0.0,
+          "uncertainty_method": "Student-t interval across independent search seeds",
+          "value": 0.0005709050516382939
+        }
+      },
+      "sobol": {
+        "gain_from_initial": {
+          "by_seed": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "confidence_interval_95": [
+            0.0,
+            0.0
+          ],
+          "n_seeds": 3,
+          "relative_standard_error": null,
+          "standard_error": 0.0,
+          "uncertainty_method": "Student-t interval across independent search seeds",
+          "value": 0.0
+        },
+        "mean_confirmed_J": 0.0005709050516382939,
+        "seed_variation": {
+          "by_seed": [
+            0.0005709050516382939,
+            0.0005709050516382939,
+            0.0005709050516382939
+          ],
+          "confidence_interval_95": [
+            0.0005709050516382939,
+            0.0005709050516382939
+          ],
+          "n_seeds": 3,
+          "relative_standard_error": 0.0,
+          "standard_error": 0.0,
+          "uncertainty_method": "Student-t interval across independent search seeds",
+          "value": 0.0005709050516382939
+        }
+      }
+    },
+    "native_Ge_confirmed_J": 0.0024208067388850514,
+    "native_Si_confirmed_J": 0.0023173596817207412,
+    "rotation_confirmed_J": 0.00030014083104222105,
+    "rotation_screening_relative_change": -0.35172859535842466,
+    "run": "optimization_20261019_restart",
+    "scope": "No completed historical measurement is overwritten or reused as a new observation."
+  },
+  "publication": "New paired results update only the focused README section; completed optimizer results remain unchanged.",
+  "readme_check": {
+    "active_scripts": 10,
+    "all_local_links_exist": true,
+    "nine_method_means_and_gains_match_results": true
+  },
+  "resources": {
+    "all_cpus": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63,
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84,
+      85,
+      86,
+      87,
+      88,
+      89,
+      90,
+      91,
+      92,
+      93,
+      94,
+      95
+    ],
+    "cpu_cap": 96,
+    "cpus": [
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63,
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84,
+      85,
+      86,
+      87,
+      88,
+      89,
+      90,
+      91,
+      92,
+      93,
+      94,
+      95
+    ],
+    "llm_cpus": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "minimum_free_disk_gb": 20.0,
+    "per_task_mem_gb": 2.0,
+    "system_mem_reserve_gb": 16.0,
+    "total_mem_gb": 64.0,
+    "workers": 86
+  },
+  "run": "material_scan_data/orientation_materials_20261026",
+  "source_archive": {
+    "bytes": 2150975888,
+    "independent_copy": "/data/htseng/material-scan-archives/orientation_materials_20261026/frozen-source.tar.gz",
+    "independent_copy_verified": true,
+    "manifest_sha256": "6fc5bec2fec51ef04ba3c1b1b91725849df28ffcbf7d800e600686dc227ea951",
+    "members": 67434,
+    "path": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/orientation_materials_20261026/archives/frozen-source.tar.gz",
+    "schema": "material-scan-archive-1",
+    "separate_filesystem": true,
+    "sha256": "7f5c2e86f93d7866d7f9aac9ae13f4e08956a98997c42ea9fede48f2293c5cde",
+    "verified": true
+  },
+  "source_sha256": {
+    "analysis.py": "6320d6572f149260be022b9811d1f960015293ea4d5d73eaf27383001740ef8e",
+    "figures/plot.py": "33d85d4ce3bf9a348a4707487ef575be27e96a7190f85345b7682f8cb75c2dc6",
+    "parameters.yaml": "902b657893d5fc9fc99d1b7d23b4987e1aa9355cd4bad91f092fd69e8d020900",
+    "physics.py": "5132113c77d22c5dc6a3caff0b22909e3fde35503cc3a4e5198e1f37c9749edf",
+    "records.py": "cb65827bc75015be556ca7f54e5b08261a169f0f361ca51886ca16461441ef32",
+    "run_all.sh": "b28f79a11a502c231ce7cb9138ee94b0185a53b1d7403ad647fdf1ed281c2971",
+    "scan.py": "5ac19b2c32d20489408d6dcaac1fdbfeff45ff08cd5b49a61650fa7734cad674",
+    "search.py": "64af23964f6d2362cc1048075ccda600dc23dbd18e7d81a662594b87cd1ded7d"
+  },
+  "state": "running",
+  "tests": {
+    "final_focused_tests_passed": 2,
+    "log_sha256": "0d2c60e2de8f26b2901357d7002e40dfe4f83f36c31f64d7df4ba02b91ddfde4",
+    "passed": 202
+  },
+  "tmux_session": "orientation_materials_20261026",
+  "updated": 1793034106.934081
+}
