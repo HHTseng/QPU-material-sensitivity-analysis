@@ -148,56 +148,19 @@ Junction-QP yield alone does not establish a fabrication optimum, global
 minimum or qubit-error reduction.
 
 <!-- focused-start -->
-## Next measurement: matched rotation and native materials
+## Matched rotation and native-material comparison
 
-The [fixed follow-up inputs](studies/focused/queue.yaml) define **five designs**:
-the same property target at 0° and 45°, and native Si–Nb–Cu, Ge–Nb–Cu and
-GaAs–Nb–Cu. The native cases retain their own coupled substrate records and the
-reference film model. They are not assigned the calibrated target's film inputs.
+Finished 2026-10-27. Eight unused 1,024-position layouts compare 0° with 45° at identical properties, and Ge/Nb/Cu and GaAs/Nb/Cu with Si/Nb/Cu.
 
-All five designs use **eight new, independent 1,024-position layouts**. Each
-layout has eight transport realizations and 62,500 primaries per task. Positions,
-area fractions and streams are matched across candidates within a layout.
-The three comparisons are fixed before transport: 0° against 45°, Ge against Si,
-and GaAs against Si. No candidate is selected using these observations.
+| Candidate / reference | Response change | Simultaneous interval | At least 5% reduction established |
+|---|---:|---:|---|
+| target-0deg / target-45deg | -30.22% | [-35.41%, -25.04%] | True |
+| Ge-Nb-Cu / Si-Nb-Cu | +15.89% | [+0.12%, +31.65%] | False |
+| GaAs-Nb-Cu / Si-Nb-Cu | +0.38% | [-5.22%, +5.98%] | False |
 
-For comparison $a/b$ and layout $k$, the observations are
-$d_k=\widehat J_{a,k}-\widehat J_{b,k}$ and
-$r_k=\widehat J_{a,k}/\widehat J_{b,k}-1$. Intervals describe their means over
-eight layouts; the mean of ratios generally differs from the ratio of means.
-Student-t intervals use a Bonferroni correction
-across the three comparisons: each interval has confidence 98.33%, giving
-family error at most 5% under the stated assumptions. A useful reduction requires
-the entire relative-change interval below −5%. All outcomes are retained;
-the calculation completes all eight layouts without early stopping.
+![Matched rotation and native-material responses](figures/orientation_materials.png)
 
-| Quantity | Allocation or estimate |
-|---|---|
-| Transport | **20.48 billion primaries; 327,680 tasks** |
-| CPUs | **86 workers**, inside the 96-CPU total limit; eight CPUs reserved for the model service |
-| GPUs | **0**; no new LLM inference |
-| Host memory | Combined limit **64 GiB**; 2 GiB per task; 16 GiB host reserve |
-| Additional working storage | Approximately **20–30 GiB**, plus a 20 GiB free-disk reserve |
-| Independent archive storage | Approximately **8–12 GiB**, plus the free-disk reserve |
-| CPU time | Approximately **1,100 CPU-hours** at the measured task rates |
-| Elapsed time | **14–20 h after launch**; allow up to 24 h for archive checks and variable load |
-
-These are measured-rate estimates, not guaranteed completion times. The 0°
-effect may remain substantial, but its screening estimate can overstate the
-confirmed gain. Ge or GaAs may fail to improve on Si. At equal variance, eight
-layouts reduce mean standard error by approximately $\sqrt{4/8}=0.707$ relative
-to four; the correction for three comparisons widens the intervals. Small effects
-may remain unresolved. This experiment does not certify spatial convergence.
-
-The run is `orientation_materials_20261026`, launched on **October 26**.
-[Launch verification](verification/orientation_materials_launch_20261026.json)
-records fresh layout hashes, matching physical inputs, execution checks and timing assumptions.
-The expected finish is **October 27 EDT**, conditional on uninterrupted execution.
-Check its recorded state with
-`bash run_all.sh status material_scan_data/orientation_materials_20261026`.
-A persistent tmux session of the same name runs the eight layouts sequentially.
-Two verified archives preserve each completed layout before raw working files
-are removed. Completion generates the paired comparisons and updates this section.
+[Paired intervals, physical inputs and limits](docs/results/orientation_materials.md).
 <!-- focused-end -->
 
 The subsequent optimization should include crystal orientation and physically
