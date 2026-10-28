@@ -230,27 +230,57 @@ tmux -L material-scan attach -t native_orientation_20261028_full
 ```
 <!-- native-end -->
 
-## Are 2,048 positions worthwhile?
+<!-- spatial-start -->
+## Limited 2,048-site verification
 
-**A small confirmation check can be worthwhile; a full search at 2,048 positions
-is premature.** At unchanged primaries per position, doubling positions roughly
-doubles transport and may reduce position error by $1/\sqrt2\simeq0.707$.
-Reallocating 1,024 positions is predicted to improve Ge/GaAs precision more
-strongly than uniformly doubling the previous allocation.
+The owner authorized this limited extension on October 28. The
+[verification inputs](studies/native/verification_2048.yaml) fix the first four
+native benchmark layouts and all six Si/Ge/GaAs–Nb–Cu cases at 0°/45°.
+Each new layout retains all 1,024 reference positions, appends 1,024 positions,
+and preserves the area fractions and source streams. Region counts become
+$[68,1024,204,340,412]$. The main optimizer study retains its 1,024-site limit.
 
-A more efficient diagnostic holds total primary count fixed: use 2,048 positions
-with 15,625 primaries per task instead of 1,024 with 31,250, retaining four
-realizations. Position error may fall by 29%, while transport error is approximately
-unchanged. Saved task times suggest **25–50% more elapsed time**, owing to extra
-process and file overhead, rather than twice the primary work. Four layouts of
-the six native 0°/45° cases would require **3.072 billion new primaries** and
-approximately **3–6 hours**, compared against the retained 1,024-site results.
-This estimate depends on retaining comparable physical inputs and source streams.
+The new runs use four realizations and 15,625 primaries per task, giving
+**3.072 billion additional primaries in 196,608 tasks**. Each design/layout has
+the same total primaries as its retained 1,024-site reference at 31,250 primaries
+per task. None of the earlier measurements is replaced.
 
-The [allocation and cost analysis](verification/site_allocation_20261028.json)
-records the equations, measured task times and assumptions. A 2,048-site diagnostic
-is most useful if balanced-half shifts or finalist position errors still affect
-the new conclusions. The active queue retains the existing **1,024-site limit**.
+The analysis separates three questions:
+
+1. **Spatial resolution:** compare all 2,048 positions with the balanced
+   1,024-position subset of the new outputs. Both use 15,625 primaries per task.
+   Six paired layout-ratio intervals have Bonferroni family error 0.05.
+   Agreement within 5% requires the entire interval inside ±5%.
+2. **Equal total primaries:** compare the full 2,048-site response with the
+   retained 1,024-site response, which used twice the primaries per position.
+3. **Primary count:** compare the new 1,024-position subset with the retained
+   response at those same positions. The latter two diagnostics have descriptive
+   paired 95% intervals and do not define the spatial agreement criterion.
+
+Four layouts give limited precision. Failure to establish agreement can reflect
+wide intervals; it does not by itself establish a physical change. The checks
+cover these six fixed cases, rather than the entire orientation search domain.
+
+The queue is `spatial_2048_20261028`. The
+[verification record](verification/spatial_2048_launch_20261028.json) retains
+input checks, tests, source hashes and timing estimates. It waits for
+`native_orientation_20261028_full` to release its queue lock, then holds that
+lock throughout verification. This keeps the two transport pools sequential.
+The verification uses **86 workers**, **no GPUs**, the **64 GiB** combined memory
+limit, and approximately **12–20 GiB** additional working storage plus the 20 GiB
+free-disk reserve.
+
+Expected active runtime is **3–6 hours**, added after the native study's remaining
+work. The estimated combined finish is **October 30–31 EDT**. This includes
+variable transport and archive checks; interruption or resource waits can extend it.
+The [allocation and timing analysis](verification/site_allocation_20261028.json)
+explains the expected precision and process overhead at fixed total primaries.
+
+```bash
+bash run_all.sh status material_scan_data/spatial_2048_20261028
+tmux -L material-scan attach -t spatial_2048_20261028
+```
+<!-- spatial-end -->
 
 ## Calculation and execution
 

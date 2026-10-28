@@ -2026,6 +2026,124 @@ class QueueTests(unittest.TestCase):
     tearDown = WorkflowTests.tearDown
     make_executable = WorkflowTests.make_executable
 
+    def test_spatial_2048_retains_positions_streams_and_total_primaries(self):
+        cfg=records.load_document(ROOT/'studies/native/verification_2048.yaml')
+        parent=self.root/'reference';(parent/'designs').mkdir(parents=True)
+        run=self.root/'new';(run/'designs').mkdir(parents=True)
+        fixed=scan.load_study(self.raw)['fixed'];weights=records.load_document(ROOT/'figures/spatial_sites.json')['stratum_weights']
+        previous={}
+        for step in cfg['studies']:
+            d=physics.build_design(fixed,{'kind':'stratified','sites':1024,'position_seed':step['position_seed'],
+                'allocation':dict(zip(physics.REGIONS,[34,512,102,170,206])),'stratum_weights':weights})
+            previous[step['id']]=d;records.write_json(parent/'designs'/step['parent_design'],d)
+        cfg['reference_run']=str(parent)
+        self.queue_python(scope="mode in ('check', 'prepare')",start='if spatial_verify:',stop='independent_root =',
+            spatial_verify=True,cfg=cfg,defaults=cfg['defaults'],repo=ROOT,run=run,fixed=fixed)
+        for step in cfg['studies']:
+            old=previous[step['id']];new=records.load_document(run/'designs'/step['sampling']['design_file'])
+            self.assertEqual(new['sites_mm'][:1024],old['sites_mm'])
+            self.assertEqual(new['stratum_weights'],weights)
+            self.assertEqual(list(new['stratum_counts'].values()),[68,1024,204,340,412])
+        step=cfg['studies'][0];small=previous[step['id']];large=records.load_document(run/'designs'/step['sampling']['design_file'])
+        raw=copy.deepcopy(self.raw);raw['sampling'].update(kind='recorded-stratified',replicas=4,seed_base=20261028,seed_bank=step['bank'])
+        paths=[]
+        for n,d,np_ in [(1024,small,31250),(2048,large,15625)]:
+            path=self.root/f'{n}.json';records.write_json(path,d)
+            raw['sampling'].update(sites=n,design_file=str(path),events_per_task=np_)
+            study=scan.load_study(raw);prepared=physics.prepare_values(study,{'values':{}})
+            paths.append(scan.task_plan(study,prepared,{'build':'fixture'}))
+        a,b=paths
+        self.assertEqual(sum(t['events'] for t in a),sum(t['events'] for t in b))
+        for replica in range(4):
+            self.assertEqual([t['seeds'] for t in a[replica*1024:(replica+1)*1024]],
+                             [t['seeds'] for t in b[replica*2048:replica*2048+1024]])
+
+    def test_spatial_2048_reference_check_rejects_changed_physics(self):
+        parent=self.root/'reference';parent.mkdir()
+        records.write_json(self.root/'dependency.json',{'run':str(parent)})
+        snapshot={'source_sha256':{n:'same' for n in ('scan.py','physics.py','analysis.py','records.py','parameters.yaml')},
+                  'files_sha256':{'bin/Main':'same','CrystalMaps/Si/config.txt':'same'}}
+        for root in (parent,self.root):records.write_json(root/'source-ready.json',snapshot)
+        queue=[{'reference':'native-layout-01'}]
+        with self.assertRaises(SystemExit) as stopped:
+            self.queue_python(scope='check-reference',start='parent =',run=self.root,queue=queue)
+        self.assertEqual(stopped.exception.code,75)
+        for name in ('one','two'):(parent/name).write_text('archive fixture')
+        report={'complete':True,'results':[]}
+        report['archive']={'verified':True,'independent_copy_verified':True,'path':str(parent/'one'),'independent_copy':str(parent/'two'),
+                           'summary_content_hash':records.content_hash(report)}
+        records.write_json(parent/'studies/native-layout-01/summary.json',report)
+        with self.assertRaises(SystemExit) as stopped:
+            self.queue_python(scope='check-reference',start='parent =',run=self.root,queue=queue)
+        self.assertEqual(stopped.exception.code,0)
+        changed=copy.deepcopy(snapshot);changed['source_sha256']['physics.py']='changed'
+        records.write_json(self.root/'source-ready.json',changed,overwrite=True)
+        with self.assertRaisesRegex(ValueError,'physical evaluation changed'):
+            self.queue_python(scope='check-reference',start='parent =',run=self.root,queue=queue)
+
+    def test_spatial_2048_waits_for_parent_queue_lock(self):
+        import fcntl
+        parent=self.root/'reference';parent.mkdir();run=self.root/'queued';(run/'source').mkdir(parents=True)
+        records.write_json(run/'source-ready.json',{})
+        records.write_json(run/'resources.json',{'cpus':sorted(os.sched_getaffinity(0))[:2]})
+        records.write_json(run/'dependency.json',{'run':str(parent)})
+        (run/'source/run_all.sh').write_text('case "$1" in\ncheck-reference) exit 0;;\nexecute) touch "$2/started"; while [ ! -f "$2/allow_exit" ]; do sleep .02; done;;\nesac\n')
+        environment={**os.environ,'MATERIAL_REPOSITORY':str(ROOT),'MATERIAL_PYTHON':sys.executable}
+        with (parent/'queue.lock').open('a') as lock:
+            fcntl.flock(lock,fcntl.LOCK_EX)
+            child=subprocess.Popen(['bash',str(ROOT/'run_all.sh'),'run',str(run)],env=environment,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+            try:
+                deadline=time.monotonic()+5
+                while not (run/'queue_status.json').exists() and time.monotonic()<deadline:time.sleep(.02)
+                self.assertEqual(records.load_document(run/'queue_status.json')['state'],'waiting_for_reference_queue')
+                self.assertFalse((run/'started').exists())
+                fcntl.flock(lock,fcntl.LOCK_UN)
+                deadline=time.monotonic()+5
+                while not (run/'started').exists() and time.monotonic()<deadline:time.sleep(.02)
+                self.assertTrue((run/'started').exists())
+                with self.assertRaises(BlockingIOError):fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+                (run/'allow_exit').write_text('finish')
+                stdout,stderr=child.communicate(timeout=10)
+                self.assertEqual(child.returncode,0,stderr)
+                self.assertTrue((run/'started').exists())
+            finally:
+                if child.poll() is None:child.terminate();child.wait(timeout=5)
+
+    def test_spatial_2048_report_separates_spatial_and_primary_count_changes(self):
+        from unittest.mock import patch,Mock
+        cfg=records.load_document(ROOT/'studies/native/verification_2048.yaml');parent=self.root/'reference';parent.mkdir()
+        records.write_json(self.root/'dependency.json',{'run':str(parent)})
+        reports={}
+        for k,step in enumerate(cfg['studies']):
+            oldrows=[];newrows=[]
+            for point in cfg['candidates']:
+                v=10.+k
+                row={'name':point['name'],'parameters':point['values'],'value':v,'standard_error':.1,
+                     'units':'weighted_junction_QPs_per_injected_eV','estimate':{'means_by_stratum':{'test':v},'maximum_site_leverage':.1}}
+                oldrows.append(row);newrows.append({**copy.deepcopy(row),'value':v*1.02,'balanced_half_value':v*1.01})
+            old={'id':step['reference'],'complete':True,'results':oldrows,'streams':{'bank':k},'geometry':{},
+                 'design':{'sites_mm':list(range(1024)),'stratum_weights':{'test':1.}},'events_total_per_candidate':128000000,'events_per_task':31250}
+            records.write_json(parent/'studies'/step['reference']/'summary.json',old)
+            reports[step['id']]={**copy.deepcopy(old),'id':step['id'],'results':newrows,'events_per_task':15625,
+                                 'design':{'sites_mm':list(range(2048)),'stratum_weights':{'test':1.}}}
+        records.write_json(self.root/'source-ready.json',{})
+        records.write_json(self.root/'publication.json',{'branch':'fixture','remote':'fixture'})
+        (self.root/'README.md').write_text('before\n<!-- spatial-start -->\nold\n<!-- spatial-end -->\nafter\n')
+        verified=Mock(return_value={})
+        with patch.object(subprocess,'check_output',return_value='fixture'),patch.object(analysis,'plot_result'):
+            with self.assertRaises(SystemExit) as stopped:
+                self.queue_python('mean_interval','layout_summary',scope='finish',branch='spatial_verify',
+                    spatial_verify=True,cfg=cfg,defaults=cfg['defaults'],queue=cfg['studies'],reports=reports,
+                    repo=self.root,run=self.root,limits={'workers':86},subprocess=subprocess,verify_saved_archive=verified)
+        self.assertEqual(stopped.exception.code,0);self.assertEqual(verified.call_count,4)
+        result=records.load_document(self.root/'docs/results/spatial_2048.json')
+        self.assertAlmostEqual(result['simultaneous_confidence'],1-.05/6)
+        for row in result['contrasts']:
+            self.assertAlmostEqual(row['spatial_relative_change']['difference'],1.02/1.01-1)
+            self.assertAlmostEqual(row['fixed_primary_relative_change']['difference'],.02)
+            self.assertAlmostEqual(row['half_primary_count_relative_change']['difference'],.01)
+            self.assertTrue(row['equivalent_within_5_percent'])
+
     def test_native_reallocation_uses_fresh_sites_and_unchanged_area_weights(self):
         cfg=records.load_document(ROOT/'studies/native/queue.yaml');run=self.root/'fresh';run.mkdir()
         fixed=scan.load_study(ROOT/'studies/reference.yaml')['fixed']
@@ -2489,7 +2607,7 @@ class QueueTests(unittest.TestCase):
         namespace={'records':records,'analysis':analysis,'scan':scan,'physics':physics,
                    'np':np,'copy':copy,'math':math,'itertools':itertools,'Path':Path,
                    'os':os,'time':time,'sys':sys,'json':json,'shutil':shutil,
-                   'max_sites':1024,'initial_checks':False,'optimization':False,'focused':False,'native_search':False,'refinement':{},**values}
+                   'max_sites':1024,'initial_checks':False,'optimization':False,'focused':False,'native_search':False,'spatial_verify':False,'refinement':{},**values}
         exec(compile(ast.Module(body=code,type_ignores=[]),'isolated queue Python','exec'),namespace)
         return namespace
 

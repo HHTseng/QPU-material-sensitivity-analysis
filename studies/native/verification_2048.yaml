@@ -1,0 +1,196 @@
+schema: material-scan-spatial-verification-1
+id: limited-2048-20261028
+description: Four nested 2048-site native-material checks at unchanged total primary count; queued after
+  the current native study.
+reference_run: material_scan_data/native_orientation_20261028_full
+defaults:
+  temperature_K: 0.02
+  gun_energy_eV: 0.01
+  junction_gap_eV: 0.000191
+  cutoff_eV: 3.82e-05
+  nb_gap_min_eV: 0.0015384
+  source_half_span_mm: 4.0
+  source_law: uniform_surface
+  objective: device_junction_qps_per_eV
+  seed_base: 20261028
+  bootstrap_draws: 1000
+  design_counts:
+  - 2048
+  allocations:
+    '2048':
+    - 68
+    - 1024
+    - 204
+    - 340
+    - 412
+  position_seed: 2026102801
+  independent_position_seeds: []
+  confirmation_position_seeds: []
+  area_seed: 0
+  area_samples: 8000000
+  design_note: Owner authorized limited 2048-site verification on 2026-10-28. Extend the first four native
+    benchmark layouts, retaining their first 1024 positions and area weights. Main optimization stays
+    at most 1024 sites.
+  source_note: The chip is 10x10 mm2; the declared injection region is 8x8 mm2.
+  max_sites: 2048
+  base_design_file: material_scan_data/native_orientation_20261028_full/designs/source-independent-01_1024.json
+  fresh_designs: false
+execution:
+  independent_archive_root: /data/htseng/material-scan-archives
+  max_cpu_fraction: 0.5
+  max_memory_fraction: 0.5
+  workers: 86
+  total_mem_gb: 64.0
+  reserved_mem_gb: 16.0
+  minimum_free_disk_gb: 20.0
+  per_task_mem_gb: 2.0
+  blas_threads: 1
+  timeout_s: 21600
+  stall_timeout_s: 7200
+  failed_response: missing
+  timeout_note: A task exceeding six hours is right-censored; it never supplies a zero response.
+  queue_order: sequential_studies
+  stop_after_initial_checks: false
+  llm_cpu_count: 8
+  max_gpus: 0
+search_bounds: {}
+candidates:
+- name: Si-45deg
+  materials:
+  - Si
+  - Nb
+  - Cu
+  values:
+    lattice_deg: 45.0
+- name: Si-0deg
+  materials:
+  - Si
+  - Nb
+  - Cu
+  values:
+    lattice_deg: 0.0
+- name: Ge-45deg
+  materials:
+  - Ge
+  - Nb
+  - Cu
+  values:
+    lattice_deg: 45.0
+- name: Ge-0deg
+  materials:
+  - Ge
+  - Nb
+  - Cu
+  values:
+    lattice_deg: 0.0
+- name: GaAs-45deg
+  materials:
+  - GaAs
+  - Nb
+  - Cu
+  values:
+    lattice_deg: 45.0
+- name: GaAs-0deg
+  materials:
+  - GaAs
+  - Nb
+  - Cu
+  values:
+    lattice_deg: 0.0
+question:
+  spatial: Does 2048 agree with its balanced 1024 subset within 5 percent at the same per-position primaries?
+  fixed_work: How does 2048 x 15625 compare with retained 1024 x 31250 at equal total primaries?
+  transport: How does the new 1024 subset at 15625 compare with the same positions at 31250?
+  selection: First four layouts and all six 0/45-degree cases fixed before seeing their results; no optimizer
+    or material selection.
+comparison:
+  family_error: 0.05
+  meaningful_reduction: 0.05
+  pairs:
+  - candidate: Si-0deg
+    reference: Si-45deg
+  - candidate: Ge-0deg
+    reference: Ge-45deg
+  - candidate: GaAs-0deg
+    reference: GaAs-45deg
+  - candidate: Ge-0deg
+    reference: Si-0deg
+  - candidate: GaAs-0deg
+    reference: Si-0deg
+  primary: Six spatial mean-ratio contrasts, 2048 versus nested 1024 at 15625 primaries per task; Bonferroni
+    family error 0.05 and equivalence margin +/-5 percent.
+  secondary: Equal-total-primary and half-primary-count comparisons are descriptive paired 95 percent
+    intervals; they do not define spatial convergence.
+  stopping: Complete all four layouts. No optional stopping and no larger source design.
+expected_work:
+  new_primaries: 3072000000
+  new_tasks: 196608
+  reference_primaries_reused_for_comparison: 3072000000
+  active_elapsed_hours:
+  - 3
+  - 6
+  workers: 86
+  gpus: 0
+  memory_limit_gib: 64
+  extra_working_disk_gib:
+  - 12
+  - 20
+  scheduling: Wait for the current native queue lock, then retain that lock throughout verification. No
+    overlapping transport pools.
+  estimate_note: 25 to 50 percent more time than a 1024-site cohort at equal total primaries; hardware
+    load and source-dependent transport can extend the estimate.
+limitations:
+- This verification covers six fixed native 0/45-degree cases, not every orientation or optimized leader.
+- Four independent layouts give broad Student-t intervals, especially for rare concentrated responses.
+  Failure to establish equivalence does not establish a physical change.
+- The pure spatial contrast uses the new nested subset at the same per-position primary count. Comparing
+  against the older 1024 cohort also changes per-position primaries.
+- Mean layout ratios differ from a ratio of pooled means. Area-weight uncertainty and model assumptions
+  are not inferred from these checks.
+- All original measurements remain unchanged. Two verified archives retain each new layout before raw
+  working data are cleared.
+studies:
+- id: spatial-2048-01
+  kind: focused
+  position_seed: 2026102801
+  bank: 5101
+  sampling:
+    design: 2048
+    design_file: nested-01_2048.json
+    replicas: 4
+    events_per_task: 15625
+  reference: native-layout-01
+  parent_design: source-independent-01_1024.json
+- id: spatial-2048-02
+  kind: focused
+  position_seed: 2026102802
+  bank: 5102
+  sampling:
+    design: 2048
+    design_file: nested-02_2048.json
+    replicas: 4
+    events_per_task: 15625
+  reference: native-layout-02
+  parent_design: source-independent-02_1024.json
+- id: spatial-2048-03
+  kind: focused
+  position_seed: 2026102803
+  bank: 5103
+  sampling:
+    design: 2048
+    design_file: nested-03_2048.json
+    replicas: 4
+    events_per_task: 15625
+  reference: native-layout-03
+  parent_design: source-independent-03_1024.json
+- id: spatial-2048-04
+  kind: focused
+  position_seed: 2026102804
+  bank: 5104
+  sampling:
+    design: 2048
+    design_file: nested-04_2048.json
+    replicas: 4
+    events_per_task: 15625
+  reference: native-layout-04
+  parent_design: source-independent-04_1024.json

@@ -20,6 +20,25 @@ source_dir="$material_run/source"
 if [[ "$mode" == run ]]; then
     [[ -f "$material_run/source-ready.json" ]] || bash "$BASH_SOURCE" prepare "$material_run"
     export MATERIAL_REPOSITORY="$repository" MATERIAL_PYTHON="$material_python"
+    if [[ -f "$material_run/dependency.json" ]]; then
+        parent_run=$("$material_python" - "$material_run" <<'PY'
+import json,sys,time
+from pathlib import Path
+root=Path(sys.argv[1]); parent=json.loads((root/'dependency.json').read_text())['run']
+(root/'queue_status.json').write_text(json.dumps({'state':'waiting_for_reference_queue','reference_run':parent,'updated':time.time()})+'\n')
+print(parent)
+PY
+        )
+        while :; do
+            exec 8>>"$parent_run/queue.lock"
+            flock 8
+            if bash "$source_dir/run_all.sh" check-reference "$material_run"; then break
+            else code=$?; [[ "$code" == 75 ]] || exit "$code"; fi
+            flock -u 8
+            exec 8>&-
+            sleep 30
+        done
+    fi
     cpu_list=$("$material_python" -c 'import json,sys;print(",".join(map(str,json.load(open(sys.argv[1]))["cpus"])))' "$material_run/resources.json")
     exec taskset -c "$cpu_list" bash "$source_dir/run_all.sh" execute "$material_run"
 fi
@@ -238,7 +257,8 @@ if not config_path.is_absolute(): config_path=(source if (run/'source-ready.json
 cfg=records.load_document(config_path)
 optimization=cfg.get('schema')=='material-scan-optimization-1'
 native_search=cfg.get('schema')=='material-scan-native-optimization-1'
-focused=native_search or cfg.get('schema')=='material-scan-focused-1'
+spatial_verify=cfg.get('schema')=='material-scan-spatial-verification-1'
+focused=native_search or spatial_verify or cfg.get('schema')=='material-scan-focused-1'
 refinement={}
 if optimization and cfg.get('refinement_file'):
     refinement=records.load_document((source if (run/'source-ready.json').is_file() else repo)/cfg['refinement_file'])
@@ -460,6 +480,28 @@ if mode=='status':
 limits={'workers':94,'total_mem_gb':64.,'per_task_mem_gb':2.,'system_mem_reserve_gb':16.,'minimum_free_disk_gb':20.}
 if (run/'resources.json').is_file(): limits=records.load_document(run/'resources.json')
 resource.setrlimit(resource.RLIMIT_AS,(int(limits['total_mem_gb']*1024**3),resource.RLIM_INFINITY))
+if mode=='check-reference':
+    parent=Path(records.load_document(run/'dependency.json')['run'])
+    old=records.load_document(parent/'source-ready.json'); new=records.load_document(run/'source-ready.json')
+    for name in ('scan.py','physics.py','analysis.py','records.py','parameters.yaml'):
+        if old['source_sha256'][name]!=new['source_sha256'][name]: raise ValueError('reference physical evaluation changed: '+name)
+    immutable=lambda name:name.startswith(('bin/','lib/','CrystalMaps/','geant4-data/','legacy/'))
+    if {k:v for k,v in old['files_sha256'].items() if immutable(k)}!={k:v for k,v in new['files_sha256'].items() if immutable(k)}:
+        raise ValueError('reference executable, libraries or physical records changed')
+    for step in queue:
+        path=parent/'studies'/step['reference']/'summary.json'
+        if not path.is_file() or not records.load_document(path).get('archive',{}).get('verified'):
+            records.write_json(run/'queue_status.json',{'state':'waiting_for_reference_measurements','reference':step['reference'],'updated':time.time()},overwrite=True)
+            raise SystemExit(75)
+        report=records.load_document(path)
+        if not report.get('complete'): raise ValueError('reference measurement is incomplete')
+        receipt=report['archive']
+        if not receipt.get('independent_copy_verified') or any(not Path(receipt[key]).is_file() for key in ('path','independent_copy')):
+            raise ValueError('reference needs two retained archive copies')
+        if receipt.get('summary_content_hash')!=records.content_hash({k:v for k,v in report.items() if k not in ('archive','raw_files_present')}):
+            raise ValueError('reference summary differs from its saved checksum')
+    print('Reference queue released; physical identities and completed measurements agree.')
+    raise SystemExit(0)
 if mode=='verify-source':
     snapshot=records.load_document(run/'source-ready.json')
     actual={str(path.relative_to(source)):records.sha256_file(path) for path in sorted(source.rglob('*')) if path.is_file()}
@@ -635,6 +677,19 @@ if mode in ('check','prepare'):
                 independent['design_hash']=records.content_hash({k:v for k,v in independent.items() if k!='design_hash'})
                 if independent['stratum_weights']!=previous_design['stratum_weights']: raise ValueError('independent layouts must share area weights')
                 records.write_json(run/'designs'/f'{family}-{k:02d}_{n}.json',independent)
+    if spatial_verify:
+        parent=(repo/cfg['reference_run']).resolve()
+        records.write_json(run/'dependency.json',{'run':str(parent),'reference_ids':[s['reference'] for s in cfg['studies']]})
+        for step in cfg['studies']:
+            previous=records.load_document(parent/'designs'/step['parent_design'])
+            sampling={'kind':'stratified','sites':2048,'position_seed':step['position_seed'],
+                      'allocation':dict(zip(physics.REGIONS,defaults['allocations']['2048'])),
+                      'stratum_weights':previous['stratum_weights']}
+            design=physics.build_design(fixed,sampling,previous=previous)
+            if design['sites_mm'][:1024]!=previous['sites_mm'] or design['stratum_weights']!=previous['stratum_weights']:
+                raise ValueError('verification must retain all reference positions and area weights')
+            design['design_hash']=records.content_hash({k:v for k,v in design.items() if k!='design_hash'})
+            records.write_json(run/'designs'/step['sampling']['design_file'],design)
     independent_root=Path(os.environ.get('MATERIAL_ARCHIVE_ROOT',cfg['execution']['independent_archive_root']))/run.name
     independent_root.mkdir(parents=True,exist_ok=True)
     if independent_root.stat().st_dev==run.stat().st_dev: raise ValueError('archive copies require a separate persistent filesystem')
@@ -718,7 +773,9 @@ if mode in ('check','prepare'):
         files=['README.md','docs/results/orientation_materials.json','docs/results/orientation_materials.md','figures/orientation_materials.png']
     if native_search:
         files=['README.md','docs/results/native_optimization.json','docs/results/native_optimization.md','figures/native_optimization.png']
-    message='Report native material orientation optimization' if native_search else 'Report matched rotation and native-material comparison' if focused else 'Report confirmed optimization comparisons' if optimization else 'Report fresh full-scale material studies'
+    if spatial_verify:
+        files=['README.md','docs/results/spatial_2048.json','docs/results/spatial_2048.md','figures/spatial_2048.png']
+    message='Report limited 2048-site verification' if spatial_verify else 'Report native material orientation optimization' if native_search else 'Report matched rotation and native-material comparison' if focused else 'Report confirmed optimization comparisons' if optimization else 'Report fresh full-scale material studies'
     records.write_json(run/'publication.json',{'branch':subprocess.check_output(['git','branch','--show-current'],cwd=repo,text=True).strip(),'remote':subprocess.check_output(['git','remote','get-url','origin'],cwd=repo,text=True).strip(),'files':files,'commit_message':message})
     print(records.canonical_json({'prepared_studies':len(queue),'source':str(source),'resources':limits}))
     raise SystemExit(0)
@@ -1100,7 +1157,7 @@ elif mode=='record':
         records.write_json(run/'initial-observations'/(step['id']+'.json'),{'objective':report['objective'],
             'design_hash':report['design']['design_hash'],'events_per_task':report['events_per_task'],
             'replicas':report['replicas'],'observations':observations})
-    elif native_search and step['kind']=='focused':
+    elif (native_search or spatial_verify) and step['kind']=='focused':
         # The balanced half uses the first n_h/2 positions in each region, fixed before transport.
         for row in report['results']:
             blocks=records.load_result(output,candidate_id=row['candidate_id'])['results'][0]['blocks']
@@ -1223,6 +1280,70 @@ elif mode=='finish':
     if any(not report['complete'] and not ((optimization or native_search) and report.get('terminated_search')) for report in reports.values()):
         raise ValueError('all declared measured studies must finish or have an explicitly terminated search record')
     for report in reports.values(): verify_saved_archive(report)
+    if spatial_verify:
+        parent=Path(records.load_document(run/'dependency.json')['run']); prior=[]
+        for step in queue:
+            old=records.load_document(parent/'studies'/step['reference']/'summary.json');verify_saved_archive(old)
+            new=reports[step['id']]
+            if new['design']['sites_mm'][:1024]!=old['design']['sites_mm'] or new['design']['stratum_weights']!=old['design']['stratum_weights']:
+                raise ValueError('nested positions or area weights changed')
+            if new['events_total_per_candidate']!=old['events_total_per_candidate'] or 2*new['events_per_task']!=old['events_per_task']:
+                raise ValueError('verification requires equal total primaries and half the per-position primaries')
+            if new['streams']!=old['streams'] or new['geometry']!=old['geometry']:
+                raise ValueError('reference streams or physical geometry changed')
+            for a,b in zip(new['results'],old['results']):
+                if a['name']!=b['name'] or a['parameters']!=b['parameters']: raise ValueError('reference material properties changed')
+            prior.append(old)
+        aggregate=layout_summary([reports[step['id']] for step in queue]); reference=layout_summary(prior)
+        contrasts=[]; confidence=1-cfg['comparison']['family_error']/len(cfg['candidates'])
+        for row in aggregate['results']:
+            name=row['name'];fine=np.asarray(row['estimate']['by_layout'])
+            half=np.array([next(r['balanced_half_value'] for r in report['results'] if r['name']==name) for report in reports.values()])
+            baseline=np.asarray(next(r['estimate']['by_layout'] for r in reference['results'] if r['name']==name))
+            spatial=analysis.compare_repeated(fine,half,paired=True,confidence=confidence)
+            relative=analysis.compare_repeated(fine/half,np.ones(len(half)),paired=True,confidence=confidence) if np.all(half>0) else None
+            fixed=analysis.compare_repeated(fine/baseline,np.ones(len(baseline)),paired=True) if np.all(baseline>0) else None
+            transport=analysis.compare_repeated(half/baseline,np.ones(len(baseline)),paired=True) if np.all(baseline>0) else None
+            contrasts.append({'candidate':name,'spatial_difference':spatial,'spatial_relative_change':relative,
+                'equivalent_within_5_percent':relative['equivalent_within_margin'] if relative else None,
+                'fixed_primary_relative_change':fixed,'half_primary_count_relative_change':transport,
+                'half_1024_by_layout':half.tolist(),'parent_1024_by_layout':baseline.tolist()})
+        result={'id':cfg['id'],'state':'complete','date':time.strftime('%Y-%m-%d'),'objective':defaults['objective'],
+                'question':cfg['question'],'results':aggregate['results'],'reference_results':reference['results'],
+                'contrasts':contrasts,'simultaneous_confidence':confidence,'studies':reports,
+                'reference_studies':prior,'source':records.load_document(run/'source-ready.json'),
+                'resources':limits,'limitations':cfg['limitations']}
+        publication=records.load_document(run/'publication.json')
+        if subprocess.check_output(['git','branch','--show-current'],cwd=repo,text=True).strip()!=publication['branch'] or subprocess.check_output(['git','remote','get-url','origin'],cwd=repo,text=True).strip()!=publication['remote']:
+            raise ValueError('publication branch or remote changed; retained results were not published')
+        public=repo/'docs/results';public.mkdir(parents=True,exist_ok=True)
+        records.write_json(public/'spatial_2048.json',result,overwrite=True)
+        plotted=[{'name':r['candidate'],'value':r['spatial_difference']['difference'],'standard_error':r['spatial_difference']['standard_error']}
+                 for r in contrasts]
+        analysis.plot_result({'results':plotted,'yield_label':'2048 minus nested 1024; weighted junction QPs / injected eV',
+            'title':'Four matched layouts; equal per-position primaries; bars show standard errors'},repo/'figures/spatial_2048.png','summary')
+        lines=['# Limited 2048-site verification','',
+               'Six primary spatial contrasts use paired layout ratios with Bonferroni family error 0.05. The nested 1024 subset and full 2048 use the same per-position primaries.',
+               '', '| Candidate | Spatial response change | Simultaneous interval | Equivalent within 5% |',
+               '|---|---:|---:|---|']
+        for row in contrasts:
+            estimate=row['spatial_relative_change']
+            if estimate:
+                lo,hi=estimate['confidence_interval']
+                lines.append(f"| {row['candidate']} | {100*estimate['difference']:+.2f}% | [{100*lo:+.2f}%, {100*hi:+.2f}%] | {row['equivalent_within_5_percent']} |")
+            else: lines.append(f"| {row['candidate']} | undefined for zero reference | undefined | undefined |")
+        lines+=['','Fixed-total-primary and half-primary-count comparisons are descriptive 95% intervals in the numerical record.',
+                '',*['- '+text for text in cfg['limitations']],'','[Measurements, reference data and archives](spatial_2048.json).','']
+        (public/'spatial_2048.md').write_text('\n'.join(lines))
+        block='\n'.join(['<!-- spatial-start -->','## Limited 2,048-site verification','',
+            'Finished '+result['date']+'. Four nested layouts verified six native material/rotation cases at equal total primary count.',
+            '',*lines[4:6+len(contrasts)],'','![Spatial resolution contrasts](figures/spatial_2048.png)','',
+            '[Spatial and transport comparisons, uncertainty and archives](docs/results/spatial_2048.md).','<!-- spatial-end -->'])
+        readme=repo/'README.md';text=readme.read_text();start=text.index('<!-- spatial-start -->');end=text.index('<!-- spatial-end -->')+len('<!-- spatial-end -->')
+        readme.write_text(text[:start]+block+text[end:])
+        records.write_json(run/'queue_status.json',{'state':'complete','studies':len(reports),'updated':time.time()},overwrite=True)
+        print(records.canonical_json({'state':'complete','studies':len(reports),'verified_cases':len(contrasts)}))
+        raise SystemExit(0)
     if native_search:
         benchmarks=[reports[entry['id']] for entry in queue if entry['kind']=='focused']
         confirmed=layout_summary([reports[entry['id']] for entry in queue if entry['kind']=='native_confirmation'])
