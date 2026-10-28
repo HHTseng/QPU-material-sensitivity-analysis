@@ -1,0 +1,176 @@
+{
+  "area_weights": [
+    2.65625e-05,
+    0.002636631097371374,
+    0.032861575994413084,
+    0.17848066274749622,
+    0.7859945676607194
+  ],
+  "assumptions": [
+    "Eight old layouts estimate regional variances. Cross-region covariances are omitted in the planning approximation.",
+    "Native 45 degree results inform new allocations; new orientations may have different spatial variance.",
+    "Randomized Sobol and rare concentrated responses need not obey exact 1/n scaling. These predictions require new validation.",
+    "The allocation factors hold per-position transport statistics fixed. The active run uses four times fewer primaries per position, increasing conditional transport error; the factors are not guarantees for total uncertainty, especially for Si."
+  ],
+  "date": "2026-10-28",
+  "equation": "Var(Jhat) approximately sum_h W_h^2 sigma_h^2/n_h; estimate sigma_h^2 by n_h_old*Var_layout(mu_hat_h).",
+  "new1024": [
+    34,
+    512,
+    102,
+    170,
+    206
+  ],
+  "new512": [
+    17,
+    256,
+    51,
+    85,
+    103
+  ],
+  "old1024": [
+    136,
+    128,
+    256,
+    256,
+    248
+  ],
+  "planned_primaries": {
+    "benchmark": 6144000000,
+    "confirmation_upper_bound": 16896000000,
+    "shared_starts_and_search": 25344000000,
+    "total_upper_bound": 48384000000
+  },
+  "predictions": {
+    "GaAs-Nb-Cu": {
+      "near_junction_fraction_of_diagonal_variance": 0.9914054789336262,
+      "predicted_SE_factor_new1024": 0.5154710043932761,
+      "predicted_SE_factor_new2048": 0.36449304271152616,
+      "predicted_SE_factor_old2048": 0.7071067811865476,
+      "regional_variance_terms": [
+        1.7894502933911205e-12,
+        2.2391041032101968e-08,
+        1.2107535156166189e-10,
+        2.167400931624293e-11,
+        4.956973264614753e-11
+      ]
+    },
+    "Ge-Nb-Cu": {
+      "near_junction_fraction_of_diagonal_variance": 0.9986937692499166,
+      "predicted_SE_factor_new1024": 0.502029267468446,
+      "predicted_SE_factor_new2048": 0.35498829938105325,
+      "predicted_SE_factor_old2048": 0.7071067811865476,
+      "regional_variance_terms": [
+        2.050598887097738e-11,
+        1.396799079181121e-07,
+        3.543443287606784e-11,
+        2.157362770275979e-11,
+        1.0517878043390658e-10
+      ]
+    },
+    "Si-Nb-Cu": {
+      "near_junction_fraction_of_diagonal_variance": 0.7963246040216275,
+      "predicted_SE_factor_new1024": 0.7132279900159039,
+      "predicted_SE_factor_new2048": 0.5043283482722969,
+      "predicted_SE_factor_old2048": 0.7071067811865476,
+      "regional_variance_terms": [
+        1.0218135235343793e-13,
+        1.355159197617622e-09,
+        6.183746390506972e-11,
+        9.461288316920058e-11,
+        1.9005560699274378e-10
+      ]
+    },
+    "target-0deg": {
+      "near_junction_fraction_of_diagonal_variance": 0.13147251688335607,
+      "predicted_SE_factor_new1024": 1.0622163621868757,
+      "predicted_SE_factor_new2048": 0.7511003927896456,
+      "predicted_SE_factor_old2048": 0.7071067811865476,
+      "regional_variance_terms": [
+        4.502280508994589e-15,
+        2.33699280132306e-11,
+        1.5980226132604651e-12,
+        2.2377526374612675e-11,
+        1.3040525479491042e-10
+      ]
+    },
+    "target-45deg": {
+      "near_junction_fraction_of_diagonal_variance": 0.18119579700515379,
+      "predicted_SE_factor_new1024": 1.0608918049172864,
+      "predicted_SE_factor_new2048": 0.750163789362249,
+      "predicted_SE_factor_old2048": 0.7071067811865476,
+      "regional_variance_terms": [
+        6.3115451494066976e-15,
+        1.8476542865823112e-11,
+        1.1955618460382048e-12,
+        2.6661921665192918e-11,
+        5.562970316709149e-11
+      ]
+    }
+  },
+  "prospective_2048": {
+    "all_phases_at2048_primaries_upper_bound": 147456000000,
+    "all_phases_elapsed_days": [
+      4.6,
+      7.6
+    ],
+    "fixed_primary_method": {
+      "four_layout_pilot_elapsed_hours": [
+        3,
+        6
+      ],
+      "four_layout_six_candidate_primaries": 3072000000,
+      "note": "Fits compare historical layouts and material states at two primary counts; altered source allocation, orientations and filesystem overhead can change the cost. The pilot is prospective and not part of the active queue.",
+      "planning_elapsed_factor": [
+        1.25,
+        1.5
+      ],
+      "position_SE_factor": 0.7071067811865476,
+      "primaries_per_task": 15625,
+      "replicas": 4,
+      "same_total_primaries_as1024_with31250": true,
+      "sites": 2048,
+      "timing_fits": {
+        "GaAs-Nb-Cu": {
+          "fixed_primary_2048_elapsed_factor_vs1024": 1.2928132432227617,
+          "seconds_at31250": 7.245267849059019,
+          "seconds_at62500": 12.369025321217464,
+          "seconds_per_primary_fit": 0.00016396023910907024,
+          "startup_seconds_fit": 2.1215103769005736
+        },
+        "Ge-Nb-Cu": {
+          "fixed_primary_2048_elapsed_factor_vs1024": 1.2114557929332779,
+          "seconds_at31250": 8.414920638009107,
+          "seconds_at62500": 15.050457560037394,
+          "seconds_per_primary_fit": 0.00021233718150490518,
+          "startup_seconds_fit": 1.7793837159808206
+        },
+        "Si-Nb-Cu": {
+          "fixed_primary_2048_elapsed_factor_vs1024": 1.2990454547533838,
+          "seconds_at31250": 6.802690302945848,
+          "seconds_at62500": 11.571066990700821,
+          "seconds_per_primary_fit": 0.00015258805400815913,
+          "startup_seconds_fit": 2.034313615190875
+        }
+      },
+      "transport_SE_approximately_unchanged": true
+    },
+    "four_nested_benchmark_extensions_additional_primaries": 3072000000,
+    "four_nested_extensions_elapsed_hours": [
+      3,
+      5
+    ],
+    "only_confirmation_at2048_total_primaries_upper_bound": 65280000000,
+    "recommendation": "Reallocate 1024 sites first. A limited 2048-site check at the same total primaries can be worthwhile: position error may fall by 29 percent with about 25 to 50 percent extra elapsed time. Use it if the new balanced-half checks or finalist uncertainty remain limiting; avoid making every optimizer evaluation 2048 sites.",
+    "scope": "Prospective estimates only; the active study stays at or below 1024 sites.",
+    "uniform_doubling_SE_factor": 0.7071067811865476
+  },
+  "regions": [
+    "S0_junction",
+    "S1_le_0.05",
+    "S2_le_0.20",
+    "S3_le_0.50",
+    "S4_bulk"
+  ],
+  "source": "docs/results/orientation_materials.json"
+}

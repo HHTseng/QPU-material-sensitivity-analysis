@@ -1,0 +1,503 @@
+{
+  "allocation_analysis": "verification/site_allocation_20261028.json",
+  "date": "2026-10-28",
+  "execution_checks": {
+    "checks": [
+      {
+        "balanced_half_checked": true,
+        "bo_and_sobol_proposals_checked": true,
+        "cases": 12,
+        "material": "Si",
+        "passed": true,
+        "primaries": 48
+      },
+      {
+        "balanced_half_checked": true,
+        "bo_and_sobol_proposals_checked": true,
+        "cases": 12,
+        "material": "Ge",
+        "passed": true,
+        "primaries": 48
+      },
+      {
+        "balanced_half_checked": true,
+        "bo_and_sobol_proposals_checked": true,
+        "cases": 12,
+        "material": "GaAs",
+        "passed": true,
+        "primaries": 48
+      }
+    ],
+    "included_in_scientific_results": false,
+    "primaries": 144
+  },
+  "expected_completion_local": [
+    "2026-10-30T02:40:58.946950-04:00",
+    "2026-10-31T02:40:58.946950-04:00"
+  ],
+  "fresh_layouts": [
+    {
+      "counts": {
+        "S0_junction": 34,
+        "S1_le_0.05": 512,
+        "S2_le_0.20": 102,
+        "S3_le_0.50": 170,
+        "S4_bulk": 206
+      },
+      "file": "source-independent-01_1024.json",
+      "hash": "a13a10ba730ab9240da62bce0ee35dae263670c5436113f77382fbfd9a4e2be7",
+      "position_sha256": "11df3df4b1070d8e11fae2e8bbffbd074040e01c1fa18ab27d9f392bff8643f3",
+      "sites": 1024
+    },
+    {
+      "counts": {
+        "S0_junction": 34,
+        "S1_le_0.05": 512,
+        "S2_le_0.20": 102,
+        "S3_le_0.50": 170,
+        "S4_bulk": 206
+      },
+      "file": "source-independent-02_1024.json",
+      "hash": "51be58bddb649ae6eb85c7477940647ee4a01535df8df1d42fe40c2ba3779c81",
+      "position_sha256": "6d1860e0cb4d1e77d83f426ba732a66066088fb9b40d94b1b6217f0cac04a7c5",
+      "sites": 1024
+    },
+    {
+      "counts": {
+        "S0_junction": 34,
+        "S1_le_0.05": 512,
+        "S2_le_0.20": 102,
+        "S3_le_0.50": 170,
+        "S4_bulk": 206
+      },
+      "file": "source-independent-03_1024.json",
+      "hash": "c058ebb9a57373b392b710c5351f95d317da47bff0f7ba1951fc5c29568253db",
+      "position_sha256": "c0908ddca0a900df18f554de937e22d60c35e0743b8bf6f50b3715500f18ce7c",
+      "sites": 1024
+    },
+    {
+      "counts": {
+        "S0_junction": 34,
+        "S1_le_0.05": 512,
+        "S2_le_0.20": 102,
+        "S3_le_0.50": 170,
+        "S4_bulk": 206
+      },
+      "file": "source-independent-04_1024.json",
+      "hash": "ca6df08fd310cfcbd0fd709d4c50d2376ec7c016d1f9a6acb04622c52aa44e57",
+      "position_sha256": "7033d576941a7a5d6ddb9b33077d6a870cf1762082c2416e500f478187128cec",
+      "sites": 1024
+    },
+    {
+      "counts": {
+        "S0_junction": 34,
+        "S1_le_0.05": 512,
+        "S2_le_0.20": 102,
+        "S3_le_0.50": 170,
+        "S4_bulk": 206
+      },
+      "file": "source-independent-05_1024.json",
+      "hash": "0ae8142af37788533837812475e6484d9e4c142e4d1fc1ec8c67f6b451f54584",
+      "position_sha256": "3697ee6b40b200c910dc4f9b676d8a32704eac250d68df867e5d1758660530e1",
+      "sites": 1024
+    },
+    {
+      "counts": {
+        "S0_junction": 34,
+        "S1_le_0.05": 512,
+        "S2_le_0.20": 102,
+        "S3_le_0.50": 170,
+        "S4_bulk": 206
+      },
+      "file": "source-independent-06_1024.json",
+      "hash": "566274bd53ac3fea2a727afe634c837b59ae658e028bb0bfa3743186bced2c30",
+      "position_sha256": "2fbff60e6fdc582a6e231cf50f7815503a06a921abd69518f7623b4d2946546e",
+      "sites": 1024
+    },
+    {
+      "counts": {
+        "S0_junction": 34,
+        "S1_le_0.05": 512,
+        "S2_le_0.20": 102,
+        "S3_le_0.50": 170,
+        "S4_bulk": 206
+      },
+      "file": "source-independent-07_1024.json",
+      "hash": "2d799744cacb168973d6db34761fb3a7452d928643932dfcc7b275c60d54a311",
+      "position_sha256": "cad0eee106a7e1d036456119d9ce8ee69a5cf7d54fdce0f83553f301de38c69b",
+      "sites": 1024
+    },
+    {
+      "counts": {
+        "S0_junction": 34,
+        "S1_le_0.05": 512,
+        "S2_le_0.20": 102,
+        "S3_le_0.50": 170,
+        "S4_bulk": 206
+      },
+      "file": "source-independent-08_1024.json",
+      "hash": "1ad486e969164b1f108ef953c6e6858a148ef91d79dce194fe5196a21510db2e",
+      "position_sha256": "c184f27ec3dca20e34afcdf60f99bfa480423a44ecbc6dd0f608528cb59c40f7",
+      "sites": 1024
+    },
+    {
+      "counts": {
+        "S0_junction": 34,
+        "S1_le_0.05": 512,
+        "S2_le_0.20": 102,
+        "S3_le_0.50": 170,
+        "S4_bulk": 206
+      },
+      "file": "stratified_1024.json",
+      "hash": "4c8e6c96d155e4e00f69ae5c6375771ef9540d6fdd72d435e4c3e35b56e6d898",
+      "position_sha256": "57140fe1233cd487485c8dbf2e1fa2be14ea94c27c97002d38a0e6d861111531",
+      "sites": 1024
+    },
+    {
+      "counts": {
+        "S0_junction": 17,
+        "S1_le_0.05": 256,
+        "S2_le_0.20": 51,
+        "S3_le_0.50": 85,
+        "S4_bulk": 103
+      },
+      "file": "stratified_512.json",
+      "hash": "283e9e5117fc98b5d63fde14235fb5d91329c5bc6b9e7f7d911d294cd920cf2f",
+      "position_sha256": "731b453f760371cd88f2150c0ef14775061a1fd858f54031331336b6bf401f43",
+      "sites": 512
+    },
+    {
+      "counts": {
+        "S0_junction": 34,
+        "S1_le_0.05": 512,
+        "S2_le_0.20": 102,
+        "S3_le_0.50": 170,
+        "S4_bulk": 206
+      },
+      "file": "unused-stream-confirmation-01_1024.json",
+      "hash": "965f6db5ec29e41884d73d61591858b37f4257ed8ef5890b08c2c28dddc9e305",
+      "position_sha256": "932adbe2060fda580dd2207bc799ffa78dbe30ccc826cb4ac5558788c3695a07",
+      "sites": 1024
+    },
+    {
+      "counts": {
+        "S0_junction": 34,
+        "S1_le_0.05": 512,
+        "S2_le_0.20": 102,
+        "S3_le_0.50": 170,
+        "S4_bulk": 206
+      },
+      "file": "unused-stream-confirmation-02_1024.json",
+      "hash": "6d0b0ef075eab160e9f25427612f766f5130c3c630dffec92801293bc98174fb",
+      "position_sha256": "3588a5e4980864a101d764458f57831755976f4bc20ec35c92ed29b6c6c76377",
+      "sites": 1024
+    },
+    {
+      "counts": {
+        "S0_junction": 34,
+        "S1_le_0.05": 512,
+        "S2_le_0.20": 102,
+        "S3_le_0.50": 170,
+        "S4_bulk": 206
+      },
+      "file": "unused-stream-confirmation-03_1024.json",
+      "hash": "014c9bd2356cc89dc31f26995f7b037b2cdd0e060ab088bfdb5f55cb59351527",
+      "position_sha256": "bbe7c851233a0d8086069f427d8fda054f3107af16a356b317d114faf84b4552",
+      "sites": 1024
+    },
+    {
+      "counts": {
+        "S0_junction": 34,
+        "S1_le_0.05": 512,
+        "S2_le_0.20": 102,
+        "S3_le_0.50": 170,
+        "S4_bulk": 206
+      },
+      "file": "unused-stream-confirmation-04_1024.json",
+      "hash": "fc4b046e93bdccf85454bed2c626b4eac178f621ff05a9a05bade1e18fd1598d",
+      "position_sha256": "3ed70f889e91b60e7012ee5292a3a84e9e13b1a7604e5d3129d200e6478c6a20",
+      "sites": 1024
+    }
+  ],
+  "native_45deg_physical_identity_with_previous": {
+    "GaAs": true,
+    "Ge": true,
+    "Si": true
+  },
+  "observed_launch_local": "2026-10-28T14:40:58.946950-04:00",
+  "observed_queue": {
+    "driver_pid": 3590771,
+    "driver_starttime": 382267794,
+    "index": 0,
+    "stage": "native-layout-01",
+    "state": "running",
+    "updated": 1793212869.0177283
+  },
+  "observed_resources": {
+    "free_disk_bytes": 120670535680,
+    "memory": {
+      "available_bytes": 402118635520,
+      "limiting_cgroup": "/sys/fs/cgroup/user.slice",
+      "raw_unreclaimed_headroom_bytes": 30889639936
+    },
+    "rss_bytes": 6082818048,
+    "updated": 1793212998.4556417
+  },
+  "observed_task_counts": {
+    "complete": 1455,
+    "planned": 22949,
+    "running": 172
+  },
+  "old_production_measurements_unchanged": true,
+  "planned": {
+    "by_kind": {
+      "focused": 6144000000,
+      "native_confirmation": 16896000000,
+      "native_initial": 6912000000,
+      "native_search": 18432000000
+    },
+    "confirmation_targets_upper_bound": 33,
+    "primaries_upper_bound": 48384000000,
+    "tasks_upper_bound": 1548288
+  },
+  "resources": {
+    "all_cpus": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63,
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84,
+      85,
+      86,
+      87,
+      88,
+      89,
+      90,
+      91,
+      92,
+      93,
+      94,
+      95
+    ],
+    "cpu_cap": 96,
+    "cpus": [
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63,
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84,
+      85,
+      86,
+      87,
+      88,
+      89,
+      90,
+      91,
+      92,
+      93,
+      94,
+      95
+    ],
+    "llm_cpus": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "minimum_free_disk_gb": 20.0,
+    "per_task_mem_gb": 2.0,
+    "system_mem_reserve_gb": 16.0,
+    "total_mem_gb": 64.0,
+    "workers": 86
+  },
+  "run": "material_scan_data/native_orientation_20261028_full",
+  "scientific_scope": "At most 1024 sites; native coupled records; new positions and streams; all selected leaders independently confirmed. 2048-site estimates are prospective only.",
+  "source_archive": {
+    "bytes": 2151001677,
+    "independent_copy": "/data/htseng/material-scan-archives/native_orientation_20261028_full/frozen-source.tar.gz",
+    "independent_copy_verified": true,
+    "manifest_sha256": "f02778d4a8e76f82563d58427262d38dda29232fd19734aca1801d1e0789ddfa",
+    "members": 67435,
+    "path": "/home/htseng/Sensitivity_Analysis_HT/material_scan_data/native_orientation_20261028_full/archives/frozen-source.tar.gz",
+    "schema": "material-scan-archive-1",
+    "separate_filesystem": true,
+    "sha256": "c9e447f0ab1fc2f1db3f64daf6311f1b5a3b793e9f24f5327e9c9fe9cc6a58c8",
+    "verified": true
+  },
+  "source_sha256": {
+    "analysis.py": "6320d6572f149260be022b9811d1f960015293ea4d5d73eaf27383001740ef8e",
+    "figures/plot.py": "33d85d4ce3bf9a348a4707487ef575be27e96a7190f85345b7682f8cb75c2dc6",
+    "parameters.yaml": "902b657893d5fc9fc99d1b7d23b4987e1aa9355cd4bad91f092fd69e8d020900",
+    "physics.py": "5132113c77d22c5dc6a3caff0b22909e3fde35503cc3a4e5198e1f37c9749edf",
+    "records.py": "cb65827bc75015be556ca7f54e5b08261a169f0f361ca51886ca16461441ef32",
+    "run_all.sh": "6540472f1c6bd2c3a218cbc8a06d91cab6104f65571785cdb1d86bb6cb83d240",
+    "scan.py": "5ac19b2c32d20489408d6dcaac1fdbfeff45ff08cd5b49a61650fa7734cad674",
+    "search.py": "64af23964f6d2362cc1048075ccda600dc23dbd18e7d81a662594b87cd1ded7d"
+  },
+  "state": "running",
+  "tests": {
+    "final_configuration_targeted_passed": 6,
+    "log_sha256": "42dff25449f3dd65a235b5144b0cdfdf3d52b001aaaecb05994ab6d158d6cec9",
+    "passed": 206,
+    "source_scope": "206 tests cover the implementation; six targeted native tests and real execution checks were repeated with the final full-angle configuration.",
+    "targeted_log_sha256": "b201591625ee32c6da9c73aa09eb3acb3b8af94dffa985fb0d65ba328899f469"
+  },
+  "tmux_session": "native_orientation_20261028_full",
+  "updated": 1793212999.8727188
+}

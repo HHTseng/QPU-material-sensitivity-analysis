@@ -2026,6 +2026,81 @@ class QueueTests(unittest.TestCase):
     tearDown = WorkflowTests.tearDown
     make_executable = WorkflowTests.make_executable
 
+    def test_native_reallocation_uses_fresh_sites_and_unchanged_area_weights(self):
+        cfg=records.load_document(ROOT/'studies/native/queue.yaml');run=self.root/'fresh';run.mkdir()
+        fixed=scan.load_study(ROOT/'studies/reference.yaml')['fixed']
+        saved=records.load_document(ROOT/cfg['defaults']['base_design_file'])
+        before=records.content_hash(saved)
+        self.queue_python(scope="mode in ('check', 'prepare')",start='fixed = reference',stop='independent_root =',
+            cfg=cfg,defaults=cfg['defaults'],focused=True,native_search=True,optimization=False,
+            reference={'fixed':fixed},run=run,repo=ROOT)
+        for n in (512,1024):
+            d=records.load_document(run/'designs'/f'stratified_{n}.json')
+            self.assertEqual(list(d['stratum_counts'].values()),cfg['defaults']['allocations'][str(n)])
+            self.assertEqual(d['stratum_weights'],saved['stratum_weights'])
+            self.assertNotEqual(d['sites_mm'][:512],saved['sites_mm'])
+        self.assertEqual(records.content_hash(records.load_document(ROOT/cfg['defaults']['base_design_file'])),before)
+        self.assertEqual(len(list((run/'designs').glob('source-independent*'))),8)
+        self.assertEqual(len(list((run/'designs').glob('unused-stream-confirmation*'))),4)
+
+    def test_native_search_changes_only_orientation_and_shares_measured_starts(self):
+        cfg=records.load_document(ROOT/'studies/native/queue.yaml')
+        design=physics.build_design(scan.load_study(self.raw)['fixed'],{'kind':'sobol','sites':512,'position_seed':2026102800})
+        records.write_json(self.root/'designs/stratified_512.json',design)
+        for material in ('Ge','GaAs'):
+            path=self.root/'maps'/material;path.mkdir()
+            (path/'config.txt').write_text((self.root/'maps/Si/config.txt').read_text()
+                .replace('165.6','126.0' if material=='Ge' else '121.57'))
+        records.write_json(self.root/'installation.json',self.raw['installation'])
+        limits={key:cfg['execution'][key] for key in ('workers','total_mem_gb','per_task_mem_gb')}|{'system_mem_reserve_gb':16}
+        for material in cfg['materials']:
+            step=next(s for s in cfg['studies'] if s['kind']=='native_initial' and s['material']==material)
+            values=dict(cfg=cfg,defaults=cfg['defaults'],source=ROOT,run=self.root,identifier=step['id'],step=step,limits=limits,native_search=True)
+            ns=self.queue_python('base_study',scope='stage',branch="native_search and step['kind'] in ('native_initial', 'native_search')",**values)
+            raw=ns['raw'];raw['sampling'].update(kind='sobol',sites=2);raw['sampling'].pop('design_file')
+            study=scan.load_study(raw);prepared=[physics.prepare_values(study,p) for p in raw['candidates']]
+            self.assertEqual(len(prepared),12)
+            self.assertEqual(set(study['space']['names']),set(cfg['orientation_bounds']))
+            for p in prepared:
+                self.assertEqual(p['derived']['lattice_map_name'],material)
+                self.assertEqual(p['derived']['config_mode'],'native_g4cmp')
+                self.assertEqual(p['values']['topfilm_density'],8570.)
+                self.assertEqual(p['values']['bot_density'],8960.)
+                self.assertEqual({k:v for k,v in p['values'].items() if k not in cfg['orientation_bounds']},
+                                 {k:v for k,v in prepared[0]['values'].items() if k not in cfg['orientation_bounds']})
+            observations=[{'values':p['values'],'value':.001+i*.00001,'standard_error':.00001,
+                           'transport_standard_error':.000001} for i,p in enumerate(prepared)]
+            records.write_json(self.root/'initial-observations'/(step['id']+'.json'),{'observations':observations})
+            for method in cfg['methods']:
+                arm=next(s for s in cfg['studies'] if s.get('initial')==step['id'] and s.get('method')==method)
+                ns=self.queue_python('base_study',scope='stage',branch="native_search and step['kind'] in ('native_initial', 'native_search')",
+                                     **{**values,'step':arm,'identifier':arm['id']})
+                self.assertEqual(ns['raw']['search']['initial_observations'],observations)
+                self.assertEqual(ns['raw']['search']['method'],cfg['methods'][method])
+                self.assertNotIn('candidates',ns['raw'])
+
+    def test_native_confirmation_retains_materials_and_does_not_select_from_holdouts(self):
+        cfg=records.load_document(ROOT/'studies/native/queue.yaml')
+        design=physics.build_design(scan.load_study(self.raw)['fixed'],{'kind':'sobol','sites':1024,'position_seed':2026102901})
+        records.write_json(self.root/'designs/unused-stream-confirmation-01_1024.json',design)
+        for material in ('Ge','GaAs'):
+            path=self.root/'maps'/material;path.mkdir()
+            (path/'config.txt').write_text((self.root/'maps/Si/config.txt').read_text())
+        records.write_json(self.root/'installation.json',self.raw['installation'])
+        for step in cfg['studies']:
+            if step['kind'] not in ('native_initial','native_search'):continue
+            records.write_json(self.root/'studies'/step['id']/'summary.json',{'complete':True,
+                'results':[{'value':.001,'status':'complete','parameters':{'lattice_deg':12.}}]})
+        step=next(s for s in cfg['studies'] if s['kind']=='native_confirmation')
+        ns=self.queue_python('base_study',scope='stage',branch="native_search and step['kind'] == 'native_confirmation'",
+            cfg=cfg,defaults=cfg['defaults'],source=ROOT,run=self.root,queue=cfg['studies'],step=step,identifier=step['id'],
+            limits={key:cfg['execution'][key] for key in ('workers','total_mem_gb','per_task_mem_gb')}|{'system_mem_reserve_gb':16},native_search=True)
+        selection=records.load_document(self.root/'native-selected.json')
+        self.assertFalse(selection['selection_uses_confirmation'])
+        self.assertLess(len(selection['candidates']),33)
+        self.assertEqual({p['materials'][0] for p in selection['candidates']},{'Si','Ge','GaAs'})
+        self.assertFalse(ns['raw']['sampling']['independent_candidate_streams'])
+
     def test_focused_inputs_keep_exact_rotation_pair_and_matched_native_streams(self):
         cfg=records.load_document(ROOT/'studies/focused/queue.yaml')
         self.assertEqual(len(set(cfg['defaults']['independent_position_seeds'])),8)
@@ -2049,6 +2124,44 @@ class QueueTests(unittest.TestCase):
         streams=[[t['seeds'] for t in scan.task_plan(study,p,{'build':'fixture'})] for p in points]
         self.assertTrue(all(seeds==streams[0] for seeds in streams))
         self.assertFalse(raw['sampling']['independent_candidate_streams'])
+
+    def test_native_final_report_keeps_partial_arms_out_of_matched_seed_test(self):
+        from unittest.mock import patch
+        cfg=records.load_document(ROOT/'studies/native/queue.yaml');reports={}
+        names=[p['name'] for p in cfg['candidates']]+[s['id'] for s in cfg['studies'] if s['kind'] in ('native_initial','native_search')]
+        records.write_json(self.root/'native-selected.json',{'aliases':{n:[n] for n in names},'candidates':[], 'selection_uses_confirmation':False})
+        for step in cfg['studies']:
+            if step['kind']=='focused': chosen=names[:6]
+            elif step['kind']=='native_confirmation':chosen=names
+            else:
+                reports[step['id']]={'complete':True,'results':[],'timing':{'total_s':1},
+                    'search_counts':{'target_reached':True,'measured':16,'target':16}}
+                continue
+            rows=[]
+            for name in chosen:
+                value=10. if name.startswith('native-initial') or name.endswith('45deg') else 8. if name.startswith('bo-') or name.endswith('0deg') else 9.
+                rows.append({'name':name,'value':value,'balanced_half_value':value*1.01,'standard_error':.1,
+                    'transport_standard_error':.01,'units':'weighted_junction_QPs_per_injected_eV',
+                    'estimate':{'means_by_stratum':{'test':value},'maximum_site_leverage':.1}})
+            reports[step['id']]={'id':step['id'],'complete':True,'results':rows}
+        reports['sobol-Si-303']['search_counts']['target_reached']=False
+        records.write_json(self.root/'source-ready.json',{'source':'fixture'})
+        records.write_json(self.root/'publication.json',{'branch':'fixture','remote':'fixture'})
+        (self.root/'README.md').write_text('before\n<!-- native-start -->\nold\n<!-- native-end -->\nafter\n')
+        with patch.object(subprocess,'check_output',return_value='fixture'),patch.object(analysis,'plot_result'):
+            with self.assertRaises(SystemExit) as stopped:
+                self.queue_python('mean_interval','layout_summary',scope='finish',branch='native_search',
+                    native_search=True,focused=True,cfg=cfg,defaults=cfg['defaults'],queue=cfg['studies'],reports=reports,
+                    repo=self.root,run=self.root,limits={'workers':86},subprocess=subprocess)
+        self.assertEqual(stopped.exception.code,0)
+        result=records.load_document(self.root/'docs/results/native_optimization.json')
+        self.assertEqual(result['method_comparison']['Si']['complete_matched_seeds'],[101,202])
+        self.assertEqual(result['method_comparison']['Si']['bo_minus_sobol']['n_new'],2)
+        self.assertEqual(result['method_comparison']['Ge']['bo_minus_sobol']['n_new'],3)
+        self.assertEqual(len(result['benchmark_contrasts']),5)
+        self.assertEqual(result['confirmation']['results'][0]['estimate']['n_layouts'],4)
+        self.assertAlmostEqual(result['confirmation']['results'][0]['transport_standard_error'],.005)
+        self.assertTrue((self.root/'README.md').read_text().endswith('\nafter\n'))
 
     def test_focused_report_uses_paired_layouts_and_corrects_three_intervals(self):
         from unittest.mock import patch
@@ -2376,7 +2489,7 @@ class QueueTests(unittest.TestCase):
         namespace={'records':records,'analysis':analysis,'scan':scan,'physics':physics,
                    'np':np,'copy':copy,'math':math,'itertools':itertools,'Path':Path,
                    'os':os,'time':time,'sys':sys,'json':json,'shutil':shutil,
-                   'max_sites':1024,'initial_checks':False,'optimization':False,'focused':False,'refinement':{},**values}
+                   'max_sites':1024,'initial_checks':False,'optimization':False,'focused':False,'native_search':False,'refinement':{},**values}
         exec(compile(ast.Module(body=code,type_ignores=[]),'isolated queue Python','exec'),namespace)
         return namespace
 

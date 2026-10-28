@@ -117,35 +117,30 @@ More inference or larger models are not justified by these results alone.
 
 ## Physical findings and remaining limits
 
-The strongest controlled screening change was **in-plane crystal rotation from
-45° to 0°**, reducing $J$ by 35.2% at otherwise identical properties. Its selected
-0° target independently confirmed at
-$J=0.000300141$, with a four-layout 95% interval
-$[0.000286310,0.000313972]$. This is 25.5% below the best BO method's mean,
-but that comparison changes more than rotation. A direct matched rotation
-confirmation is the next measurement.
+The matched 0°/45° experiment below confirms a **30.22% reduction** for the
+specified property target, with an adjusted interval of **25.04–35.41% reduction**.
+Every one of its eight layouts favored 0°. Mean $J$ changed from 0.000409613 to
+0.000285456. About 92% of the estimated change came from the outer two source
+regions, consistent with rotation changing phonon propagation relative to junctions.
 
 The target has $(C_{11},C_{12},C_{44})=(450,0,5)$ GPa, upper-film lifetime
-1 ps, lower-film lifetime 0.5 ns and gap 1.5384 meV. Its other substrate and film
-inputs remain the calibrated background. Elastic stability does not establish
-that this combined property set exists in a material.
-For example, its upper- and lower-film densities are 15,010.9 and 7,184.4 kg/m³;
-these are calibrated property inputs rather than the native Nb/Cu pair.
+1 ps, lower-film lifetime 0.5 ns and gap 1.5384 meV. Its other inputs remain the
+calibrated background, including film densities of 15,010.9 and 7,184.4 kg/m³.
+Elastic stability does not establish that this combined property set exists.
 
-For native materials, Ge–Nb–Cu appeared 11.3% below Si–Nb–Cu during screening.
-In independent confirmation, Ge–Nb–Cu instead gave $J=0.00242081$, compared
-with $0.00231736$ for Si–Nb–Cu: approximately 4.5% higher. Its apparent advantage
-did not survive confirmation. Physical inputs were identical between phases;
-source-position and transport variation remain important. Only the selected
-native winner was confirmed, so the complete native ranking is unresolved.
+For native substrates at 45°, Ge–Nb–Cu gave a higher response than Si–Nb–Cu in
+all eight layouts. The mean paired relative increase was 15.89%, with a broad
+adjusted interval of 0.12–31.65%; the absolute-difference interval includes zero.
+GaAs differed by 0.38%, with interval −5.22% to +5.98%, establishing neither an
+improvement nor equivalence within 5%. Position variation near junctions dominates
+these remaining uncertainties. The relative intervals average layout-specific
+ratios; they are not intervals for a ratio of pooled means.
 
-The earlier primary-count test passed at fixed positions, while the spatial
-convergence test failed. Four additional layouts do not establish convergence
-throughout the search domain. All further layouts remain at **1,024 positions
-or fewer**. Materials retain their own density and lattice records; scattering,
-film lifetimes and interface assumptions require independent physical support.
-Junction-QP yield alone does not establish a fabrication optimum, global
-minimum or qubit-error reduction.
+The earlier primary-count check passed at fixed positions, while spatial
+convergence remains unresolved. Further studies retain each native material's
+density, lattice, elastic constants and phonon rates. Film lifetimes and
+interfaces still contain model assumptions. Junction-QP yield alone does not
+establish a fabrication optimum, global minimum or qubit-error reduction.
 
 <!-- focused-start -->
 ## Matched rotation and native-material comparison
@@ -163,11 +158,99 @@ Finished 2026-10-27. Eight unused 1,024-position layouts compare 0° with 45° a
 [Paired intervals, physical inputs and limits](docs/results/orientation_materials.md).
 <!-- focused-end -->
 
-The subsequent optimization should include crystal orientation and physically
-coupled material choices, retaining BO and corner refinement as controls.
-Additional optimizer seeds can then test smaller differences. A bounded LLM
-should propose physical hypotheses or checks; any claimed benefit must be an
-added, independently confirmed reduction under equal measured work.
+<!-- native-start -->
+## Native-material orientation study: October 28
+
+The [new study](studies/native/queue.yaml) applies the measured sampling results
+before further optimization. Its three parts use a single evaluator and stay
+within **1,024 source positions**:
+
+1. Compare native Si, Ge and GaAs with Nb/Cu at 0° and 45° on eight new layouts.
+2. For each substrate and three search seeds, give BO and Sobol the same twelve
+   measured starts and sixteen additional responses per method. Vary only crystal
+   orientation; native density, elasticity, phonon rates and film inputs stay fixed.
+3. Confirm the starting winners, optimizer leaders and fixed 0°/45° controls on
+   four unused layouts. Confirmation observations stay out of search and selection.
+
+The orientation variables are $c\in[-1,1]$, $a\in[0,1]$ and
+$\phi\in[0,359]$ degrees. The surface normal in crystal coordinates is
+
+$$
+n(c,a)=\left(\sqrt{1-c^2}\cos(2\pi a),\sqrt{1-c^2}\sin(2\pi a),c\right).
+$$
+
+Here $\phi$ is rotation about that normal. The upper limit avoids repeating the
+360° endpoint and approximates the full in-plane range to one degree.
+The GP uses a spherical distance for the normal. The twelve starts comprise
+(001), (110) and (111) normals at 0°/45°, plus six seeded Sobol orientations.
+Three optimizer seeds support an exploratory comparison, not a global-minimum claim.
+
+The region area fractions remain unchanged. Counts change as follows:
+
+| Source region | Previous 1,024 | New 1,024 | Search 512 |
+|---|---:|---:|---:|
+| Junction rectangles | 136 | 34 | 17 |
+| Within 0.05 mm | 128 | 512 | 256 |
+| 0.05–0.20 mm | 256 | 102 | 51 |
+| 0.20–0.50 mm | 256 | 170 | 85 |
+| Remaining source area | 248 | 206 | 103 |
+
+The allocation was fixed from the previous eight layouts. A regional variance
+approximation predicts approximately half the position error for Ge/GaAs.
+New orientations can change that estimate. Each position uses four realizations, with
+31,250 primaries per task: fewer primaries increase conditional transport
+error, which remains measured separately. A balanced half-layout comparison
+uses the first half of positions within each region, chosen before examining
+new responses. It diagnoses 512/1,024 agreement without extra transport and does
+not establish convergence throughout the orientation domain.
+
+| Resource | Allocation or estimate |
+|---|---|
+| Studies | 39 sequential stages |
+| Complete primary counts | At most **48.384 billion**, before confirmation deduplication and failed attempts |
+| Workers | **86**, inside the 96-CPU total limit; eight CPUs remain reserved for the model service |
+| GPUs | **0** |
+| Host memory | **64 GiB** combined limit, 2 GiB per task, 16 GiB host reserve |
+| Additional working storage | Approximately **35–55 GiB**, plus a 20 GiB free-disk reserve |
+| Elapsed time | **36–60 h after launch**, depending on orientation-dependent transport and archive checks |
+
+The run is `native_orientation_20261028_full`, launched on **October 28**.
+Expected completion is **October 30–31 EDT**, conditional on uninterrupted execution.
+[Launch verification](verification/native_orientation_launch_20261028.json) records
+source hashes, fresh layouts, physical identities, tests and execution checks.
+Expected outcomes include a native
+rotation response, measured precision after reallocation, and BO's added gain
+against the same starting data and Sobol. A 30% gain in the calibrated target
+does not predict the gain in Si, Ge or GaAs. BO may add little beyond the starting
+orientations; all outcomes and incomplete searches remain visible.
+
+```bash
+bash run_all.sh status material_scan_data/native_orientation_20261028_full
+tmux -L material-scan attach -t native_orientation_20261028_full
+```
+<!-- native-end -->
+
+## Are 2,048 positions worthwhile?
+
+**A small confirmation check can be worthwhile; a full search at 2,048 positions
+is premature.** At unchanged primaries per position, doubling positions roughly
+doubles transport and may reduce position error by $1/\sqrt2\simeq0.707$.
+Reallocating 1,024 positions is predicted to improve Ge/GaAs precision more
+strongly than uniformly doubling the previous allocation.
+
+A more efficient diagnostic holds total primary count fixed: use 2,048 positions
+with 15,625 primaries per task instead of 1,024 with 31,250, retaining four
+realizations. Position error may fall by 29%, while transport error is approximately
+unchanged. Saved task times suggest **25–50% more elapsed time**, owing to extra
+process and file overhead, rather than twice the primary work. Four layouts of
+the six native 0°/45° cases would require **3.072 billion new primaries** and
+approximately **3–6 hours**, compared against the retained 1,024-site results.
+This estimate depends on retaining comparable physical inputs and source streams.
+
+The [allocation and cost analysis](verification/site_allocation_20261028.json)
+records the equations, measured task times and assumptions. A 2,048-site diagnostic
+is most useful if balanced-half shifts or finalist position errors still affect
+the new conclusions. The active queue retains the existing **1,024-site limit**.
 
 ## Calculation and execution
 
@@ -208,10 +291,10 @@ conda run -n G4CMP python scan.py run studies/reference-eight.yaml \
   --output material_scan_data/experiments/reference-eight
 conda run -n G4CMP python -m unittest discover -s tests -v
 
-# Full follow-up; prepare freezes source, executable, libraries and inputs.
-MATERIAL_QUEUE_CONFIG=studies/focused/queue.yaml \
-  bash run_all.sh prepare material_scan_data/orientation_materials_20261026
-bash run_all.sh run material_scan_data/orientation_materials_20261026
+# Native orientation study; prepare freezes source, executable and inputs.
+MATERIAL_QUEUE_CONFIG=studies/native/queue.yaml \
+  bash run_all.sh prepare material_scan_data/native_orientation_20261028_full
+bash run_all.sh run material_scan_data/native_orientation_20261028_full
 ```
 
 Repeating a run with unchanged inputs resumes recorded work. New physical inputs

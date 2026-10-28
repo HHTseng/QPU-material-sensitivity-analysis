@@ -175,7 +175,7 @@ path=Path(sys.argv[3])/'summary.json'
 report=json.loads(path.read_text()) if path.is_file() else {}
 limited=report.get('incomplete_reason')=='elapsed limit or maximum attempts reached before the measured target'
 fresh=path.is_file() and path.stat().st_mtime_ns>=int(sys.argv[4])
-raise SystemExit(0 if fresh and step['kind']=='optimization_search' and not report.get('complete') and report.get('search_counts') and limited else 1)
+raise SystemExit(0 if fresh and step['kind'] in ('optimization_search','native_search') and not report.get('complete') and report.get('search_counts') and limited else 1)
 PY
                 then break; fi
                 bash "$BASH_SOURCE" failed "$material_run" "$index"
@@ -237,7 +237,8 @@ if (run/'queue-config.json').is_file(): config_path=Path(records.load_document(r
 if not config_path.is_absolute(): config_path=(source if (run/'source-ready.json').is_file() else repo)/config_path
 cfg=records.load_document(config_path)
 optimization=cfg.get('schema')=='material-scan-optimization-1'
-focused=cfg.get('schema')=='material-scan-focused-1'
+native_search=cfg.get('schema')=='material-scan-native-optimization-1'
+focused=native_search or cfg.get('schema')=='material-scan-focused-1'
 refinement={}
 if optimization and cfg.get('refinement_file'):
     refinement=records.load_document((source if (run/'source-ready.json').is_file() else repo)/cfg['refinement_file'])
@@ -307,6 +308,8 @@ def layout_summary(reports):
         estimate['means_by_stratum']={h:float(np.mean([r['estimate']['means_by_stratum'][h] for r in measured])) for h in measured[0]['estimate']['means_by_stratum']}
         estimate['maximum_site_leverage']=max(r['estimate']['maximum_site_leverage'] for r in measured)
         row.update(value=estimate['value'],standard_error=estimate['standard_error'],estimate=estimate)
+        if all(r.get('transport_standard_error') is not None for r in measured):
+            row['transport_standard_error']=math.sqrt(sum(r['transport_standard_error']**2 for r in measured))/len(measured)
     reference=np.asarray(out['results'][0]['estimate']['by_layout']); pairs=[]
     for row in out['results'][1:]:
         values=np.asarray(row['estimate']['by_layout'])
@@ -560,7 +563,7 @@ if mode in ('check','prepare'):
         for point in calibration['candidates']: physics.prepare_values(validation,point)
     if mode=='check':
         stages=3+len(cfg['pilot_methods'])+len(cfg['search_seeds'])*(1+2*len(cfg['methods']))+len(defaults['confirmation_position_seeds'])+len(refinement.get('fixed_studies',[])) if optimization else len(cfg['studies'])
-        print(records.canonical_json({'search_dimensions':len(space['names']),'native_material_cases':18,'stages':stages,'max_sites':max_sites,'stop_after_initial_checks':initial_checks,'cpu_cap':cap,'workers':limits['workers'],'memory':scan.memory_headroom(),'source_region_mm':8,'temperature_K':defaults['temperature_K']}))
+        print(records.canonical_json({'search_dimensions':len(cfg['orientation_bounds']) if native_search else len(space['names']),'native_material_cases':18,'stages':stages,'max_sites':max_sites,'stop_after_initial_checks':initial_checks,'cpu_cap':cap,'workers':limits['workers'],'memory':scan.memory_headroom(),'source_region_mm':8,'temperature_K':defaults['temperature_K']}))
         raise SystemExit(0)
     run.mkdir(parents=True,exist_ok=True)
     relative_config=str(config_path.relative_to(repo if not (run/'source-ready.json').is_file() else source))
@@ -618,8 +621,9 @@ if mode in ('check','prepare'):
                   'area_samples':defaults['area_samples'],'area_seed':defaults['area_seed'],
                   'allocation':dict(zip(physics.REGIONS,defaults['allocations'][str(n)])),
                   'stratum_weights':previous_design['stratum_weights']}
-        prior=previous_design if n>base_n else None
-        design=copy.deepcopy(previous_design) if n==base_n else physics.build_design(fixed,sampling,previous=prior)
+        fresh=defaults.get('fresh_designs',False)
+        prior=previous_design if n>base_n and not fresh else None
+        design=copy.deepcopy(previous_design) if n==base_n and not fresh else physics.build_design(fixed,sampling,previous=prior)
         if design['stratum_counts']!=sampling['allocation']: raise ValueError('the declared allocation differs from its recorded source design')
         design['design_hash']=records.content_hash({k:v for k,v in design.items() if k!='design_hash'})
         records.write_json(run/'designs'/f'stratified_{n}.json',design)
@@ -696,16 +700,26 @@ if mode in ('check','prepare'):
             queue.extend({**group,'id':group['id']+f'-{i//4+1:02d}','move_start':i,'move_count':4} for i in range(0,moves,4))
         else: queue.append(group)
     records.write_json(run/'queue.json',queue)
-    if focused:
+    if focused and not native_search:
         primaries=sum(step['sampling']['design']*step['sampling']['replicas']*step['sampling']['events_per_task']*len(cfg['candidates']) for step in queue)
         records.write_json(run/'planned-computation.json',{'primaries':primaries,'layouts':len(queue),
             'candidates':len(cfg['candidates']),'comparisons':cfg['comparison'],
             'interpretation':'All fixed candidates use matched positions and streams within each independent layout.'})
+    if native_search:
+        counts={'focused':len(cfg['candidates']),'native_initial':cfg['initial_count'],'native_search':cfg['search_count'],
+                'native_confirmation':len(cfg['candidates'])+len(cfg['materials'])*len(cfg['search_seeds'])*(1+len(cfg['methods']))}
+        work={kind:sum(step['sampling']['design']*step['sampling']['replicas']*step['sampling']['events_per_task']*counts[kind]
+                      for step in queue if step['kind']==kind) for kind in counts}
+        records.write_json(run/'planned-computation.json',{'primaries_upper_bound':sum(work.values()),'by_kind':work,
+            'confirmation_targets_upper_bound':counts['native_confirmation'],'tasks_upper_bound':sum(work.values())//31250})
     records.write_json(run/'queue_status.json',{'state':'prepared','stages':len(queue),'updated':time.time()},overwrite=True)
     files=['README.md','docs/results/optimization_summary.json','docs/results/optimization_summary.md','figures/optimization_results.png'] if optimization else ['README.md','docs/results/full_scale_summary.json','figures/full_scale_finalists.png','figures/full_scale_transport_morris.png','figures/full_scale_density_morris.png','figures/full_scale_methods.png','figures/full_scale_projection.png']
     if focused:
         files=['README.md','docs/results/orientation_materials.json','docs/results/orientation_materials.md','figures/orientation_materials.png']
-    records.write_json(run/'publication.json',{'branch':subprocess.check_output(['git','branch','--show-current'],cwd=repo,text=True).strip(),'remote':subprocess.check_output(['git','remote','get-url','origin'],cwd=repo,text=True).strip(),'files':files,'commit_message':'Report matched rotation and native-material comparison' if focused else 'Report confirmed optimization comparisons' if optimization else 'Report fresh full-scale material studies'})
+    if native_search:
+        files=['README.md','docs/results/native_optimization.json','docs/results/native_optimization.md','figures/native_optimization.png']
+    message='Report native material orientation optimization' if native_search else 'Report matched rotation and native-material comparison' if focused else 'Report confirmed optimization comparisons' if optimization else 'Report fresh full-scale material studies'
+    records.write_json(run/'publication.json',{'branch':subprocess.check_output(['git','branch','--show-current'],cwd=repo,text=True).strip(),'remote':subprocess.check_output(['git','remote','get-url','origin'],cwd=repo,text=True).strip(),'files':files,'commit_message':message})
     print(records.canonical_json({'prepared_studies':len(queue),'source':str(source),'resources':limits}))
     raise SystemExit(0)
 
@@ -867,6 +881,53 @@ if mode=='stage':
             raw['sampling']['position_seed']=step['position_seed']
             raw['analysis'].update(comparisons=True,diagnostics=True,bootstrap_draws=defaults['bootstrap_draws'])
         else: raise ValueError('unknown optimization study')
+    elif native_search and step['kind'] in ('native_initial','native_search'):
+        raw=base_study(identifier,{**step['sampling'],'seed_bank':step['bank']})
+        linked={**raw,'candidates':[{'materials':[step['material'],'Nb','Cu']}]}
+        study=scan.load_study(linked); baseline=physics.prepare_values(study,linked['candidates'][0])['values']
+        raw['realization']={'mode':'native_g4cmp','material':step['material']}
+        raw['parameters']={name:{'mode':'fixed','value':value} for name,value in baseline.items()}
+        raw['parameters'].update({name:{'mode':'search','value':baseline[name],'bounds':bounds} for name,bounds in cfg['orientation_bounds'].items()})
+        raw['sampling']['independent_candidate_streams']=True
+        raw['analysis'].update(comparisons=False,diagnostics=False,bootstrap_draws=256)
+        if step['kind']=='native_initial':
+            from scipy.stats import qmc
+            study=scan.load_study(raw); points=[]
+            for miller,angle in itertools.product(([0,0,1],[1,1,0],[1,1,1]),(0.,45.)):
+                polar,azimuth=physics.miller_to_sphere(miller)
+                points.append({'name':f'initial-{len(points):02d}','values':{**baseline,
+                    'orientation_polar_cos':polar,'orientation_azimuth_turns':azimuth,'lattice_deg':angle}})
+            for u in qmc.Sobol(d=3,scramble=True,seed=step['seed']).random_base2(4):
+                points.append({'name':f'initial-{len(points):02d}','values':physics.from_unit(u,study['space'])})
+                if len(points)==step['count']: break
+            raw['candidates']=points
+        else:
+            raw.update(kind='search'); raw.pop('candidates')
+            initial=records.load_document(run/'initial-observations'/(step['initial']+'.json'))['observations']
+            raw['search']={'method':cfg['methods'][step['method']],'seed':step['seed'],'evaluations':step['count'],
+                'measured_evaluations':True,'max_attempts':3*step['count'],'max_elapsed_s':43200,
+                'initial_observations':initial,'parallel_candidates':1,'options':cfg['optimizer_options']}
+    elif native_search and step['kind']=='native_confirmation':
+        raw=base_study(identifier,{**step['sampling'],'seed_bank':step['bank']})
+        raw['sampling'].update(position_seed=step['position_seed'],independent_candidate_streams=False)
+        selected=run/'native-selected.json'
+        if not selected.exists():
+            points=copy.deepcopy(cfg['candidates'])
+            for entry in queue:
+                if entry['kind'] not in ('native_initial','native_search'): continue
+                report=records.load_document(run/'studies'/entry['id']/'summary.json')
+                if not (report.get('complete') or report.get('terminated_search')): raise ValueError('screening must finish before confirmation')
+                complete=[p for p in [*report.get('initial_results',[]),*report['results']] if p.get('status','complete')=='complete']
+                best=min(complete,key=lambda row:row['value'])
+                points.append({'name':entry['id'],'materials':[entry['material'],'Nb','Cu'],'values':best.get('parameters',best.get('values'))})
+            study=scan.load_study({**raw,'candidates':points}); distinct={}; aliases={}
+            for point in points:
+                prepared=physics.prepare_values(study,point)
+                key=records.content_hash({k:prepared[k] for k in ('values','derived','fixed','top_film','bottom_film')})
+                aliases.setdefault(key,[]).append(point['name']);distinct.setdefault(key,point)
+            records.write_json(selected,{'candidates':list(distinct.values()),'aliases':aliases,'selection_uses_confirmation':False})
+        raw['candidates']=records.load_document(selected)['candidates']
+        raw['analysis'].update(comparisons=False,diagnostics=True)
     elif focused and step['kind']=='focused':
         raw=base_study(identifier,{**step['sampling'],'seed_bank':step['bank']})
         raw['sampling'].update(position_seed=step['position_seed'],independent_candidate_streams=False)
@@ -1014,7 +1075,7 @@ elif mode=='record':
         receipt=verify_saved_archive(report); compact_study(output,report,receipt)
         print(records.canonical_json({'stage':step['id'],'already_archived':True})); raise SystemExit(0)
     if not report['complete']:
-        if not optimization or step['kind']!='optimization_search' or not report.get('search_counts'):
+        if step['kind'] not in ('optimization_search','native_search') or not report.get('search_counts'):
             raise ValueError('incomplete studies cannot become confirmed results')
         report['terminated_search']=True
         report['interpretation']='Declared search stopped without its complete response target; missing responses remain absent.'
@@ -1029,7 +1090,7 @@ elif mode=='record':
         records.write_json(run/'calibration-background.json',{'candidate':{'name':best['name'],'values':best['parameters'],
             'realization':originals[best['name']].get('realization',{})},'calibration_value':best['value'],'candidate_id':best['candidate_id'],
             'selection':'Smallest fresh response among predefined full-input cases inside the six-dimensional domain. Calibration is not optimizer gain.'})
-    elif optimization and step['kind']=='optimization_initial':
+    elif step['kind'] in ('optimization_initial','native_initial'):
         observations=[]
         for row in report['results']:
             observations.append({'values':row['parameters'],'value':row['value'],'standard_error':row['standard_error'],
@@ -1039,6 +1100,16 @@ elif mode=='record':
         records.write_json(run/'initial-observations'/(step['id']+'.json'),{'objective':report['objective'],
             'design_hash':report['design']['design_hash'],'events_per_task':report['events_per_task'],
             'replicas':report['replicas'],'observations':observations})
+    elif native_search and step['kind']=='focused':
+        # The balanced half uses the first n_h/2 positions in each region, fixed before transport.
+        for row in report['results']:
+            blocks=records.load_result(output,candidate_id=row['candidate_id'])['results'][0]['blocks']
+            counts=analysis.prepare_counts(blocks,report['design']); coarse=0.
+            for _,positions,weight in counts['groups']:
+                if len(positions)%2: raise ValueError('balanced half needs even source counts in every region')
+                coarse+=weight*float(counts['weighted'][positions[:len(positions)//2]].mean())
+            row['balanced_half_value']=coarse
+        records.write_json(output/'summary.json',report,overwrite=True)
     elif optimization and step['kind']=='optimization_resolution':
         coarse=records.load_document(run/'designs/stratified_512.json')
         coarse_design={**report['design'],'position_strata':coarse['stratum'],'sites_mm':coarse['sites_mm'],'design_hash':coarse['design_hash']}
@@ -1149,9 +1220,73 @@ elif mode=='finish':
                 'reason':'Unfinished studies remain; independent completed measurements are preserved. Inspect ai-paused.json and logs.',
                 'updated':time.time()},overwrite=True)
             raise SystemExit(75)
-    if any(not report['complete'] and not (optimization and report.get('terminated_search')) for report in reports.values()):
+    if any(not report['complete'] and not ((optimization or native_search) and report.get('terminated_search')) for report in reports.values()):
         raise ValueError('all declared measured studies must finish or have an explicitly terminated search record')
     for report in reports.values(): verify_saved_archive(report)
+    if native_search:
+        benchmarks=[reports[entry['id']] for entry in queue if entry['kind']=='focused']
+        confirmed=layout_summary([reports[entry['id']] for entry in queue if entry['kind']=='native_confirmation'])
+        bench=layout_summary(benchmarks); selection=records.load_document(run/'native-selected.json')
+        aliases={name:names[0] for names in selection['aliases'].values() for name in names}
+        values={name:next(row['estimate']['by_layout'] for row in confirmed['results'] if row['name']==target) for name,target in aliases.items()}
+        comparisons={}; benchmark_pairs=[]; subset_checks={}
+        for pair in cfg['comparison']['pairs']:
+            a=next(row['estimate']['by_layout'] for row in bench['results'] if row['name']==pair['candidate'])
+            b=next(row['estimate']['by_layout'] for row in bench['results'] if row['name']==pair['reference'])
+            benchmark_pairs.append({**pair,'relative_change':analysis.compare_repeated(np.asarray(a)/b,np.ones(len(b)),paired=True,
+                confidence=1-cfg['comparison']['family_error']/len(cfg['comparison']['pairs']))})
+        for row in bench['results']:
+            name=row['name']; fine=np.asarray(row['estimate']['by_layout'])
+            half=np.array([next(r['balanced_half_value'] for r in report['results'] if r['name']==name) for report in benchmarks])
+            subset_checks[name]=analysis.compare_repeated(half/fine,np.ones(len(fine)),paired=True,
+                confidence=1-.05/len(cfg['candidates']))
+        for material in cfg['materials']:
+            methods={}; per_seed={}
+            for method in cfg['methods']:
+                rows=[]
+                for seed in cfg['search_seeds']:
+                    name=f'{method}-{material}-{seed}'; start=f'native-initial-{material}-{seed}'
+                    a=np.asarray(values[name]); b=np.asarray(values[start]); report=reports[name]
+                    gain=1-float(a.mean()/b.mean()) if b.mean()>0 else None
+                    rows.append({'seed':seed,'value':float(a.mean()),'gain_from_initial':gain,'counts':report['search_counts'],
+                        'paired_layout_difference':analysis.compare_repeated(a,b,paired=True),'timing':report['timing']})
+                methods[method]={'by_seed':rows,'mean_value':float(np.mean([r['value'] for r in rows]))}
+                per_seed[method]=[r['value'] for r in rows]
+            keep=[i for i in range(len(cfg['search_seeds'])) if all(methods[m]['by_seed'][i]['counts']['target_reached'] for m in cfg['methods'])]
+            paired=analysis.compare_repeated([per_seed['bo'][i] for i in keep],[per_seed['sobol'][i] for i in keep],paired=True,
+                confidence=1-.05/len(cfg['materials'])) if len(keep)>=2 else {'status':'insufficient complete matched search seeds'}
+            comparisons[material]={'methods':methods,'bo_minus_sobol':paired,'complete_matched_seeds':[cfg['search_seeds'][i] for i in keep]}
+        result={'id':cfg['id'],'state':'complete','date':time.strftime('%Y-%m-%d'),'objective':defaults['objective'],
+                'benchmarks':bench,'benchmark_contrasts':benchmark_pairs,'balanced_half_checks':subset_checks,
+                'confirmation':confirmed,'method_comparison':comparisons,'selection':selection,'studies':reports,
+                'source':records.load_document(run/'source-ready.json'),'resources':limits,'limitations':cfg['limitations']}
+        publication=records.load_document(run/'publication.json')
+        if subprocess.check_output(['git','branch','--show-current'],cwd=repo,text=True).strip()!=publication['branch'] or subprocess.check_output(['git','remote','get-url','origin'],cwd=repo,text=True).strip()!=publication['remote']:
+            raise ValueError('publication branch or remote changed; retained results were not published')
+        public=repo/'docs/results';public.mkdir(parents=True,exist_ok=True)
+        records.write_json(public/'native_optimization.json',result,overwrite=True)
+        plotted=[{'name':material+': '+method,'value':data['mean_value'],
+                  'standard_error':float(np.std([r['value'] for r in data['by_seed']],ddof=1)/math.sqrt(len(data['by_seed'])))}
+                 for material,comparison in comparisons.items() for method,data in comparison['methods'].items()]
+        analysis.plot_result({'results':plotted,'objective':defaults['objective'],'title':'Confirmed native orientation search; errors across search seeds'},
+                             repo/'figures/native_optimization.png','summary')
+        lines=['# Native-material orientation search','','| Material | Method | Confirmed J | Mean added reduction |','|---|---|---:|---:|']
+        for material,comparison in comparisons.items():
+            for method,data in comparison['methods'].items():
+                gains=[r['gain_from_initial'] for r in data['by_seed']]
+                gain=f'{100*np.mean(gains):.2f}%' if all(g is not None for g in gains) else 'undefined for zero reference'
+                lines.append(f"| {material} | {method} | {data['mean_value']:.7g} | {gain} |")
+        lines+=['',*['- '+text for text in cfg['limitations']],'','[Layouts, uncertainty, subset checks and archives](native_optimization.json).','']
+        (public/'native_optimization.md').write_text('\n'.join(lines))
+        block='\n'.join(['<!-- native-start -->','## Native-material orientation optimization','',
+            'Finished '+result['date']+'. Density, elasticity and phonon rates remained coupled to each native material.',
+            '',*lines[2:5+len(plotted)],'','![Confirmed orientation search](figures/native_optimization.png)','',
+            '[Measured results and scientific limits](docs/results/native_optimization.md).','<!-- native-end -->'])
+        readme=repo/'README.md';text=readme.read_text();start=text.index('<!-- native-start -->');end=text.index('<!-- native-end -->')+len('<!-- native-end -->')
+        readme.write_text(text[:start]+block+text[end:])
+        records.write_json(run/'queue_status.json',{'state':'complete','studies':len(reports),'updated':time.time()},overwrite=True)
+        print(records.canonical_json({'state':'complete','studies':len(reports),'confirmed_targets':len(confirmed['results'])}))
+        raise SystemExit(0)
     if focused:
         # Layout means are the independent observations; all comparisons were fixed before transport.
         aggregate=layout_summary([reports[step['id']] for step in queue])

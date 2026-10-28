@@ -1,0 +1,621 @@
+schema: material-scan-native-optimization-1
+id: native-orientation-20261028
+description: 'Native crystal orientation: reallocated 1024-site checks, three-seed BO versus Sobol, and
+  independent confirmation.'
+question:
+  sampling: Does reallocation reduce near-junction position variation without changing the area integral?
+  rotation: Does the 0 degree gain persist in native Si, Ge or GaAs with their own coupled properties?
+  optimization: Does BO improve on shared measured starts and Sobol in three-dimensional crystal orientation?
+  previous_run: orientation_materials_20261026
+  selection_uses_confirmation: false
+defaults:
+  temperature_K: 0.02
+  gun_energy_eV: 0.01
+  junction_gap_eV: 0.000191
+  cutoff_eV: 3.82e-05
+  nb_gap_min_eV: 0.0015384
+  source_half_span_mm: 4.0
+  source_law: uniform_surface
+  objective: device_junction_qps_per_eV
+  seed_base: 20261028
+  bootstrap_draws: 1000
+  design_counts:
+  - 512
+  - 1024
+  allocations:
+    '512':
+    - 17
+    - 256
+    - 51
+    - 85
+    - 103
+    '1024':
+    - 34
+    - 512
+    - 102
+    - 170
+    - 206
+  position_seed: 2026102800
+  independent_position_seeds:
+  - 2026102801
+  - 2026102802
+  - 2026102803
+  - 2026102804
+  - 2026102805
+  - 2026102806
+  - 2026102807
+  - 2026102808
+  confirmation_position_seeds:
+  - 2026102901
+  - 2026102902
+  - 2026102903
+  - 2026102904
+  area_seed: 0
+  area_samples: 8000000
+  design_note: Fresh positions, reallocated toward the near-junction region. All area fractions are unchanged;
+    no historical position is removed or overwritten.
+  source_note: The chip is 10x10 mm2; the declared injection region is 8x8 mm2.
+  max_sites: 1024
+  base_design_file: figures/spatial_sites.json
+  fresh_designs: true
+execution:
+  independent_archive_root: /data/htseng/material-scan-archives
+  max_cpu_fraction: 0.5
+  max_memory_fraction: 0.5
+  workers: 86
+  total_mem_gb: 64.0
+  reserved_mem_gb: 16.0
+  minimum_free_disk_gb: 20.0
+  per_task_mem_gb: 2.0
+  blas_threads: 1
+  timeout_s: 21600
+  stall_timeout_s: 7200
+  failed_response: missing
+  timeout_note: A task exceeding six hours is right-censored; it never supplies a zero response.
+  queue_order: sequential_studies
+  stop_after_initial_checks: false
+  llm_cpu_count: 8
+  max_gpus: 0
+search_bounds: {}
+materials:
+- Si
+- Ge
+- GaAs
+search_seeds:
+- 101
+- 202
+- 303
+methods:
+  bo: bo_gp
+  sobol: sobol
+initial_count: 12
+search_count: 16
+orientation_bounds:
+  lattice_deg:
+  - 0.0
+  - 359.0
+  orientation_polar_cos:
+  - -1.0
+  - 1.0
+  orientation_azimuth_turns:
+  - 0.0
+  - 1.0
+optimizer_options:
+  n_init: 12
+  n_restarts: 3
+  n_candidates: 4096
+  extra_candidates: 8
+  proposal_min_distance: 0.03
+  local_width: 0.08
+  local_adapt: false
+  runtime_aware: false
+  refit_every: 4
+  transform: log
+candidates:
+- name: Si-45deg
+  materials:
+  - Si
+  - Nb
+  - Cu
+  values:
+    lattice_deg: 45.0
+- name: Si-0deg
+  materials:
+  - Si
+  - Nb
+  - Cu
+  values:
+    lattice_deg: 0.0
+- name: Ge-45deg
+  materials:
+  - Ge
+  - Nb
+  - Cu
+  values:
+    lattice_deg: 45.0
+- name: Ge-0deg
+  materials:
+  - Ge
+  - Nb
+  - Cu
+  values:
+    lattice_deg: 0.0
+- name: GaAs-45deg
+  materials:
+  - GaAs
+  - Nb
+  - Cu
+  values:
+    lattice_deg: 45.0
+- name: GaAs-0deg
+  materials:
+  - GaAs
+  - Nb
+  - Cu
+  values:
+    lattice_deg: 0.0
+comparison:
+  family_error: 0.05
+  meaningful_reduction: 0.05
+  pairs:
+  - candidate: Si-0deg
+    reference: Si-45deg
+  - candidate: Ge-0deg
+    reference: Ge-45deg
+  - candidate: GaAs-0deg
+    reference: GaAs-45deg
+  - candidate: Ge-0deg
+    reference: Si-0deg
+  - candidate: GaAs-0deg
+    reference: Si-0deg
+  uncertainty: Paired layout differences and layout response ratios; five fixed native comparisons use
+    Bonferroni family error 0.05. BO versus Sobol is paired over complete matched search seeds, conditional
+    on four shared confirmation layouts.
+  stopping: Eight benchmark layouts, all declared measured search targets or explicit termination, then
+    four unused confirmation layouts. No 2048-site transport is included.
+expected_work:
+  primaries_upper_bound: 48384000000
+  tasks_upper_bound: 1548288
+  confirmation_targets_upper_bound: 33
+  elapsed_hours:
+  - 36
+  - 60
+  gpus: 0
+  cpu_hours:
+  - 2500
+  - 4000
+  working_disk_gib:
+  - 35
+  - 55
+  disk_reserve_gib: 20
+  sampling_prediction: Independent-stratum approximation from eight old layouts predicts SE factors 0.71
+    for Si, 0.50 for Ge and 0.52 for GaAs. Cross-region correlations and new orientations can change this.
+  confirmation_note: Use four realizations of 31250 primaries because native layout variation exceeded
+    transport uncertainty. Both errors remain measured.
+limitations:
+- A native lattice keeps density, elasticity and phonon rates coupled. Film lifetimes and interface fields
+  still contain model assumptions.
+- The in-plane range is 0 to 359 degrees. The excluded final degree avoids duplicating the 360 degree
+  endpoint; the study does not claim an exact global orientation minimum.
+- The half-layout comparison is a balanced subset of the same 1024-site outputs, fixed before transport.
+  It is not a separately simulated 512-site experiment.
+- Eight benchmark and four confirmation layouts do not prove spatial convergence across the orientation
+  domain.
+- Three optimizer seeds give exploratory algorithm comparisons. Position layouts are not additional optimizer
+  repetitions; incomplete arms remain visible.
+- No new LLM inference, material identification, fabrication optimum or qubit-error claim is implied.
+studies:
+- id: native-layout-01
+  kind: focused
+  position_seed: 2026102801
+  bank: 5101
+  sampling:
+    design: 1024
+    design_file: source-independent-01_1024.json
+    replicas: 4
+    events_per_task: 31250
+- id: native-layout-02
+  kind: focused
+  position_seed: 2026102802
+  bank: 5102
+  sampling:
+    design: 1024
+    design_file: source-independent-02_1024.json
+    replicas: 4
+    events_per_task: 31250
+- id: native-layout-03
+  kind: focused
+  position_seed: 2026102803
+  bank: 5103
+  sampling:
+    design: 1024
+    design_file: source-independent-03_1024.json
+    replicas: 4
+    events_per_task: 31250
+- id: native-layout-04
+  kind: focused
+  position_seed: 2026102804
+  bank: 5104
+  sampling:
+    design: 1024
+    design_file: source-independent-04_1024.json
+    replicas: 4
+    events_per_task: 31250
+- id: native-layout-05
+  kind: focused
+  position_seed: 2026102805
+  bank: 5105
+  sampling:
+    design: 1024
+    design_file: source-independent-05_1024.json
+    replicas: 4
+    events_per_task: 31250
+- id: native-layout-06
+  kind: focused
+  position_seed: 2026102806
+  bank: 5106
+  sampling:
+    design: 1024
+    design_file: source-independent-06_1024.json
+    replicas: 4
+    events_per_task: 31250
+- id: native-layout-07
+  kind: focused
+  position_seed: 2026102807
+  bank: 5107
+  sampling:
+    design: 1024
+    design_file: source-independent-07_1024.json
+    replicas: 4
+    events_per_task: 31250
+- id: native-layout-08
+  kind: focused
+  position_seed: 2026102808
+  bank: 5108
+  sampling:
+    design: 1024
+    design_file: source-independent-08_1024.json
+    replicas: 4
+    events_per_task: 31250
+- id: native-initial-Si-101
+  kind: native_initial
+  material: Si
+  seed: 101
+  count: 12
+  bank: 5200
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: bo-Si-101
+  kind: native_search
+  material: Si
+  seed: 101
+  method: bo
+  initial: native-initial-Si-101
+  count: 16
+  bank: 5300
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: sobol-Si-101
+  kind: native_search
+  material: Si
+  seed: 101
+  method: sobol
+  initial: native-initial-Si-101
+  count: 16
+  bank: 5301
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: native-initial-Si-202
+  kind: native_initial
+  material: Si
+  seed: 202
+  count: 12
+  bank: 5201
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: sobol-Si-202
+  kind: native_search
+  material: Si
+  seed: 202
+  method: sobol
+  initial: native-initial-Si-202
+  count: 16
+  bank: 5302
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: bo-Si-202
+  kind: native_search
+  material: Si
+  seed: 202
+  method: bo
+  initial: native-initial-Si-202
+  count: 16
+  bank: 5303
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: native-initial-Si-303
+  kind: native_initial
+  material: Si
+  seed: 303
+  count: 12
+  bank: 5202
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: bo-Si-303
+  kind: native_search
+  material: Si
+  seed: 303
+  method: bo
+  initial: native-initial-Si-303
+  count: 16
+  bank: 5304
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: sobol-Si-303
+  kind: native_search
+  material: Si
+  seed: 303
+  method: sobol
+  initial: native-initial-Si-303
+  count: 16
+  bank: 5305
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: native-initial-Ge-101
+  kind: native_initial
+  material: Ge
+  seed: 101
+  count: 12
+  bank: 5203
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: sobol-Ge-101
+  kind: native_search
+  material: Ge
+  seed: 101
+  method: sobol
+  initial: native-initial-Ge-101
+  count: 16
+  bank: 5306
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: bo-Ge-101
+  kind: native_search
+  material: Ge
+  seed: 101
+  method: bo
+  initial: native-initial-Ge-101
+  count: 16
+  bank: 5307
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: native-initial-Ge-202
+  kind: native_initial
+  material: Ge
+  seed: 202
+  count: 12
+  bank: 5204
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: bo-Ge-202
+  kind: native_search
+  material: Ge
+  seed: 202
+  method: bo
+  initial: native-initial-Ge-202
+  count: 16
+  bank: 5308
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: sobol-Ge-202
+  kind: native_search
+  material: Ge
+  seed: 202
+  method: sobol
+  initial: native-initial-Ge-202
+  count: 16
+  bank: 5309
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: native-initial-Ge-303
+  kind: native_initial
+  material: Ge
+  seed: 303
+  count: 12
+  bank: 5205
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: sobol-Ge-303
+  kind: native_search
+  material: Ge
+  seed: 303
+  method: sobol
+  initial: native-initial-Ge-303
+  count: 16
+  bank: 5310
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: bo-Ge-303
+  kind: native_search
+  material: Ge
+  seed: 303
+  method: bo
+  initial: native-initial-Ge-303
+  count: 16
+  bank: 5311
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: native-initial-GaAs-101
+  kind: native_initial
+  material: GaAs
+  seed: 101
+  count: 12
+  bank: 5206
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: bo-GaAs-101
+  kind: native_search
+  material: GaAs
+  seed: 101
+  method: bo
+  initial: native-initial-GaAs-101
+  count: 16
+  bank: 5312
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: sobol-GaAs-101
+  kind: native_search
+  material: GaAs
+  seed: 101
+  method: sobol
+  initial: native-initial-GaAs-101
+  count: 16
+  bank: 5313
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: native-initial-GaAs-202
+  kind: native_initial
+  material: GaAs
+  seed: 202
+  count: 12
+  bank: 5207
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: sobol-GaAs-202
+  kind: native_search
+  material: GaAs
+  seed: 202
+  method: sobol
+  initial: native-initial-GaAs-202
+  count: 16
+  bank: 5314
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: bo-GaAs-202
+  kind: native_search
+  material: GaAs
+  seed: 202
+  method: bo
+  initial: native-initial-GaAs-202
+  count: 16
+  bank: 5315
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: native-initial-GaAs-303
+  kind: native_initial
+  material: GaAs
+  seed: 303
+  count: 12
+  bank: 5208
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: bo-GaAs-303
+  kind: native_search
+  material: GaAs
+  seed: 303
+  method: bo
+  initial: native-initial-GaAs-303
+  count: 16
+  bank: 5316
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: sobol-GaAs-303
+  kind: native_search
+  material: GaAs
+  seed: 303
+  method: sobol
+  initial: native-initial-GaAs-303
+  count: 16
+  bank: 5317
+  sampling:
+    design: 512
+    replicas: 4
+    events_per_task: 31250
+- id: native-confirmation-01
+  kind: native_confirmation
+  position_seed: 2026102901
+  bank: 5401
+  sampling:
+    design: 1024
+    design_file: unused-stream-confirmation-01_1024.json
+    replicas: 4
+    events_per_task: 31250
+- id: native-confirmation-02
+  kind: native_confirmation
+  position_seed: 2026102902
+  bank: 5402
+  sampling:
+    design: 1024
+    design_file: unused-stream-confirmation-02_1024.json
+    replicas: 4
+    events_per_task: 31250
+- id: native-confirmation-03
+  kind: native_confirmation
+  position_seed: 2026102903
+  bank: 5403
+  sampling:
+    design: 1024
+    design_file: unused-stream-confirmation-03_1024.json
+    replicas: 4
+    events_per_task: 31250
+- id: native-confirmation-04
+  kind: native_confirmation
+  position_seed: 2026102904
+  bank: 5404
+  sampling:
+    design: 1024
+    design_file: unused-stream-confirmation-04_1024.json
+    replicas: 4
+    events_per_task: 31250
