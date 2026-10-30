@@ -201,9 +201,29 @@ All six spatial intervals include zero. Only Ge at 0° establishes agreement wit
 [Spatial and transport comparisons, uncertainty and archives](docs/results/spatial_2048.md).
 <!-- spatial-end -->
 
-## Next physical optimization
+<!-- film-start -->
+## Native film design and matched optimization
 
-Orientation alone has not produced a reliable new gain for these native materials. The next comparison should vary film or interface properties within measured physical bounds, retaining each substrate's coupled properties. Give BO and Sobol common starting data and equal new measurements; confirm selected designs on unused layouts. A useful sampling test is two independent 512-position layouts at 15,625 primaries instead of one at 31,250: both use 64 million primaries per response, with different task overhead. Earlier LLM searches showed no added gain; further GPU inference is not the current priority.
+The new study is running in tmux, started **2026-10-30 at 16:35 EDT**. It varies Nb thickness
+from **75 to 100 nm** and Cu thickness from **1 to 10 micrometres**, keeping
+Cu volume fixed while its island coverage changes. Native Si/GaAs and Nb/Cu
+material properties remain coupled.
+
+The sequence contains **60 measured studies**: eight paired sampling comparisons,
+six search seeds per substrate with common starts for BO/Sobol, and eight unused
+confirmation layouts. Each search has 12 shared starts, including all four
+thickness corners, and 24 new responses per method. A meaningful added gain
+requires an adjusted interval entirely beyond **5% reduction**, accounting for
+both search-seed and position-layout variation.
+
+The upper count is **76.8 billion primaries** before combining identical selected
+designs. Expected elapsed time is **72-120 hours**, approximately **November 2-4 EST**, using 86 workers and no GPUs.
+Raw work is on the data disk; each archive has a second verified copy on the
+independent home filesystem. Completed historical measurements remain unchanged.
+
+[Physical inputs, equations, comparisons and limitations](docs/film_study.md);
+[validated launch and completion estimate](verification/film_design_launch_20261030.json).
+<!-- film-end -->
 
 ## Calculation and execution
 

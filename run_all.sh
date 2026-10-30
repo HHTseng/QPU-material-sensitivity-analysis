@@ -258,7 +258,8 @@ if (run/'queue-config.json').is_file(): config_path=Path(records.load_document(r
 if not config_path.is_absolute(): config_path=(source if (run/'source-ready.json').is_file() else repo)/config_path
 cfg=records.load_document(config_path)
 optimization=cfg.get('schema')=='material-scan-optimization-1'
-native_search=cfg.get('schema')=='material-scan-native-optimization-1'
+film_search=cfg.get('schema')=='material-scan-film-optimization-1'
+native_search=film_search or cfg.get('schema')=='material-scan-native-optimization-1'
 spatial_verify=cfg.get('schema')=='material-scan-spatial-verification-1'
 focused=native_search or spatial_verify or cfg.get('schema')=='material-scan-focused-1'
 refinement={}
@@ -279,7 +280,10 @@ def base_study(identifier,sampling,kind='confirmation'):
     raw.update(id=identifier,kind=kind,description=identifier+' simulation')
     raw['fixed'].update(temperature_K=defaults['temperature_K'],position_half_span_mm=defaults['source_half_span_mm'],gun_energy_eV=defaults['gun_energy_eV'],setTopGap=defaults['junction_gap_eV'],min_e_phonons_eV=defaults['cutoff_eV'])
     raw['parameters']={'temperature':{'mode':'fixed','value':defaults['temperature_K']}}
+    if film_search:
+        raw['parameters'].update({name:{'mode':'search','bounds':bounds} for name,bounds in cfg['design_bounds'].items()})
     raw['constraints']={'topfilm_gap_min_eV':defaults['nb_gap_min_eV']}
+    raw['constraints'].update(cfg.get('physical_constraints',{}))
     raw['analysis']={'objective':defaults['objective'],'bootstrap_draws':defaults['bootstrap_draws'],'tail_bootstrap_draws':1000,'store_blocks':False}
     raw['execution']={key:limits[key] for key in ('workers','total_mem_gb','per_task_mem_gb','system_mem_reserve_gb')}
     raw['execution'].update(timeout_s=cfg['execution']['timeout_s'],stall_timeout_s=cfg['execution']['stall_timeout_s'])
@@ -607,7 +611,7 @@ if mode in ('check','prepare'):
         for point in calibration['candidates']: physics.prepare_values(validation,point)
     if mode=='check':
         stages=3+len(cfg['pilot_methods'])+len(cfg['search_seeds'])*(1+2*len(cfg['methods']))+len(defaults['confirmation_position_seeds'])+len(refinement.get('fixed_studies',[])) if optimization else len(cfg['studies'])
-        print(records.canonical_json({'search_dimensions':len(cfg['orientation_bounds']) if native_search else len(space['names']),'native_material_cases':18,'stages':stages,'max_sites':max_sites,'stop_after_initial_checks':initial_checks,'cpu_cap':cap,'workers':limits['workers'],'memory':scan.memory_headroom(),'source_region_mm':8,'temperature_K':defaults['temperature_K']}))
+        print(records.canonical_json({'search_dimensions':len(cfg['design_bounds'] if film_search else cfg['orientation_bounds']) if native_search else len(space['names']),'native_material_cases':18,'stages':stages,'max_sites':max_sites,'stop_after_initial_checks':initial_checks,'cpu_cap':cap,'workers':limits['workers'],'memory':scan.memory_headroom(),'source_region_mm':8,'temperature_K':defaults['temperature_K']}))
         raise SystemExit(0)
     run.mkdir(parents=True,exist_ok=True)
     relative_config=str(config_path.relative_to(repo if not (run/'source-ready.json').is_file() else source))
@@ -679,6 +683,26 @@ if mode in ('check','prepare'):
                 independent['design_hash']=records.content_hash({k:v for k,v in independent.items() if k!='design_hash'})
                 if independent['stratum_weights']!=previous_design['stratum_weights']: raise ValueError('independent layouts must share area weights')
                 records.write_json(run/'designs'/f'{family}-{k:02d}_{n}.json',independent)
+    if film_search:
+        for pair in cfg['layout_pairs']:
+            components=[]
+            for index,seed in enumerate(pair['position_seeds'],1):
+                sampling={'kind':'stratified','sites':512,'position_seed':seed,
+                    'allocation':dict(zip(physics.REGIONS,defaults['allocations']['512'])),
+                    'stratum_weights':previous_design['stratum_weights']}
+                design=physics.build_design(fixed,sampling)
+                design['design_hash']=records.content_hash(design)
+                records.write_json(run/'designs'/f"{pair['id']}-component-{index}.json",design)
+                components.append(design)
+            first,second=components
+            combined={key:copy.deepcopy(value) for key,value in first.items() if key!='design_hash'}
+            combined.update(sites_mm=first['sites_mm']+second['sites_mm'],stratum=first['stratum']+second['stratum'],
+                stratum_counts={h:2*n for h,n in first['stratum_counts'].items()},
+                position_layouts=['layout-01']*512+['layout-02']*512,
+                layout_sources={f'layout-{i+1:02d}':{'design_hash':d['design_hash'],'position_seed':pair['position_seeds'][i]}
+                    for i,d in enumerate(components)})
+            combined['design_hash']=records.content_hash(combined)
+            records.write_json(run/'designs'/f"{pair['id']}-paired.json",combined)
     if spatial_verify:
         parent=(repo/cfg['reference_run']).resolve()
         records.write_json(run/'dependency.json',{'run':str(parent),'reference_ids':[s['reference'] for s in cfg['studies']]})
@@ -765,10 +789,13 @@ if mode in ('check','prepare'):
     if native_search:
         counts={'focused':len(cfg['candidates']),'native_initial':cfg['initial_count'],'native_search':cfg['search_count'],
                 'native_confirmation':len(cfg['candidates'])+len(cfg['materials'])*len(cfg['search_seeds'])*(1+len(cfg['methods']))}
+        if film_search: counts['film_sampling']=len(cfg['sampling_candidates'])
         work={kind:sum(step['sampling']['design']*step['sampling']['replicas']*step['sampling']['events_per_task']*counts[kind]
                       for step in queue if step['kind']==kind) for kind in counts}
         records.write_json(run/'planned-computation.json',{'primaries_upper_bound':sum(work.values()),'by_kind':work,
-            'confirmation_targets_upper_bound':counts['native_confirmation'],'tasks_upper_bound':sum(work.values())//31250})
+            'confirmation_targets_upper_bound':counts['native_confirmation'],
+            'tasks_upper_bound':sum(step['sampling']['design']*step['sampling']['replicas']*counts[kind]
+                for kind in counts for step in queue if step['kind']==kind)})
     records.write_json(run/'queue_status.json',{'state':'prepared','stages':len(queue),'updated':time.time()},overwrite=True)
     files=['README.md','docs/results/optimization_summary.json','docs/results/optimization_summary.md','figures/optimization_results.png'] if optimization else ['README.md','docs/results/full_scale_summary.json','figures/full_scale_finalists.png','figures/full_scale_transport_morris.png','figures/full_scale_density_morris.png','figures/full_scale_methods.png','figures/full_scale_projection.png']
     if focused:
@@ -777,7 +804,10 @@ if mode in ('check','prepare'):
         files=['README.md','docs/results/native_optimization.json','docs/results/native_optimization.md','figures/native_optimization.png']
     if spatial_verify:
         files=['README.md','docs/results/spatial_2048.json','docs/results/spatial_2048.md','figures/spatial_2048.png']
+    if film_search:
+        files=['README.md','docs/results/film_optimization.json','docs/results/film_optimization.md','figures/film_optimization.png']
     message='Report limited 2048-site verification' if spatial_verify else 'Report native material orientation optimization' if native_search else 'Report matched rotation and native-material comparison' if focused else 'Report confirmed optimization comparisons' if optimization else 'Report fresh full-scale material studies'
+    if film_search: message='Report native film design and matched optimization results'
     records.write_json(run/'publication.json',{'branch':subprocess.check_output(['git','branch','--show-current'],cwd=repo,text=True).strip(),'remote':subprocess.check_output(['git','remote','get-url','origin'],cwd=repo,text=True).strip(),'files':files,'commit_message':message})
     print(records.canonical_json({'prepared_studies':len(queue),'source':str(source),'resources':limits}))
     raise SystemExit(0)
@@ -946,17 +976,23 @@ if mode=='stage':
         study=scan.load_study(linked); baseline=physics.prepare_values(study,linked['candidates'][0])['values']
         raw['realization']={'mode':'native_g4cmp','material':step['material']}
         raw['parameters']={name:{'mode':'fixed','value':value} for name,value in baseline.items()}
-        raw['parameters'].update({name:{'mode':'search','value':baseline[name],'bounds':bounds} for name,bounds in cfg['orientation_bounds'].items()})
+        bounds=cfg['design_bounds'] if film_search else cfg['orientation_bounds']
+        raw['parameters'].update({name:{'mode':'search','value':baseline[name],'bounds':limits} for name,limits in bounds.items()})
         raw['sampling']['independent_candidate_streams']=True
         raw['analysis'].update(comparisons=False,diagnostics=False,bootstrap_draws=256)
+        if film_search: raw['analysis']['store_search_blocks']=False
         if step['kind']=='native_initial':
             from scipy.stats import qmc
             study=scan.load_study(raw); points=[]
-            for miller,angle in itertools.product(([0,0,1],[1,1,0],[1,1,1]),(0.,45.)):
-                polar,azimuth=physics.miller_to_sphere(miller)
-                points.append({'name':f'initial-{len(points):02d}','values':{**baseline,
-                    'orientation_polar_cos':polar,'orientation_azimuth_turns':azimuth,'lattice_deg':angle}})
-            for u in qmc.Sobol(d=3,scramble=True,seed=step['seed']).random_base2(4):
+            if film_search:
+                for u in itertools.product((0.,1.),repeat=len(study['space']['names'])):
+                    points.append({'name':f'initial-{len(points):02d}','values':physics.from_unit(u,study['space'])})
+            else:
+                for miller,angle in itertools.product(([0,0,1],[1,1,0],[1,1,1]),(0.,45.)):
+                    polar,azimuth=physics.miller_to_sphere(miller)
+                    points.append({'name':f'initial-{len(points):02d}','values':{**baseline,
+                        'orientation_polar_cos':polar,'orientation_azimuth_turns':azimuth,'lattice_deg':angle}})
+            for u in qmc.Sobol(d=len(study['space']['names']),scramble=True,seed=step['seed']).random_base2(4):
                 points.append({'name':f'initial-{len(points):02d}','values':physics.from_unit(u,study['space'])})
                 if len(points)==step['count']: break
             raw['candidates']=points
@@ -966,6 +1002,10 @@ if mode=='stage':
             raw['search']={'method':cfg['methods'][step['method']],'seed':step['seed'],'evaluations':step['count'],
                 'measured_evaluations':True,'max_attempts':3*step['count'],'max_elapsed_s':43200,
                 'initial_observations':initial,'parallel_candidates':1,'options':cfg['optimizer_options']}
+            if film_search:
+                raw['search'].pop('initial_observations')
+                raw['search'].update(initial_observations_file=str(run/'initial-observations'/(step['initial']+'.json')),
+                                     conditional_transport_noise=True)
     elif native_search and step['kind']=='native_confirmation':
         raw=base_study(identifier,{**step['sampling'],'seed_bank':step['bank']})
         raw['sampling'].update(position_seed=step['position_seed'],independent_candidate_streams=False)
@@ -987,12 +1027,37 @@ if mode=='stage':
             records.write_json(selected,{'candidates':list(distinct.values()),'aliases':aliases,'selection_uses_confirmation':False})
         raw['candidates']=records.load_document(selected)['candidates']
         raw['analysis'].update(comparisons=False,diagnostics=True)
-    elif focused and step['kind']=='focused':
+    elif focused and step['kind'] in ('focused','film_sampling'):
         raw=base_study(identifier,{**step['sampling'],'seed_bank':step['bank']})
         raw['sampling'].update(position_seed=step['position_seed'],independent_candidate_streams=False)
-        raw['candidates']=copy.deepcopy(cfg['candidates'])
+        raw['candidates']=copy.deepcopy(cfg['sampling_candidates'] if step['kind']=='film_sampling' else cfg['candidates'])
         raw['analysis'].update(comparisons=False,diagnostics=True)
         raw['provenance']=cfg['question']
+    elif film_search and step['kind']=='film_sampling_check':
+        tests=[];pilot={}
+        for pair in cfg['layout_pairs']:
+            if pair['role']=='pilot':
+                pilot[pair['id']]={label:records.load_document(run/'studies'/f"{pair['id']}-{label}"/'summary.json')
+                    for label in ('single','paired')}
+        for point in cfg['sampling_candidates']:
+            single=[];paired=[];timings={'single':[],'paired':[]}
+            for pair in pilot.values():
+                for label,target in [('single',single),('paired',paired)]:
+                    measured=pair[label]
+                    target.append(next(r['value'] for r in measured['results'] if r['name']==point['name']))
+                    timings[label].append(measured['timing']['total_s'])
+            a,b=np.asarray(paired),np.asarray(single)
+            contrast=analysis.compare_repeated(a/b,np.ones(len(b)),paired=True,
+                confidence=1-cfg['comparison']['family_error']/len(cfg['sampling_candidates'])) if np.all(b>0) else None
+            tests.append({'candidate':point['name'],'single_by_layout':single,'paired_by_layout':paired,
+                'relative_change':contrast,'single_standard_error':float(b.std(ddof=1)/np.sqrt(len(b))),
+                'paired_standard_error':float(a.std(ddof=1)/np.sqrt(len(a))),
+                'paired_to_single_variance_ratio':float(a.var(ddof=1)/b.var(ddof=1)) if b.var(ddof=1)>0 else None,
+                'paired_to_single_study_elapsed_ratio':float(np.sum(timings['paired'])/np.sum(timings['single']))})
+        records.write_json(run/'sampling-comparison.json',{'cases':tests,'interpretation':
+            'Eight paired position layouts at equal total primaries. The independent second layout changes the integration approximation; this is not a fixed-site primary-count test. Both search methods use the predeclared paired design regardless of this diagnostic.'})
+        records.write_json(run/(identifier+'-skipped.json'),{'reason':'sampling comparison recorded'})
+        print('SKIP'); raise SystemExit(0)
     else:
         if step['kind'] in ('source_validation','finalist_validation'):
             if (run/(identifier+'.json')).is_file():
@@ -1282,6 +1347,95 @@ elif mode=='finish':
     if any(not report['complete'] and not ((optimization or native_search) and report.get('terminated_search')) for report in reports.values()):
         raise ValueError('all declared measured studies must finish or have an explicitly terminated search record')
     for report in reports.values(): verify_saved_archive(report)
+    if film_search:
+        holdouts=[reports[s['id']] for s in queue if s['kind']=='native_confirmation']
+        confirmed=layout_summary(holdouts);selection=records.load_document(run/'native-selected.json')
+        aliases={name:names[0] for names in selection['aliases'].values() for name in names}
+        values={name:np.asarray(next(row['estimate']['by_layout'] for row in confirmed['results'] if row['name']==target))
+            for name,target in aliases.items()}
+        comparisons={}; confidence=1-cfg['comparison']['family_error']/(3*len(cfg['materials']))
+        for material in cfg['materials']:
+            starts=[];matrices={method:[] for method in cfg['methods']};methods={}
+            complete=[]
+            for seed in cfg['search_seeds']:
+                if all(reports[f'{method}-{material}-{seed}']['search_counts']['target_reached'] for method in cfg['methods']):
+                    complete.append(seed)
+            for method in cfg['methods']:
+                rows=[]
+                for seed in cfg['search_seeds']:
+                    name=f'{method}-{material}-{seed}';initial=f'native-initial-{material}-{seed}'
+                    a,b=values[name],values[initial]
+                    rows.append({'seed':seed,'value':float(a.mean()),'by_layout':a.tolist(),
+                        'gain_from_initial':float(np.mean(1-a/b)) if np.all(b>0) else None,
+                        'counts':reports[name]['search_counts'],'timing':reports[name]['timing']})
+                    if seed in complete: matrices[method].append(a)
+                methods[method]={'by_seed':rows,'mean_value':float(np.mean([r['value'] for r in rows]))}
+            starts=np.asarray([values[f'native-initial-{material}-{seed}'] for seed in complete])
+            tests={}
+            for method in cfg['methods']:
+                a=np.asarray(matrices[method])
+                tests[method+'_vs_initial']=analysis.compare_seed_layouts(a,starts,confidence=confidence,
+                    relative_margin=cfg['comparison']['meaningful_reduction']) if len(complete)>=2 and np.all(starts>0) else {'status':'relative comparison unavailable'}
+            a,b=np.asarray(matrices['bo']),np.asarray(matrices['sobol'])
+            tests['bo_vs_sobol']=analysis.compare_seed_layouts(a,b,confidence=confidence,
+                relative_margin=cfg['comparison']['meaningful_reduction']) if len(complete)>=2 and np.all(b>0) else {'status':'relative comparison unavailable'}
+            for estimate in tests.values():
+                estimate['full_primary_conclusion']=complete==cfg['search_seeds'] and 'relative_change' in estimate
+                if not estimate['full_primary_conclusion']: estimate['meaningful_reduction_confirmed']=False
+            comparisons[material]={'methods':methods,'primary':tests,'complete_matched_seeds':complete,
+                'all_planned_seeds_complete':complete==cfg['search_seeds']}
+        physical=[];maximum=cfg['expected_work']['confirmation_targets_upper_bound']
+        definition=scan.load_study(run/'definitions'/f"{holdouts[0]['id']}.yaml")
+        for point in selection['candidates']:
+            material=point['materials'][0];a=values[point['name']];b=values[material+'-reference']
+            prepared=physics.prepare_values(definition,point)
+            contrast=analysis.compare_repeated(a/b,np.ones(len(b)),paired=True,
+                confidence=1-cfg['comparison']['family_error']/maximum) if np.all(b>0) else None
+            physical.append({'candidate':point['name'],'material':material,'parameters':point['values'],
+                'bottom_pattern':prepared['derived']['bottom_pattern'],
+                'topfilm_thickness_um':prepared['top_film']['thickness_um'],'relative_to_reference':contrast,
+                'meaningful_reduction_confirmed':contrast['confidence_interval'][1]<=-cfg['comparison']['meaningful_reduction'] if contrast else None})
+        result={'id':cfg['id'],'state':'complete','date':time.strftime('%Y-%m-%d'),'objective':defaults['objective'],
+            'question':cfg['question'],'comparison':cfg['comparison'],'method_comparison':comparisons,
+            'design_bounds':cfg['design_bounds'],'physical_constraints':cfg['physical_constraints'],
+            'confirmation':confirmed,'physical_comparisons':physical,'selection':selection,
+            'sampling_comparison':records.load_document(run/'sampling-comparison.json'),
+            'studies':reports,'source':records.load_document(run/'source-ready.json'),'resources':limits,
+            'sources':cfg['sources'],'limitations':cfg['limitations']}
+        publication=records.load_document(run/'publication.json')
+        if subprocess.check_output(['git','branch','--show-current'],cwd=repo,text=True).strip()!=publication['branch'] or subprocess.check_output(['git','remote','get-url','origin'],cwd=repo,text=True).strip()!=publication['remote']:
+            raise ValueError('publication branch or remote changed; completed measurements remain local')
+        public=repo/'docs/results';public.mkdir(parents=True,exist_ok=True)
+        records.write_json(public/'film_optimization.json',records.public_summary(result),overwrite=True)
+        plotted=[{'name':material+': '+method,'value':data['mean_value'],
+            'standard_error':float(np.std([r['value'] for r in data['by_seed']],ddof=1)/np.sqrt(len(data['by_seed'])))}
+            for material,comparison in comparisons.items() for method,data in comparison['methods'].items()]
+        analysis.plot_result({'results':plotted,'objective':defaults['objective'],
+            'title':'Confirmed native film design; errors across search seeds'},repo/'figures/film_optimization.png','summary')
+        lines=['# Native film design and optimization','',
+            'Only Nb and Cu thickness vary. Cu coverage changes at constant Cu volume. The native substrate and film property records remain coupled. All four thickness corners were included in every common starting table.','',
+            '| Substrate | Comparison | Mean response change | Simultaneous interval | At least 5% reduction established |',
+            '|---|---|---:|---:|---|']
+        for material,comparison in comparisons.items():
+            for name,estimate in comparison['primary'].items():
+                if 'relative_change' not in estimate:
+                    lines.append(f'| {material} | {name} | unavailable | unavailable | No |'); continue
+                lo,hi=estimate['confidence_interval']
+                established=estimate['meaningful_reduction_confirmed'] and comparison['all_planned_seeds_complete']
+                lines.append(f"| {material} | {name} | {100*estimate['relative_change']:+.2f}% | [{100*lo:+.2f}%, {100*hi:+.2f}%] | {'Yes' if established else 'No'} |")
+        lines+=['','For search seed s and confirmation layout l, the compared quantity is d[s,l]=J_A[s,l]/J_B[s,l]-1. The standard error is the square root of the sum of seed-mean and layout-mean variance estimates. The Student-t degrees of freedom are the smaller of the two counts minus one; six comparisons share family error 0.05. This is a conservative approximation and counts seed-layout interaction twice. Incomplete search arms cannot establish the full primary conclusion.','',
+            'Physical design gains relative to the original Nb/Cu geometry are reported separately from optimizer gains beyond the shared starting winner. The numerical record retains unsuccessful comparisons, measured counts, timing, sampling contrasts, exact geometry and archive identities.','',
+            *['- '+text for text in cfg['limitations']],'','[Numerical results and archives](film_optimization.json).','']
+        (public/'film_optimization.md').write_text('\n'.join(lines))
+        block='\n'.join(['<!-- film-start -->','## Native film design and matched optimization','',
+            'Finished '+result['date']+'. Completed matched seeds: '+', '.join(f"{m}: {len(c['complete_matched_seeds'])}/{len(cfg['search_seeds'])}" for m,c in comparisons.items())+'. Eight unused confirmation layouts; fixed Cu volume.',
+            '',*lines[4:6+6],'','![Confirmed native film design](figures/film_optimization.png)','',
+            '[Measured results, uncertainty and limitations](docs/results/film_optimization.md).','<!-- film-end -->'])
+        readme=repo/'README.md';text=readme.read_text();start=text.index('<!-- film-start -->');end=text.index('<!-- film-end -->')+len('<!-- film-end -->')
+        readme.write_text(text[:start]+block+text[end:])
+        records.write_json(run/'queue_status.json',{'state':'complete','studies':len(reports),'updated':time.time()},overwrite=True)
+        print(records.canonical_json({'state':'complete','studies':len(reports),'confirmed_designs':len(physical)}))
+        raise SystemExit(0)
     if spatial_verify:
         parent=Path(records.load_document(run/'dependency.json')['run']); prior=[]
         for step in queue:

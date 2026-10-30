@@ -3,6 +3,7 @@
 import copy
 import csv
 import io
+import itertools
 import json
 import os
 from pathlib import Path
@@ -2040,6 +2041,264 @@ class QueueTests(unittest.TestCase):
     tearDown = WorkflowTests.tearDown
     make_executable = WorkflowTests.make_executable
 
+    def film_inputs(self):
+        cfg=records.load_document(ROOT/'studies/films/queue.yaml')
+        gaas=self.root/'maps/GaAs';gaas.mkdir(exist_ok=True)
+        gaas.joinpath('config.txt').write_text((self.root/'maps/Si/config.txt').read_text()
+            .replace('165.6','121.57').replace('63.9','57.4').replace('79.5','59.5'))
+        self.queue_python(scope="mode in ('check', 'prepare')",start='fixed = reference',stop='independent_root =',
+            cfg=cfg,defaults=cfg['defaults'],film_search=True,native_search=True,focused=True,optimization=False,
+            reference={'fixed':scan.load_study(self.raw)['fixed']},source=ROOT,run=self.root,repo=ROOT)
+        records.write_json(self.root/'installation.json',self.raw['installation'])
+        limits={key:cfg['execution'][key] for key in ('workers','total_mem_gb','per_task_mem_gb')}
+        return cfg,limits|{'system_mem_reserve_gb':16}
+
+    def test_film_arms_use_shared_corners_validated_inputs_and_transport_noise(self):
+        cfg,limits=self.film_inputs()
+        self.assertEqual(len(cfg['search_seeds']),6)
+        arms=[s for s in cfg['studies'] if s['kind']=='native_search']
+        self.assertEqual(len(arms),24);self.assertTrue(all(s['count']==24 for s in arms))
+        for material in cfg['materials']:
+            step=next(s for s in cfg['studies'] if s['kind']=='native_initial' and s['material']==material)
+            context=dict(cfg=cfg,defaults=cfg['defaults'],source=ROOT,run=self.root,limits=limits,
+                         native_search=True,film_search=True)
+            ns=self.queue_python('base_study',scope='stage',branch="native_search and step['kind'] in ('native_initial', 'native_search')",
+                **context,step=step,identifier=step['id'])
+            study=scan.load_study(ns['raw']);prepared=[physics.prepare_values(study,p) for p in ns['raw']['candidates']]
+            self.assertEqual(len(prepared),12)
+            self.assertEqual(set(study['space']['names']),set(cfg['design_bounds']))
+            coordinates={(p['values']['topfilm_thickness'],p['values']['bot_thickness']) for p in prepared}
+            for top,bottom in itertools.product(cfg['design_bounds']['topfilm_thickness'],cfg['design_bounds']['bot_thickness']):
+                self.assertTrue(any(np.allclose([top,bottom],p) for p in coordinates))
+            observations=[{'values':p['values'],'value':.001+i*.00001,'standard_error':.00001,
+                           'transport_standard_error':.000001} for i,p in enumerate(prepared)]
+            initial={'objective':cfg['defaults']['objective'],'design_hash':study['design']['design_hash'],
+                     'events_per_task':15625,'replicas':4,'observations':observations}
+            path=self.root/'initial-observations'/(step['id']+'.json');records.write_json(path,initial)
+            for method in cfg['methods']:
+                arm=next(s for s in arms if s['initial']==step['id'] and s['method']==method)
+                ns=self.queue_python('base_study',scope='stage',branch="native_search and step['kind'] in ('native_initial', 'native_search')",
+                    **context,step=arm,identifier=arm['id'])
+                raw=ns['raw'];search=raw['search'];resolved=scan.load_study(raw)
+                self.assertEqual(Path(search['initial_observations_file']),path)
+                self.assertEqual(resolved['search']['initial_observations'],observations)
+                self.assertTrue(search['conditional_transport_noise'])
+                self.assertFalse(raw['analysis']['store_search_blocks'])
+                self.assertEqual(search['evaluations'],24)
+                self.assertEqual(resolved['events_total'],64000000)
+                self.assertEqual(resolved['design']['design_hash'],study['design']['design_hash'])
+                for key,bad in [('objective','total_qps_per_primary'),('design_hash','wrong'),
+                                ('events_per_task',31250),('replicas',8)]:
+                    records.write_json(path,{**initial,key:bad},overwrite=True)
+                    with self.assertRaisesRegex(ValueError,'shared initial observations differ'):
+                        scan.load_study(raw)
+                    records.write_json(path,initial,overwrite=True)
+
+    def test_film_confirmation_keeps_geometry_and_unused_layouts(self):
+        cfg,limits=self.film_inputs()
+        low,high=cfg['design_bounds']['topfilm_thickness']
+        for step in cfg['studies']:
+            if step['kind'] not in ('native_initial','native_search'):continue
+            top,bottom=(low+.4*(high-low),4.) if step.get('method')=='bo' else (low+.6*(high-low),7.) if step.get('method')=='sobol' else (low,1.)
+            records.write_json(self.root/'studies'/step['id']/'summary.json',{'complete':True,'results':[
+                {'value':.001,'status':'complete','parameters':{'topfilm_thickness':top,'bot_thickness':bottom,'lattice_deg':45.}}]})
+        confirmations=[s for s in cfg['studies'] if s['kind']=='native_confirmation']
+        self.assertEqual(len(confirmations),8)
+        for ordinal,step in enumerate(confirmations[:2]):
+            ns=self.queue_python('base_study',scope='stage',branch="native_search and step['kind'] == 'native_confirmation'",
+                cfg=cfg,defaults=cfg['defaults'],source=ROOT,run=self.root,queue=cfg['studies'],step=step,
+                identifier=step['id'],limits=limits,native_search=True,film_search=True)
+            raw=ns['raw'];study=scan.load_study(raw)
+            self.assertFalse(raw['sampling']['independent_candidate_streams'])
+            self.assertEqual(raw['sampling']['replicas'],4)
+            self.assertEqual(raw['sampling']['events_per_task'],15625)
+            for point in raw['candidates']:
+                p=physics.prepare_values(study,point);pattern=p['derived']['bottom_pattern']
+                self.assertAlmostEqual(pattern['thickness_um']*(pattern['island_um']/pattern['pitch_um'])**2,.64)
+                self.assertEqual(p['top_film']['thickness_um'],point['values']['topfilm_thickness'])
+                self.assertEqual(p['bottom_film']['thickness_um'],point['values']['bot_thickness'])
+            selected=records.load_document(self.root/'native-selected.json')
+            self.assertFalse(selected['selection_uses_confirmation'])
+            self.assertEqual(len(selected['candidates']),12)
+            if ordinal==0:
+                before=records.content_hash(selected);first_hash=study['design']['design_hash']
+                records.write_json(self.root/'studies'/step['id']/'summary.json',{'complete':True,'results':[
+                    {'name':'unrelated-holdout-leader','value':0.,'parameters':{'topfilm_thickness':.18,'bot_thickness':8.}}]})
+            else:
+                self.assertEqual(records.content_hash(selected),before)
+                self.assertNotEqual(study['design']['design_hash'],first_hash)
+
+    def test_film_final_report_keeps_seed_layout_errors_zeros_and_partial_arms(self):
+        from unittest.mock import patch
+        cfg,limits=self.film_inputs();steps=cfg['studies']
+        fixed={p['name']:p for p in cfg['candidates']}
+        names=list(fixed)+[s['id'] for s in steps if s['kind'] in ('native_initial','native_search')]
+        points=[];low,high=cfg['design_bounds']['topfilm_thickness']
+        for k,name in enumerate(names):
+            material='Si' if name.startswith('Si-') or '-Si-' in name else 'GaAs'
+            points.append(copy.deepcopy(fixed[name]) if name in fixed else {'name':name,
+                'materials':[material,'Nb','Cu'],'values':{'topfilm_thickness':low+(high-low)*(.2+.5*k/len(names)),'bot_thickness':2.+k*.01}})
+        records.write_json(self.root/'native-selected.json',{'candidates':points,
+            'aliases':{name:[name] for name in names},'selection_uses_confirmation':False})
+        step=next(s for s in steps if s['kind']=='native_confirmation')
+        context=dict(cfg=cfg,defaults=cfg['defaults'],source=ROOT,run=self.root,limits=limits,film_search=True)
+        ns=self.queue_python('base_study',**context)
+        definition=ns['base_study'](step['id'],step['sampling']);definition['candidates']=points
+        path=self.root/'definitions'/(step['id']+'.yaml');path.parent.mkdir(exist_ok=True)
+        path.write_text(yaml.safe_dump(definition))
+        records.write_json(self.root/'source-ready.json',{})
+        records.write_json(self.root/'publication.json',{'branch':'fixture','remote':'fixture'})
+        records.write_json(self.root/'sampling-comparison.json',{'cases':[]})
+        original={}
+        for step in steps:
+            if step['kind']=='film_sampling_check':continue
+            original[step['id']]={'id':step['id'],'complete':True,'results':[],
+                'timing':{'total_s':1.},'search_counts':{'measured':24,'target':24,'target_reached':True}}
+        for l,step in enumerate(s for s in steps if s['kind']=='native_confirmation'):
+            rows=[]
+            for name in names:
+                value=(10.+l*.2)
+                if name.startswith('bo-Si-'):value=0.
+                elif name.startswith('sobol-'):value*=.98
+                elif name.startswith('bo-GaAs-'):value*=.9
+                if name in ('GaAs-reference','native-initial-GaAs-606','bo-GaAs-606'):value=0.
+                rows.append({'name':name,'value':value,'standard_error':.1,'transport_standard_error':.01,
+                    'units':'weighted_junction_QPs_per_injected_eV',
+                    'estimate':{'means_by_stratum':{'test':value},'maximum_site_leverage':.1}})
+            original[step['id']]['results']=rows
+        for partial in (False,True):
+            reports=copy.deepcopy(original)
+            if partial:
+                reports['sobol-Si-606']['search_counts'].update(target_reached=False,measured=23)
+                reports['sobol-Si-606'].update(complete=False,terminated_search=True)
+            (self.root/'README.md').write_text('before\n<!-- film-start -->\nold\n<!-- film-end -->\nafter\n')
+            with patch.object(subprocess,'check_output',return_value='fixture'),patch.object(analysis,'plot_result'):
+                with self.assertRaises(SystemExit) as stopped:
+                    self.queue_python('mean_interval','layout_summary',scope='finish',branch='film_search',
+                        **context,repo=self.root,queue=steps,reports=reports,subprocess=subprocess)
+            self.assertEqual(stopped.exception.code,0)
+            result=records.load_document(self.root/'docs/results/film_optimization.json')
+            si=result['method_comparison']['Si'];primary=si['primary']['bo_vs_initial']
+            self.assertEqual(si['all_planned_seeds_complete'],not partial)
+            self.assertEqual(len(si['complete_matched_seeds']),5 if partial else 6)
+            self.assertEqual(primary['relative_change'],-1.)
+            self.assertEqual(primary['n_layouts'],8)
+            self.assertEqual(primary['confidence_interval'],[-1.,-1.])
+            gaas=result['method_comparison']['GaAs']
+            self.assertEqual(gaas['primary']['bo_vs_initial']['status'],'relative comparison unavailable')
+            for r in result['physical_comparisons']:
+                if r['material']=='Si':
+                    self.assertEqual(r['relative_to_reference']['confidence'],1-.05/44)
+                else:self.assertIsNone(r['relative_to_reference'])
+                self.assertAlmostEqual(r['bottom_pattern']['volume_per_area_um'],.64)
+            md=(self.root/'docs/results/film_optimization.md').read_text()
+            answer='No' if partial else 'Yes'
+            self.assertIn(f'| Si | bo_vs_initial | -100.00% | [-100.00%, -100.00%] | {answer} |',md)
+            self.assertTrue((self.root/'README.md').read_text().endswith('\nafter\n'))
+
+    def test_two_layout_sampling_preserves_first_sites_streams_and_total_primaries(self):
+        fixed=scan.load_study(self.raw)['fixed']
+        weights=records.load_document(ROOT/'figures/spatial_sites.json')['stratum_weights']
+        components=[]
+        for seed in (2026103001,2026103002):
+            d=physics.build_design(fixed,{'kind':'stratified','sites':512,'position_seed':seed,
+                'allocation':dict(zip(physics.REGIONS,[17,256,51,85,103])),'stratum_weights':weights})
+            d['design_hash']=records.content_hash(d);components.append(d)
+        first,second=components;combined=copy.deepcopy(first)
+        combined['sites_mm']=first['sites_mm']+second['sites_mm']
+        combined['stratum']=first['stratum']+second['stratum']
+        combined['stratum_counts']={h:2*n for h,n in first['stratum_counts'].items()}
+        combined['position_layouts']=['layout-01']*512+['layout-02']*512
+        combined['layout_sources']={f'layout-{k+1:02d}':{'design_hash':d['design_hash'],
+            'position_seed':2026103001+k} for k,d in enumerate(components)}
+        combined['design_hash']=records.content_hash({k:v for k,v in combined.items() if k!='design_hash'})
+        studies=[]
+        for name,d,events in [('single',first,31250),('paired',combined,15625)]:
+            path=self.root/(name+'.json');records.write_json(path,d)
+            raw=copy.deepcopy(self.raw);raw['id']=name
+            raw['sampling'].update(kind='recorded-stratified',design_file=str(path),sites=len(d['sites_mm']),
+                replicas=4,events_per_task=events,seed_base=20261030,seed_bank=6100,
+                position_seed=2026103001,independent_candidate_streams=False)
+            studies.append(scan.load_study(raw))
+        a,b=studies
+        self.assertEqual(a['events_total'],64000000);self.assertEqual(a['events_total'],b['events_total'])
+        self.assertEqual(b['design']['sites_mm'][:512],a['design']['sites_mm'])
+        self.assertEqual(len({tuple(p) for p in b['design']['sites_mm']}),1024)
+        self.assertEqual(b['design']['stratum_weights'],a['design']['stratum_weights'])
+        self.assertNotEqual(a['design']['design_hash'],b['design']['design_hash'])
+        self.assertEqual(analysis.analysis_design(b)['position_layouts'],combined['position_layouts'])
+        tasks=[scan.task_plan(s,physics.prepare_values(s),{'fixture':True}) for s in studies]
+        for r in range(4):
+            control=tasks[0][r*512:(r+1)*512];paired=tasks[1][r*1024:r*1024+512]
+            self.assertEqual([(t['site_mm'],t['stratum'],t['seeds']) for t in control],
+                             [(t['site_mm'],t['stratum'],t['seeds']) for t in paired])
+            self.assertTrue(all(x['task_id']!=y['task_id'] for x,y in zip(control,paired)))
+
+    def test_native_film_geometry_changes_real_macros_at_fixed_copper_volume(self):
+        gaas=self.root/'maps/GaAs';gaas.mkdir()
+        gaas.joinpath('config.txt').write_text((self.root/'maps/Si/config.txt').read_text()
+            .replace('165.6','121.57').replace('63.9','57.4').replace('79.5','59.5'))
+        for material in ('Si','GaAs'):
+            raw=copy.deepcopy(self.raw)
+            raw['parameters']={'topfilm_thickness':{'mode':'search','bounds':[.075,.2]},
+                               'bot_thickness':{'mode':'search','bounds':[1.,10.]}}
+            raw['constraints']={'bottom_volume_per_area_um':.64,'bottom_pitch_um':250.}
+            raw['candidates']=[{'name':'native','materials':[material,'Nb','Cu']}]
+            study=scan.load_study(raw);prepared=[];macros=[];configs=[]
+            for top,bottom in ((.075,1.),(.2,10.)):
+                point=physics.prepare_values(study,{'materials':[material,'Nb','Cu'],
+                    'values':{'topfilm_thickness':top,'bot_thickness':bottom}})
+                prepared.append(point);config,macro=scan.input_text(point,study['installation']);configs.append(config)
+                commands={line.split(None,1)[0]:line.split(None,1)[1] for line in macro.splitlines()
+                          if line.startswith('/main/') and len(line.split(None,1))==2}
+                macros.append(commands)
+                self.assertEqual(commands['/main/detector_param/setTopFilmThickness'],f'{top} um')
+                self.assertEqual(commands['/main/detector_param/setBotThickness'],f'{bottom} um')
+                pattern=point['derived']['bottom_pattern']
+                width=float(commands['/main/electrode_param/setIsland'].split()[0])
+                gap=float(commands['/main/electrode_param/setIslandSpacing'].split()[0])
+                self.assertAlmostEqual(width+gap,250.)
+                self.assertAlmostEqual(bottom*(width/(width+gap))**2,.64)
+                self.assertAlmostEqual(pattern['coverage'],.64/bottom)
+                self.assertEqual(point['derived']['lattice_map_name'],material)
+                self.assertEqual(point['values']['topfilm_ph_lifetime'],.00417)
+                self.assertEqual(point['values']['bot_ph_lifetime'],5.1)
+                self.assertEqual(point['values']['topfilm_density'],8570.)
+                self.assertEqual(point['values']['bot_density'],8960.)
+            self.assertEqual(configs[0],configs[1])
+            self.assertEqual({k:v for k,v in prepared[0]['values'].items() if k not in raw['parameters']},
+                             {k:v for k,v in prepared[1]['values'].items() if k not in raw['parameters']})
+            for film in ('top_film','bottom_film'):
+                self.assertEqual({k:v for k,v in prepared[0][film].items() if k!='thickness_um'},
+                                 {k:v for k,v in prepared[1][film].items() if k!='thickness_um'})
+            self.assertNotEqual(macros[0]['/main/electrode_param/setIsland'],macros[1]['/main/electrode_param/setIsland'])
+
+    def test_fixed_copper_volume_rejects_infeasible_geometry(self):
+        for constraints,metal in [({'bottom_volume_per_area_um':1.1,'bottom_pitch_um':250.},'Cu'),
+                                  ({'bottom_volume_per_area_um':.64,'bottom_pitch_um':257.},'Cu'),
+                                  ({'bottom_volume_per_area_um':.64,'bottom_pitch_um':float('nan')},'Cu'),
+                                  ({'bottom_volume_per_area_um':True,'bottom_pitch_um':250.},'Cu'),
+                                  ({'bottom_volume_per_area_um':.64,'bottom_pitch_um':True},'Cu'),
+                                  ({'bottom_volume_per_area_um':.64,'bottom_pitch_um':250.},'Au')]:
+            raw=copy.deepcopy(self.raw);raw['constraints']=constraints
+            raw['candidates']=[{'name':'native','materials':['Si','Nb',metal]}]
+            with self.subTest(constraints=constraints,metal=metal),self.assertRaises(ValueError):
+                study=scan.load_study(raw);physics.prepare_values(study,raw['candidates'][0])
+
+    def test_film_thickness_designs_have_distinct_complete_transport_records(self):
+        raw=copy.deepcopy(self.raw);raw['analysis']['objective']='device_junction_qps_per_eV'
+        raw['parameters']={'topfilm_thickness':{'mode':'search','bounds':[.075,.2]},
+                           'bot_thickness':{'mode':'search','bounds':[1.,10.]}}
+        raw['constraints']={'bottom_volume_per_area_um':.64,'bottom_pitch_um':250.}
+        raw['candidates']=[{'name':name,'materials':['Si','Nb','Cu'],
+            'values':{'topfilm_thickness':top,'bot_thickness':bottom}}
+            for name,top,bottom in [('thin',.075,1.),('thick',.2,10.)]]
+        report=scan.run_study(raw,self.root/'film-complete')
+        self.assertTrue(report['complete'])
+        self.assertEqual([r['completed_tasks'] for r in report['results']],[4,4])
+        self.assertEqual(len({r['candidate_id'] for r in report['results']}),2)
+        self.assertEqual(self.calls.read_text().count('call'),8)
+
     def test_spatial_2048_retains_positions_streams_and_total_primaries(self):
         cfg=records.load_document(ROOT/'studies/native/verification_2048.yaml')
         parent=self.root/'reference';(parent/'designs').mkdir(parents=True)
@@ -2238,7 +2497,7 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(len(set(cfg['defaults']['independent_position_seeds'])),8)
         self.assertEqual(sum(step['sampling']['design']*step['sampling']['replicas']*
             step['sampling']['events_per_task']*len(cfg['candidates']) for step in cfg['studies']),20480000000)
-        namespace=self.queue_python('base_study',scope='stage',branch="focused and step['kind'] == 'focused'",focused=True,
+        namespace=self.queue_python('base_study',scope='stage',branch="focused and step['kind'] in ('focused', 'film_sampling')",focused=True,
             cfg=cfg,defaults=cfg['defaults'],source=ROOT,run=self.root,identifier='matched',
             step=cfg['studies'][0],limits={key:cfg['execution'][key] for key in
                 ('workers','total_mem_gb','per_task_mem_gb')}|{'system_mem_reserve_gb':16})
@@ -2623,7 +2882,7 @@ class QueueTests(unittest.TestCase):
         namespace={'records':records,'analysis':analysis,'scan':scan,'physics':physics,
                    'np':np,'copy':copy,'math':math,'itertools':itertools,'Path':Path,
                    'os':os,'time':time,'sys':sys,'json':json,'shutil':shutil,
-                   'max_sites':1024,'initial_checks':False,'optimization':False,'focused':False,'native_search':False,'spatial_verify':False,'refinement':{},**values}
+                   'max_sites':1024,'initial_checks':False,'optimization':False,'focused':False,'film_search':False,'native_search':False,'spatial_verify':False,'refinement':{},**values}
         exec(compile(ast.Module(body=code,type_ignores=[]),'isolated queue Python','exec'),namespace)
         return namespace
 
@@ -3178,6 +3437,75 @@ class SpatialUncertaintyTests(unittest.TestCase):
                  'per_electrode_qps':[float(value)]}
                 for i,row in enumerate(values) for r,value in enumerate(row)]
         return blocks,design
+
+    def test_composite_response_keeps_component_integrals_and_transport_repeats(self):
+        blocks,design=self.inputs(['a','b','c','d'],['left','right','left','right'],
+                                 [[2,4,6],[10,14,18],[6,8,10],[18,22,26]])
+        design.update(sites_mm=[[i,0.,0.] for i in range(4)],
+            position_layouts=['first','first','second','second'],
+            layout_sources={'first':{'design_hash':'first-hash','position_seed':11},
+                            'second':{'design_hash':'second-hash','position_seed':12}})
+        result=analysis.summarize(blocks,design,diagnostics=False,bootstrap_draws=64)
+        self.assertEqual(result['value'],15.)
+        self.assertEqual(result['naive_equal_site_mean'],12.)
+        self.assertEqual([r['value'] for r in result['layout_estimates']],[11.5,18.5])
+        self.assertEqual(result['value'],np.mean([r['value'] for r in result['layout_estimates']]))
+        self.assertEqual(result['by_replica'],[11.5,15.,18.5])
+        self.assertEqual(result['n_replicas'],3)
+        self.assertAlmostEqual(result['layout_standard_error'],3.5)
+        self.assertAlmostEqual(result['layout_estimates'][0]['transport_standard_error'],3.5/np.sqrt(3))
+        ordinary=copy.deepcopy(design);ordinary.pop('position_layouts');ordinary.pop('layout_sources')
+        old=analysis.summarize(blocks,ordinary,diagnostics=False,bootstrap_draws=64)
+        self.assertEqual({k:v for k,v in result.items() if k not in ('layout_estimates','layout_standard_error')},old)
+
+    def test_composite_sampling_rejects_missing_or_dependent_layout_records(self):
+        blocks,design=self.inputs(list('abcdef'),['left','left','right','left','left','right'],[[1,2,3]]*6)
+        design.update(sites_mm=[[i,0.,0.] for i in range(6)],
+            position_layouts=['first']*3+['second']*3,
+            layout_sources={'first':{'design_hash':'first-hash','position_seed':11},
+                            'second':{'design_hash':'second-hash','position_seed':12}})
+        analysis.prepare_counts(blocks,design)
+        invalid=[]
+        d=copy.deepcopy(design);d['position_layouts'].pop();invalid.append(d)
+        d=copy.deepcopy(design);d['layout_sources'].pop('second');invalid.append(d)
+        d=copy.deepcopy(design);d['layout_sources']['second']['design_hash']='first-hash';invalid.append(d)
+        d=copy.deepcopy(design);d['layout_sources']['second']['position_seed']=11;invalid.append(d)
+        d=copy.deepcopy(design);d['layout_sources']['second']['position_seed']=True;invalid.append(d)
+        d=copy.deepcopy(design);d['sites_mm'][3]=d['sites_mm'][0];invalid.append(d)
+        d=copy.deepcopy(design);d['position_strata'][3]='right';invalid.append(d)
+        d=copy.deepcopy(design);d['position_strata'][2]='left';invalid.append(d)
+        for d in invalid:
+            with self.subTest(design=d),self.assertRaises(ValueError):analysis.prepare_counts(blocks,d)
+
+    def test_seed_layout_interval_keeps_both_sources_of_variation(self):
+        from scipy.stats import t
+        rows=np.array([-.01,0.,.01]);columns=np.array([-.015,-.005,.005,.015])
+        changes=-.08+rows[:,None]+columns[None,:];reference=np.full((3,4),10.)
+        result=analysis.compare_seed_layouts(reference*(1+changes),reference)
+        seed_se=float(rows.std(ddof=1)/np.sqrt(3));layout_se=float(columns.std(ddof=1)/2)
+        combined=float(np.hypot(seed_se,layout_se))
+        self.assertAlmostEqual(result['relative_change'],-.08)
+        self.assertAlmostEqual(result['seed_standard_error'],seed_se)
+        self.assertAlmostEqual(result['layout_standard_error'],layout_se)
+        self.assertAlmostEqual(result['standard_error'],combined)
+        self.assertEqual(result['n_seeds'],3);self.assertEqual(result['n_layouts'],4)
+        np.testing.assert_allclose(result['confidence_interval'],-.08+np.array([-1,1])*t.ppf(.975,2)*combined)
+        self.assertGreater(combined,2*changes.std(ddof=1)/np.sqrt(changes.size))
+        self.assertFalse(result['meaningful_reduction_confirmed'])
+        improved=analysis.compare_seed_layouts(reference*(.98+changes),reference)
+        self.assertTrue(improved['meaningful_reduction_confirmed'])
+
+    def test_seed_layout_interval_rejects_invalid_inputs_and_keeps_measured_zero(self):
+        reference=np.ones((3,4));measured=np.zeros((3,4))
+        zero=analysis.compare_seed_layouts(measured,reference)
+        self.assertEqual(zero['relative_change'],-1.)
+        self.assertEqual(zero['confidence_interval'],[-1.,-1.])
+        self.assertTrue(zero['meaningful_reduction_confirmed'])
+        invalid=[(np.ones(4),reference),(np.ones((2,4)),reference),(reference[:1],reference[:1]),
+                 (reference,np.zeros((3,4))),(-reference,reference),
+                 (np.full((3,4),np.nan),reference),(reference,np.full((3,4),np.inf))]
+        for a,b in invalid:
+            with self.subTest(a=a,b=b),self.assertRaises(ValueError):analysis.compare_seed_layouts(a,b)
 
     def test_nested_identical_layout_cancels_shared_sites_and_streams(self):
         blocks,design=self.inputs(['a','b','c'],['left','left','right'],

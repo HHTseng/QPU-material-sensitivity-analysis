@@ -3,6 +3,32 @@ meta:
   purpose: Definitions and model destinations for the material-property scan.
   note: Search bounds belong to each experiment, not to this catalog.
 parameters:
+  topfilm_thickness:
+    unit: um
+    type: float
+    target: macro:/main/detector_param/setTopFilmThickness
+    valid_range: [0.001, 100.0]
+    source: 'Upper-film geometric thickness. Baseline Nb is 0.075 um; 0.100 um
+      Nb devices are reported in doi:10.1088/1674-1056/ac11d7 and 0.200 um Nb
+      in doi:10.1038/s41467-025-58919-8. Study bounds describe a design range,
+      not measured uncertainty; bulk film properties remain fixed assumptions.'
+    default: 0.075
+    search_range: [0.075, 0.200]
+    scale: log
+    active: false
+  bot_thickness:
+    unit: um
+    type: float
+    target: macro:/main/detector_param/setBotThickness
+    valid_range: [0.001, 100.0]
+    source: 'Lower-film geometric thickness. Experimental 1 and 10 um Cu islands
+      are described in doi:10.1103/PhysRevB.110.024519 and 10 um Cu in
+      doi:10.1038/s41467-022-33997-0. Study bounds describe a design range,
+      not measured uncertainty in the inherited Cu scattering model.'
+    default: 1.0
+    search_range: [1.0, 10.0]
+    scale: log
+    active: false
   topfilm_vsound:
     unit: km/s
     type: float

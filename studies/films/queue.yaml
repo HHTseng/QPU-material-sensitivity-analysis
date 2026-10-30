@@ -1,0 +1,940 @@
+schema: material-scan-film-optimization-1
+id: native-film-design-20261030-bounded
+description: 'Native Si and GaAs: Nb thickness and fixed-volume Cu island design, sampling comparison
+  and matched BO/Sobol confirmation.'
+question:
+  sampling: At 64 million primaries per response, do two independent 512-position layouts improve position
+    precision relative to one 512-position layout?
+  physics: Can Nb thickness and Cu coverage at constant Cu volume reduce the native-device response J
+    by at least 5 percent?
+  optimization: Does BO reduce confirmed J by at least 5 percent beyond shared starts containing all four
+    corners, and beyond Sobol?
+  selection_uses_confirmation: false
+defaults:
+  temperature_K: 0.02
+  gun_energy_eV: 0.01
+  junction_gap_eV: 0.000191
+  cutoff_eV: 3.82e-05
+  nb_gap_min_eV: 0.0015384
+  source_half_span_mm: 4.0
+  source_law: uniform_surface
+  objective: device_junction_qps_per_eV
+  seed_base: 20261030
+  bootstrap_draws: 1000
+  design_counts:
+  - 512
+  - 1024
+  allocations:
+    '512':
+    - 17
+    - 256
+    - 51
+    - 85
+    - 103
+    '1024':
+    - 34
+    - 512
+    - 102
+    - 170
+    - 206
+  position_seed: 2026103000
+  independent_position_seeds: []
+  confirmation_position_seeds:
+  - 2026110301
+  - 2026110302
+  - 2026110303
+  - 2026110304
+  - 2026110305
+  - 2026110306
+  - 2026110307
+  - 2026110308
+  area_seed: 0
+  area_samples: 8000000
+  design_note: Independent source pairs per search seed and eight unused confirmation layouts. All area
+    fractions retain the declared 8 x 8 mm2 uniform source integral.
+  source_note: The chip is 10x10 mm2; the declared injection region is 8x8 mm2.
+  max_sites: 1024
+  base_design_file: figures/spatial_sites.json
+  fresh_designs: true
+execution:
+  independent_archive_root: /home/htseng/Sensitivity_Analysis_HT/material_scan_data/film_archive_copies
+  max_cpu_fraction: 0.5
+  max_memory_fraction: 0.5
+  workers: 86
+  total_mem_gb: 64.0
+  reserved_mem_gb: 16.0
+  minimum_free_disk_gb: 20.0
+  per_task_mem_gb: 2.0
+  blas_threads: 1
+  timeout_s: 21600
+  stall_timeout_s: 7200
+  failed_response: missing
+  timeout_note: A task exceeding six hours is right-censored; it never supplies a zero response.
+  queue_order: sequential_studies
+  stop_after_initial_checks: false
+  llm_cpu_count: 8
+  max_gpus: 0
+search_bounds: {}
+materials:
+- Si
+- GaAs
+search_seeds:
+- 101
+- 202
+- 303
+- 404
+- 505
+- 606
+methods:
+  bo: bo_gp
+  sobol: sobol
+initial_count: 12
+search_count: 24
+optimizer_options:
+  n_init: 12
+  n_restarts: 3
+  n_candidates: 4096
+  extra_candidates: 8
+  proposal_min_distance: 0.03
+  local_width: 0.08
+  local_adapt: false
+  runtime_aware: false
+  refit_every: 4
+  transform: log
+candidates:
+- name: Si-reference
+  materials:
+  - Si
+  - Nb
+  - Cu
+  values:
+    topfilm_thickness: 0.075
+    bot_thickness: 1.0
+    lattice_deg: 45.0
+- name: Si-corner-01
+  materials:
+  - Si
+  - Nb
+  - Cu
+  values:
+    topfilm_thickness: 0.075
+    bot_thickness: 10.0
+    lattice_deg: 45.0
+- name: Si-corner-02
+  materials:
+  - Si
+  - Nb
+  - Cu
+  values:
+    topfilm_thickness: 0.1
+    bot_thickness: 1.0
+    lattice_deg: 45.0
+- name: Si-corner-03
+  materials:
+  - Si
+  - Nb
+  - Cu
+  values:
+    topfilm_thickness: 0.1
+    bot_thickness: 10.0
+    lattice_deg: 45.0
+- name: GaAs-reference
+  materials:
+  - GaAs
+  - Nb
+  - Cu
+  values:
+    topfilm_thickness: 0.075
+    bot_thickness: 1.0
+    lattice_deg: 45.0
+- name: GaAs-corner-01
+  materials:
+  - GaAs
+  - Nb
+  - Cu
+  values:
+    topfilm_thickness: 0.075
+    bot_thickness: 10.0
+    lattice_deg: 45.0
+- name: GaAs-corner-02
+  materials:
+  - GaAs
+  - Nb
+  - Cu
+  values:
+    topfilm_thickness: 0.1
+    bot_thickness: 1.0
+    lattice_deg: 45.0
+- name: GaAs-corner-03
+  materials:
+  - GaAs
+  - Nb
+  - Cu
+  values:
+    topfilm_thickness: 0.1
+    bot_thickness: 10.0
+    lattice_deg: 45.0
+comparison:
+  family_error: 0.05
+  meaningful_reduction: 0.05
+  pairs:
+  - candidate: Si-corner-03
+    reference: Si-reference
+  - candidate: GaAs-corner-03
+    reference: GaAs-reference
+  primary: 'Six fixed comparisons: BO/shared initial winner, Sobol/shared initial winner and BO/Sobol
+    for each substrate. Average paired response ratios across six search seeds and eight position layouts.
+    Sum the seed-mean and layout-mean variance estimates, with Student-t df=min(5,7) and Bonferroni family
+    error 0.05. A meaningful reduction requires the entire interval below minus 5 percent. All six planned
+    matched seeds must finish.'
+  physical: Selected designs and fixed corners are compared with the respective 75 nm Nb / 1 um Cu reference
+    on eight unused layouts. Simultaneous intervals use the predeclared 44-target upper bound.
+  sampling: Eight paired layouts at equal total primaries and eight fixed cases. Adjusted paired layout-ratio
+    intervals and total study elapsed time are reported. Variance ratios are descriptive. The paired search
+    design is fixed in advance, independently of these diagnostics.
+  stopping: Run eight sampling pairs, six complete matched optimizer seeds per substrate, and eight unused
+    confirmation layouts. Incomplete arms remain absent and prevent a full primary conclusion. No increased
+    site count or new LLM inference.
+expected_work:
+  primaries_upper_bound: 76800000000
+  sampling_primaries: 8192000000
+  screening_primaries: 46080000000
+  confirmation_primaries_upper_bound: 22528000000
+  confirmation_targets_upper_bound: 44
+  elapsed_hours:
+  - 72
+  - 120
+  workers: 86
+  cpu_cap: 96
+  gpus: 0
+  memory_limit_gib: 64
+  estimated_archive_copies_gib:
+  - 35
+  - 50
+  working_location: /data/htseng/material-scan-work/film_design_20261030_bounded
+  independent_archive_location: /home/htseng/Sensitivity_Analysis_HT/material_scan_data/film_archive_copies/film_design_20261030_bounded
+  estimate_note: The previous native rate was 1.325 billion primaries/hour. The 200 nm Nb timing diagnostic
+    was about 13 times slower, so the main range is 75 to 100 nm. Smaller per-task counts and changed
+    coverage add cost; update after the complete sampling comparison.
+limitations:
+- These are model predictions for named substrates with fixed Nb/Cu property records, not discovery of
+  a new compound or measured qubit-error reduction.
+- Nb thickness 75 to 100 nm is a chosen design interval anchored by the 75 nm reference and demonstrated
+  100 nm films. A 200 nm timing diagnostic was about 13 times slower and is retained outside the optimization.
+  Fixed Nb gap and lifetime across this interval remain model assumptions.
+- Cu thickness 1 to 10 um at 250 um pitch keeps 0.064 mm3 Cu per 10 x 10 mm2 chip. Greater thickness reduces
+  coverage; this family is not a measured device set.
+- All four corners are in each shared initial table. Monotonic response can make a corner optimal, so
+  no additional BO gain is promised.
+- Seed and layout variance are estimated separately. Their sum is a conservative approximation counting
+  seed-layout interaction twice, rather than an exact combined test.
+- Eight unused confirmation layouts assess the selected points, not uniform convergence over every physical
+  design.
+studies:
+- id: sampling-01-single
+  kind: film_sampling
+  position_seed: 2026103001
+  bank: 6101
+  sampling:
+    design: 512
+    design_file: sampling-01-component-1.json
+    replicas: 4
+    events_per_task: 31250
+- id: sampling-01-paired
+  kind: film_sampling
+  position_seed: 2026103001
+  bank: 6101
+  sampling:
+    design: 1024
+    design_file: sampling-01-paired.json
+    replicas: 4
+    events_per_task: 15625
+- id: sampling-02-single
+  kind: film_sampling
+  position_seed: 2026103003
+  bank: 6102
+  sampling:
+    design: 512
+    design_file: sampling-02-component-1.json
+    replicas: 4
+    events_per_task: 31250
+- id: sampling-02-paired
+  kind: film_sampling
+  position_seed: 2026103003
+  bank: 6102
+  sampling:
+    design: 1024
+    design_file: sampling-02-paired.json
+    replicas: 4
+    events_per_task: 15625
+- id: sampling-03-single
+  kind: film_sampling
+  position_seed: 2026103005
+  bank: 6103
+  sampling:
+    design: 512
+    design_file: sampling-03-component-1.json
+    replicas: 4
+    events_per_task: 31250
+- id: sampling-03-paired
+  kind: film_sampling
+  position_seed: 2026103005
+  bank: 6103
+  sampling:
+    design: 1024
+    design_file: sampling-03-paired.json
+    replicas: 4
+    events_per_task: 15625
+- id: sampling-04-single
+  kind: film_sampling
+  position_seed: 2026103007
+  bank: 6104
+  sampling:
+    design: 512
+    design_file: sampling-04-component-1.json
+    replicas: 4
+    events_per_task: 31250
+- id: sampling-04-paired
+  kind: film_sampling
+  position_seed: 2026103007
+  bank: 6104
+  sampling:
+    design: 1024
+    design_file: sampling-04-paired.json
+    replicas: 4
+    events_per_task: 15625
+- id: sampling-05-single
+  kind: film_sampling
+  position_seed: 2026103009
+  bank: 6105
+  sampling:
+    design: 512
+    design_file: sampling-05-component-1.json
+    replicas: 4
+    events_per_task: 31250
+- id: sampling-05-paired
+  kind: film_sampling
+  position_seed: 2026103009
+  bank: 6105
+  sampling:
+    design: 1024
+    design_file: sampling-05-paired.json
+    replicas: 4
+    events_per_task: 15625
+- id: sampling-06-single
+  kind: film_sampling
+  position_seed: 2026103011
+  bank: 6106
+  sampling:
+    design: 512
+    design_file: sampling-06-component-1.json
+    replicas: 4
+    events_per_task: 31250
+- id: sampling-06-paired
+  kind: film_sampling
+  position_seed: 2026103011
+  bank: 6106
+  sampling:
+    design: 1024
+    design_file: sampling-06-paired.json
+    replicas: 4
+    events_per_task: 15625
+- id: sampling-07-single
+  kind: film_sampling
+  position_seed: 2026103013
+  bank: 6107
+  sampling:
+    design: 512
+    design_file: sampling-07-component-1.json
+    replicas: 4
+    events_per_task: 31250
+- id: sampling-07-paired
+  kind: film_sampling
+  position_seed: 2026103013
+  bank: 6107
+  sampling:
+    design: 1024
+    design_file: sampling-07-paired.json
+    replicas: 4
+    events_per_task: 15625
+- id: sampling-08-single
+  kind: film_sampling
+  position_seed: 2026103015
+  bank: 6108
+  sampling:
+    design: 512
+    design_file: sampling-08-component-1.json
+    replicas: 4
+    events_per_task: 31250
+- id: sampling-08-paired
+  kind: film_sampling
+  position_seed: 2026103015
+  bank: 6108
+  sampling:
+    design: 1024
+    design_file: sampling-08-paired.json
+    replicas: 4
+    events_per_task: 15625
+- id: sampling-comparison
+  kind: film_sampling_check
+- id: native-initial-Si-101
+  kind: native_initial
+  material: Si
+  seed: 101
+  count: 12
+  bank: 6220
+  sampling: &id001
+    design: 1024
+    design_file: screen-101-paired.json
+    replicas: 4
+    events_per_task: 15625
+- id: bo-Si-101
+  kind: native_search
+  material: Si
+  seed: 101
+  method: bo
+  count: 24
+  initial: native-initial-Si-101
+  bank: 6221
+  sampling: *id001
+- id: sobol-Si-101
+  kind: native_search
+  material: Si
+  seed: 101
+  method: sobol
+  count: 24
+  initial: native-initial-Si-101
+  bank: 6222
+  sampling: *id001
+- id: native-initial-GaAs-101
+  kind: native_initial
+  material: GaAs
+  seed: 101
+  count: 12
+  bank: 6225
+  sampling: *id001
+- id: sobol-GaAs-101
+  kind: native_search
+  material: GaAs
+  seed: 101
+  method: sobol
+  count: 24
+  initial: native-initial-GaAs-101
+  bank: 6226
+  sampling: *id001
+- id: bo-GaAs-101
+  kind: native_search
+  material: GaAs
+  seed: 101
+  method: bo
+  count: 24
+  initial: native-initial-GaAs-101
+  bank: 6227
+  sampling: *id001
+- id: native-initial-Si-202
+  kind: native_initial
+  material: Si
+  seed: 202
+  count: 12
+  bank: 6240
+  sampling: &id002
+    design: 1024
+    design_file: screen-202-paired.json
+    replicas: 4
+    events_per_task: 15625
+- id: sobol-Si-202
+  kind: native_search
+  material: Si
+  seed: 202
+  method: sobol
+  count: 24
+  initial: native-initial-Si-202
+  bank: 6241
+  sampling: *id002
+- id: bo-Si-202
+  kind: native_search
+  material: Si
+  seed: 202
+  method: bo
+  count: 24
+  initial: native-initial-Si-202
+  bank: 6242
+  sampling: *id002
+- id: native-initial-GaAs-202
+  kind: native_initial
+  material: GaAs
+  seed: 202
+  count: 12
+  bank: 6245
+  sampling: *id002
+- id: bo-GaAs-202
+  kind: native_search
+  material: GaAs
+  seed: 202
+  method: bo
+  count: 24
+  initial: native-initial-GaAs-202
+  bank: 6246
+  sampling: *id002
+- id: sobol-GaAs-202
+  kind: native_search
+  material: GaAs
+  seed: 202
+  method: sobol
+  count: 24
+  initial: native-initial-GaAs-202
+  bank: 6247
+  sampling: *id002
+- id: native-initial-Si-303
+  kind: native_initial
+  material: Si
+  seed: 303
+  count: 12
+  bank: 6260
+  sampling: &id003
+    design: 1024
+    design_file: screen-303-paired.json
+    replicas: 4
+    events_per_task: 15625
+- id: bo-Si-303
+  kind: native_search
+  material: Si
+  seed: 303
+  method: bo
+  count: 24
+  initial: native-initial-Si-303
+  bank: 6261
+  sampling: *id003
+- id: sobol-Si-303
+  kind: native_search
+  material: Si
+  seed: 303
+  method: sobol
+  count: 24
+  initial: native-initial-Si-303
+  bank: 6262
+  sampling: *id003
+- id: native-initial-GaAs-303
+  kind: native_initial
+  material: GaAs
+  seed: 303
+  count: 12
+  bank: 6265
+  sampling: *id003
+- id: sobol-GaAs-303
+  kind: native_search
+  material: GaAs
+  seed: 303
+  method: sobol
+  count: 24
+  initial: native-initial-GaAs-303
+  bank: 6266
+  sampling: *id003
+- id: bo-GaAs-303
+  kind: native_search
+  material: GaAs
+  seed: 303
+  method: bo
+  count: 24
+  initial: native-initial-GaAs-303
+  bank: 6267
+  sampling: *id003
+- id: native-initial-Si-404
+  kind: native_initial
+  material: Si
+  seed: 404
+  count: 12
+  bank: 6280
+  sampling: &id004
+    design: 1024
+    design_file: screen-404-paired.json
+    replicas: 4
+    events_per_task: 15625
+- id: sobol-Si-404
+  kind: native_search
+  material: Si
+  seed: 404
+  method: sobol
+  count: 24
+  initial: native-initial-Si-404
+  bank: 6281
+  sampling: *id004
+- id: bo-Si-404
+  kind: native_search
+  material: Si
+  seed: 404
+  method: bo
+  count: 24
+  initial: native-initial-Si-404
+  bank: 6282
+  sampling: *id004
+- id: native-initial-GaAs-404
+  kind: native_initial
+  material: GaAs
+  seed: 404
+  count: 12
+  bank: 6285
+  sampling: *id004
+- id: bo-GaAs-404
+  kind: native_search
+  material: GaAs
+  seed: 404
+  method: bo
+  count: 24
+  initial: native-initial-GaAs-404
+  bank: 6286
+  sampling: *id004
+- id: sobol-GaAs-404
+  kind: native_search
+  material: GaAs
+  seed: 404
+  method: sobol
+  count: 24
+  initial: native-initial-GaAs-404
+  bank: 6287
+  sampling: *id004
+- id: native-initial-Si-505
+  kind: native_initial
+  material: Si
+  seed: 505
+  count: 12
+  bank: 6300
+  sampling: &id005
+    design: 1024
+    design_file: screen-505-paired.json
+    replicas: 4
+    events_per_task: 15625
+- id: bo-Si-505
+  kind: native_search
+  material: Si
+  seed: 505
+  method: bo
+  count: 24
+  initial: native-initial-Si-505
+  bank: 6301
+  sampling: *id005
+- id: sobol-Si-505
+  kind: native_search
+  material: Si
+  seed: 505
+  method: sobol
+  count: 24
+  initial: native-initial-Si-505
+  bank: 6302
+  sampling: *id005
+- id: native-initial-GaAs-505
+  kind: native_initial
+  material: GaAs
+  seed: 505
+  count: 12
+  bank: 6305
+  sampling: *id005
+- id: sobol-GaAs-505
+  kind: native_search
+  material: GaAs
+  seed: 505
+  method: sobol
+  count: 24
+  initial: native-initial-GaAs-505
+  bank: 6306
+  sampling: *id005
+- id: bo-GaAs-505
+  kind: native_search
+  material: GaAs
+  seed: 505
+  method: bo
+  count: 24
+  initial: native-initial-GaAs-505
+  bank: 6307
+  sampling: *id005
+- id: native-initial-Si-606
+  kind: native_initial
+  material: Si
+  seed: 606
+  count: 12
+  bank: 6320
+  sampling: &id006
+    design: 1024
+    design_file: screen-606-paired.json
+    replicas: 4
+    events_per_task: 15625
+- id: sobol-Si-606
+  kind: native_search
+  material: Si
+  seed: 606
+  method: sobol
+  count: 24
+  initial: native-initial-Si-606
+  bank: 6321
+  sampling: *id006
+- id: bo-Si-606
+  kind: native_search
+  material: Si
+  seed: 606
+  method: bo
+  count: 24
+  initial: native-initial-Si-606
+  bank: 6322
+  sampling: *id006
+- id: native-initial-GaAs-606
+  kind: native_initial
+  material: GaAs
+  seed: 606
+  count: 12
+  bank: 6325
+  sampling: *id006
+- id: bo-GaAs-606
+  kind: native_search
+  material: GaAs
+  seed: 606
+  method: bo
+  count: 24
+  initial: native-initial-GaAs-606
+  bank: 6326
+  sampling: *id006
+- id: sobol-GaAs-606
+  kind: native_search
+  material: GaAs
+  seed: 606
+  method: sobol
+  count: 24
+  initial: native-initial-GaAs-606
+  bank: 6327
+  sampling: *id006
+- id: native-confirmation-01
+  kind: native_confirmation
+  position_seed: 2026110301
+  bank: 6501
+  sampling:
+    design: 1024
+    design_file: unused-stream-confirmation-01_1024.json
+    replicas: 4
+    events_per_task: 15625
+- id: native-confirmation-02
+  kind: native_confirmation
+  position_seed: 2026110302
+  bank: 6502
+  sampling:
+    design: 1024
+    design_file: unused-stream-confirmation-02_1024.json
+    replicas: 4
+    events_per_task: 15625
+- id: native-confirmation-03
+  kind: native_confirmation
+  position_seed: 2026110303
+  bank: 6503
+  sampling:
+    design: 1024
+    design_file: unused-stream-confirmation-03_1024.json
+    replicas: 4
+    events_per_task: 15625
+- id: native-confirmation-04
+  kind: native_confirmation
+  position_seed: 2026110304
+  bank: 6504
+  sampling:
+    design: 1024
+    design_file: unused-stream-confirmation-04_1024.json
+    replicas: 4
+    events_per_task: 15625
+- id: native-confirmation-05
+  kind: native_confirmation
+  position_seed: 2026110305
+  bank: 6505
+  sampling:
+    design: 1024
+    design_file: unused-stream-confirmation-05_1024.json
+    replicas: 4
+    events_per_task: 15625
+- id: native-confirmation-06
+  kind: native_confirmation
+  position_seed: 2026110306
+  bank: 6506
+  sampling:
+    design: 1024
+    design_file: unused-stream-confirmation-06_1024.json
+    replicas: 4
+    events_per_task: 15625
+- id: native-confirmation-07
+  kind: native_confirmation
+  position_seed: 2026110307
+  bank: 6507
+  sampling:
+    design: 1024
+    design_file: unused-stream-confirmation-07_1024.json
+    replicas: 4
+    events_per_task: 15625
+- id: native-confirmation-08
+  kind: native_confirmation
+  position_seed: 2026110308
+  bank: 6508
+  sampling:
+    design: 1024
+    design_file: unused-stream-confirmation-08_1024.json
+    replicas: 4
+    events_per_task: 15625
+design_bounds:
+  topfilm_thickness:
+  - 0.075
+  - 0.1
+  bot_thickness:
+  - 1.0
+  - 10.0
+physical_constraints:
+  bottom_volume_per_area_um: 0.64
+  bottom_pitch_um: 250.0
+sampling_candidates:
+- name: Si-reference
+  materials:
+  - Si
+  - Nb
+  - Cu
+  values:
+    topfilm_thickness: 0.075
+    bot_thickness: 1.0
+    lattice_deg: 45.0
+- name: Si-corner-01
+  materials:
+  - Si
+  - Nb
+  - Cu
+  values:
+    topfilm_thickness: 0.075
+    bot_thickness: 10.0
+    lattice_deg: 45.0
+- name: Si-corner-02
+  materials:
+  - Si
+  - Nb
+  - Cu
+  values:
+    topfilm_thickness: 0.1
+    bot_thickness: 1.0
+    lattice_deg: 45.0
+- name: Si-corner-03
+  materials:
+  - Si
+  - Nb
+  - Cu
+  values:
+    topfilm_thickness: 0.1
+    bot_thickness: 10.0
+    lattice_deg: 45.0
+- name: GaAs-reference
+  materials:
+  - GaAs
+  - Nb
+  - Cu
+  values:
+    topfilm_thickness: 0.075
+    bot_thickness: 1.0
+    lattice_deg: 45.0
+- name: GaAs-corner-01
+  materials:
+  - GaAs
+  - Nb
+  - Cu
+  values:
+    topfilm_thickness: 0.075
+    bot_thickness: 10.0
+    lattice_deg: 45.0
+- name: GaAs-corner-02
+  materials:
+  - GaAs
+  - Nb
+  - Cu
+  values:
+    topfilm_thickness: 0.1
+    bot_thickness: 1.0
+    lattice_deg: 45.0
+- name: GaAs-corner-03
+  materials:
+  - GaAs
+  - Nb
+  - Cu
+  values:
+    topfilm_thickness: 0.1
+    bot_thickness: 10.0
+    lattice_deg: 45.0
+layout_pairs:
+- id: sampling-01
+  role: pilot
+  position_seeds:
+  - 2026103001
+  - 2026103002
+- id: sampling-02
+  role: pilot
+  position_seeds:
+  - 2026103003
+  - 2026103004
+- id: sampling-03
+  role: pilot
+  position_seeds:
+  - 2026103005
+  - 2026103006
+- id: sampling-04
+  role: pilot
+  position_seeds:
+  - 2026103007
+  - 2026103008
+- id: sampling-05
+  role: pilot
+  position_seeds:
+  - 2026103009
+  - 2026103010
+- id: sampling-06
+  role: pilot
+  position_seeds:
+  - 2026103011
+  - 2026103012
+- id: sampling-07
+  role: pilot
+  position_seeds:
+  - 2026103013
+  - 2026103014
+- id: sampling-08
+  role: pilot
+  position_seeds:
+  - 2026103015
+  - 2026103016
+- id: screen-101
+  role: search
+  position_seeds:
+  - 2026103101
+  - 2026103102
+- id: screen-202
+  role: search
+  position_seeds:
+  - 2026103103
+  - 2026103104
+- id: screen-303
+  role: search
+  position_seeds:
+  - 2026103105
+  - 2026103106
+- id: screen-404
+  role: search
+  position_seeds:
+  - 2026103107
+  - 2026103108
+- id: screen-505
+  role: search
+  position_seeds:
+  - 2026103109
+  - 2026103110
+- id: screen-606
+  role: search
+  position_seeds:
+  - 2026103111
+  - 2026103112
+sources:
+- title: Yelton etal, Phonon-mediated quasiparticle poisoning with Cu islands
+  url: https://doi.org/10.1103/PhysRevB.110.024519
+  use: 1 and 10 um Cu; 200 um islands and 50 um gaps. Fixed-volume variations are chosen geometries, not
+    measured samples.
+- title: Su etal, Nbqubit fabrication
+  url: https://doi.org/10.1088/1674-1056/ac11d7
+  use: 100 nm Nb fabrication.
+- title: Satrya etal, Thermal spectrometer for superconducting circuits
+  url: https://doi.org/10.1038/s41467-025-58919-8
+  use: 200 nm Nb fabrication.

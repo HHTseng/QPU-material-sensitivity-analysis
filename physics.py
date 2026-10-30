@@ -491,10 +491,31 @@ def prepare_values(study, candidate=None):
                ph_lifetime_ns=values['topfilm_ph_lifetime'],density_kg_m3=values['topfilm_density'])
     bottom.update(gap_threshold_eV=values['bot_gap_thres'],vsound_km_s=values['bot_vsound'],
                   ph_lifetime_ns=values['bot_ph_lifetime'],density_kg_m3=values['bot_density'])
+    for name,film in (('topfilm_thickness',top),('bot_thickness',bottom)):
+        if name in study.get('parameters',{}): film['thickness_um']=values[name]
+        else: values[name]=film['thickness_um']
     for film in (top,bottom):
         if film['qp_limit'] not in (2,3,4,5) or film['thickness_um']<=0:
             raise ValueError('film requires a safe QP limit and positive thickness')
     derived = validate_values(values,space,exact=True,films=(top,bottom))
+    constraints=space.get('constraints') or {}
+    if isinstance(constraints,dict) and 'bottom_volume_per_area_um' in constraints:
+        volume=constraints['bottom_volume_per_area_um']
+        pitch=constraints.get('bottom_pitch_um',fixed['electrode_island_um']+fixed['electrode_island_spacing_um'])
+        if any(isinstance(v,bool) or not isinstance(v,(int,float,np.number)) for v in (volume,pitch)):
+            raise ValueError('Cu volume and pitch must be finite physical numbers')
+        volume,pitch=float(volume),float(pitch)
+        coverage=volume/bottom['thickness_um']
+        if bottom['g4_material']!='G4_Cu' or not math.isfinite(volume) or not math.isfinite(pitch) or pitch<=0 or not 0<coverage<1:
+            raise ValueError('fixed Cu volume requires positive pitch and coverage strictly between zero and one')
+        # Complete square cells give V_Cu/A=t_b*(a/p)^2; lengths are um.
+        if any(not math.isclose(size*1000/pitch,round(size*1000/pitch),rel_tol=0,abs_tol=1e-9)
+               for size in (fixed['setSubWidth_mm'],fixed['setSubHeight_mm'])):
+            raise ValueError('Cu pitch must divide both chip dimensions for exact fixed volume')
+        width=pitch*math.sqrt(coverage)
+        fixed.update(electrode_island_um=width,electrode_island_spacing_um=pitch-width)
+        derived['bottom_pattern']={'pitch_um':pitch,'island_um':width,'spacing_um':pitch-width,
+            'coverage':coverage,'thickness_um':bottom['thickness_um'],'volume_per_area_um':volume}
     derived.update(g4_material_name=carrier,lattice_map_name=lattice,base_lattice_map=base,config_mode=mode,
                    point=values,config_source_sha256=record['sha256'])
     return {'values':values,'top_film':top,'bottom_film':bottom,'derived':derived,

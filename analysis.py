@@ -39,6 +39,32 @@ def prepare_counts(blocks, design=None):
         raise ValueError("area weights must sum to one")
     if ew.ndim != 1 or not ew.size or not np.isfinite(ew).all() or np.any(ew < 0) or not np.isclose(ew.sum(), 1., rtol=0., atol=1e-12):
         raise ValueError("electrode weights must be non-negative and sum to one")
+    layout_groups=[]
+    if 'position_layouts' in design or 'layout_sources' in design:
+        layouts=design.get('position_layouts'); sources=design.get('layout_sources')
+        if not isinstance(layouts,list) or len(layouts)!=len(labels) or any(not isinstance(v,str) or not v for v in layouts):
+            raise ValueError('one nonempty layout ID is required per position')
+        names=list(dict.fromkeys(layouts))
+        if not isinstance(sources,dict) or set(sources)!=set(names) or any(not isinstance(v,dict) for v in sources.values()):
+            raise ValueError('layout source records must match position layout IDs')
+        hashes=[sources[name].get('design_hash') for name in names]
+        seeds=[sources[name].get('position_seed') for name in names]
+        if any(not isinstance(v,str) or not v for v in hashes) or len(set(hashes))!=len(hashes):
+            raise ValueError('component layout hashes must be nonempty and distinct')
+        if any(isinstance(v,bool) or not isinstance(v,int) or v<0 for v in seeds) or len(set(seeds))!=len(seeds):
+            raise ValueError('component layouts require distinct integer position seeds')
+        sites=np.asarray(design.get('sites_mm',[]),dtype=float)
+        if sites.shape!=(len(labels),3) or not np.isfinite(sites).all() or len(np.unique(sites,axis=0))!=len(labels):
+            raise ValueError('component layouts require finite distinct source positions')
+        allocations=[]
+        for name in names:
+            positions=[i for i,v in enumerate(layouts) if v==name]
+            allocation={h:sum(labels[i]==h for i in positions) for h in weights}
+            if not all(allocation.values()): raise ValueError('each component layout must cover every source region')
+            allocations.append(allocation); layout_groups.append((name,positions))
+        # Equal n_h per layout makes the pooled integral their arithmetic mean.
+        if any(counts!=allocations[0] for counts in allocations):
+            raise ValueError('component layouts must use equal regional allocations')
     events, energy = design["events_per_task"], design["gun_energy_eV"]
     if not isinstance(events, (int, np.integer)) or events <= 0 or not math.isfinite(energy) or energy <= 0:
         raise ValueError("positive integer events and finite positive excitation required")
@@ -76,8 +102,10 @@ def prepare_counts(blocks, design=None):
         worst=counts.max(axis=2)/(events*energy)
     grouped={}
     for i,label in enumerate(labels): grouped.setdefault(label,[]).append(i)
-    return {'design':design,'totals':totals,'counts':counts,'weighted':weighted,'worst':worst,
-            'groups':[(label,positions,weights[label]) for label,positions in grouped.items()]}
+    out={'design':design,'totals':totals,'counts':counts,'weighted':weighted,'worst':worst,
+         'groups':[(label,positions,weights[label]) for label,positions in grouped.items()]}
+    if layout_groups: out['layouts']=layout_groups
+    return out
 
 
 def _tail_mean(pairs, probability=.05):
@@ -456,6 +484,42 @@ def compare_repeated(a, b, *, confidence=.95, relative_margin=.05, paired=False)
             'degrees_of_freedom':int(df) if paired else float(df) if np.isfinite(df) else None}
 
 
+def compare_seed_layouts(a, b, *, confidence=.95, relative_margin=.05):
+    """d[s,l]=J_a[s,l]/J_b[s,l]-1 for crossed search seeds s and layouts l.
+
+    SE^2=Var_s(mean_l d)/S+Var_l(mean_s d)/L; interaction enters twice.
+    This conservative approximation keeps shared layouts out of seed counts.
+    """
+    from scipy.stats import t
+    a,b=np.asarray(a,dtype=float),np.asarray(b,dtype=float)
+    if a.ndim!=2 or a.shape!=b.shape or min(a.shape)<2 or not np.isfinite(a).all() or not np.isfinite(b).all():
+        raise ValueError('matching finite seed-by-layout matrices with at least two seeds and layouts required')
+    if np.any(a<0) or np.any(b<=0):
+        raise ValueError('candidate responses must be nonnegative and relative-change references positive')
+    if not 0<confidence<1 or not math.isfinite(relative_margin) or relative_margin<=0:
+        raise ValueError('confidence must be in (0,1) and relative margin finite and positive')
+    with np.errstate(over='ignore',invalid='ignore'):
+        change=a/b-1
+    if not np.isfinite(change).all(): raise ValueError('relative response changes must remain finite')
+    n_seeds,n_layouts=change.shape
+    seed=compare_repeated(change.mean(axis=1)+1,np.ones(n_seeds),paired=True,
+                          confidence=confidence,relative_margin=relative_margin)
+    layout=compare_repeated(change.mean(axis=0)+1,np.ones(n_layouts),paired=True,
+                            confidence=confidence,relative_margin=relative_margin)
+    se=math.hypot(seed['standard_error'],layout['standard_error']); df=min(n_seeds-1,n_layouts-1)
+    mean=float(change.mean()); radius=float(t.ppf((1+confidence)/2,df)*se)
+    interval=[mean-radius,mean+radius]
+    return {'relative_change':mean,'seed_standard_error':seed['standard_error'],
+            'layout_standard_error':layout['standard_error'],'standard_error':se,
+            'confidence':confidence,'confidence_interval':interval,'degrees_of_freedom':df,
+            'n_seeds':n_seeds,'n_layouts':n_layouts,'equivalence_margin':relative_margin,
+            'meaningful_reduction_confirmed':interval[1]<=-relative_margin,
+            'equivalent_within_margin':interval[0]>-relative_margin and interval[1]<relative_margin,
+            'consistent_with_zero_difference':interval[0]<=0<=interval[1],
+            'conditional_seed':seed,'conditional_layout':layout,
+            'uncertainty_method':'Conservative crossed seed/layout Student-t approximation; shared interaction variance counted twice'}
+
+
 def transport_precision(by_replica, *, confidence=.95):
     """Conditional transport precision: SE(J)=sd(J_r)/sqrt(R), with fixed sites.
 
@@ -478,11 +542,13 @@ def transport_precision(by_replica, *, confidence=.95):
 
 def analysis_design(study):
     design=study['design']; sampling=study['sampling']
-    return {'position_strata':design['stratum'],'stratum_weights':design['stratum_weights'],
-            'replica_ids':list(range(sampling['replicas'])),'events_per_task':sampling['events_per_task'],
-            'gun_energy_eV':study['fixed']['gun_energy_eV'],'electrode_weights':design['electrode_weights'],
-            'design_hash':design['design_hash'],'injection_law':design.get('injection_law','uniform_surface'),
-            'sites_mm':design['sites_mm']}
+    out={'position_strata':design['stratum'],'stratum_weights':design['stratum_weights'],
+         'replica_ids':list(range(sampling['replicas'])),'events_per_task':sampling['events_per_task'],
+         'gun_energy_eV':study['fixed']['gun_energy_eV'],'electrode_weights':design['electrode_weights'],
+         'design_hash':design['design_hash'],'injection_law':design.get('injection_law','uniform_surface'),
+         'sites_mm':design['sites_mm']}
+    out.update({key:design[key] for key in ('position_layouts','layout_sources') if key in design})
+    return out
 
 
 def score_output(result, prepared, task, *, time_resolved=False, score_hash=None):
@@ -772,6 +838,18 @@ def summarize(blocks, design=None, *, objective='device_junction_qps_per_eV', di
             'n_sites':len(per_site),'n_replicas':burden.shape[1],'events_per_task':events,'design_hash':design['design_hash'],
             'by_replica':np.sum([weight*matrix.mean(axis=0) for _,_,weight,matrix in regions],axis=0).tolist(),
             'units':'weighted_junction_QPs_per_injected_eV'}
+    if data.get('layouts'):
+        estimates=[]
+        for name,positions in data['layouts']:
+            by_replica=np.zeros(burden.shape[1])
+            for label,_,weight,_ in regions:
+                selected=[i for i in positions if design['position_strata'][i]==label]
+                by_replica+=weight*burden[selected].mean(axis=0)
+            estimates.append({'layout_id':name,'n_sites':len(positions),'value':float(by_replica.mean()),
+                'by_replica':by_replica.tolist(),
+                'transport_standard_error':float(by_replica.std(ddof=1)/math.sqrt(len(by_replica))) if len(by_replica)>1 else None})
+        output['layout_estimates']=estimates
+        output['layout_standard_error']=float(np.std([r['value'] for r in estimates],ddof=1)/math.sqrt(len(estimates))) if len(estimates)>1 else None
     if diagnostics:
         worst=data['worst']; per_site=worst.mean(axis=1)
         output['spatial_r95']=_tail_mean([(per_site[i],weight/len(positions)) for _,positions,weight,_ in regions for i in positions])
