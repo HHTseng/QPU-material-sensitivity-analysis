@@ -39,6 +39,20 @@ class RecordsTests(unittest.TestCase):
         self.database.close()
         self.directory.cleanup()
 
+    def test_public_summary_keeps_estimates_and_archives_without_site_arrays(self):
+        estimate={'value':.0023,'standard_error':.00001,'confidence_interval_95':[.0022,.0024]}
+        row={'name':'Si','status':'complete','estimate':estimate,'blocks':np.ones((4,1024,17))}
+        original={'studies':{'measured':{'results':[row], 'archive':{'sha256':'abc','verified':True}}},
+                  'comparisons':[{'difference':-.0001,'confidence_interval':[-.0002,.00002]}]}
+        compact=records.public_summary(original)
+        records.write_json(self.root/'public.json',compact)
+        saved=records.load_document(self.root/'public.json')
+        self.assertEqual(saved['studies']['measured']['results'][0]['estimate'],estimate)
+        self.assertEqual(saved['comparisons'],original['comparisons'])
+        self.assertEqual(saved['studies']['measured']['archive'],original['studies']['measured']['archive'])
+        self.assertEqual(original['studies']['measured']['results'][0]['blocks'].shape,(4,1024,17))
+        self.assertLess((self.root/'public.json').stat().st_size,1000)
+
     def test_exact_task_set_and_conflicting_declarations(self):
         self.database.plan("example", "candidate", {"x": 1}, [{"task_id": "a"}, {"task_id": "b"}])
         with self.assertRaises(ValueError):
@@ -2252,7 +2266,7 @@ class QueueTests(unittest.TestCase):
             if step['kind']=='focused': chosen=names[:6]
             elif step['kind']=='native_confirmation':chosen=names
             else:
-                reports[step['id']]={'complete':True,'results':[],'timing':{'total_s':1},
+                reports[step['id']]={'complete':True,'results':[{'name':'measured','value':1.,'blocks':[[1.]*1024]}],'timing':{'total_s':1},
                     'search_counts':{'target_reached':True,'measured':16,'target':16}}
                 continue
             rows=[]
@@ -2274,6 +2288,8 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(stopped.exception.code,0)
         result=records.load_document(self.root/'docs/results/native_optimization.json')
         self.assertEqual(result['method_comparison']['Si']['complete_matched_seeds'],[101,202])
+        self.assertNotIn('blocks',result['studies']['bo-Si-101']['results'][0])
+        self.assertEqual(result['studies']['bo-Si-101']['results'][0]['value'],1.)
         self.assertEqual(result['method_comparison']['Si']['bo_minus_sobol']['n_new'],2)
         self.assertEqual(result['method_comparison']['Ge']['bo_minus_sobol']['n_new'],3)
         self.assertEqual(len(result['benchmark_contrasts']),5)

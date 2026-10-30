@@ -228,6 +228,8 @@ files=publication['files']
 if any(Path(name).is_absolute() or '..' in Path(name).parts or not
        (name=='README.md' or name.startswith('docs/results/') or name.startswith('figures/') and name.endswith('.png')) for name in files):
     raise ValueError('publication paths must be declared public scientific outputs')
+if any(Path(name).stat().st_size >= 100*1024**2 for name in files):
+    raise ValueError('public report exceeds 100 MiB; keep per-site blocks in verified archives')
 subprocess.run(['git','add','--force','--',*files],check=True)
 if subprocess.run(['git','diff','--cached','--quiet','--',*files]).returncode:
     subprocess.run(['git','commit','--only','-m',publication.get('commit_message','Report fresh full-scale material studies'),'--',*files],check=True)
@@ -1317,7 +1319,7 @@ elif mode=='finish':
         if subprocess.check_output(['git','branch','--show-current'],cwd=repo,text=True).strip()!=publication['branch'] or subprocess.check_output(['git','remote','get-url','origin'],cwd=repo,text=True).strip()!=publication['remote']:
             raise ValueError('publication branch or remote changed; retained results were not published')
         public=repo/'docs/results';public.mkdir(parents=True,exist_ok=True)
-        records.write_json(public/'spatial_2048.json',result,overwrite=True)
+        records.write_json(public/'spatial_2048.json',records.public_summary(result),overwrite=True)
         plotted=[{'name':r['candidate'],'value':r['spatial_difference']['difference'],'standard_error':r['spatial_difference']['standard_error']}
                  for r in contrasts]
         analysis.plot_result({'results':plotted,'yield_label':'2048 minus nested 1024; weighted junction QPs / injected eV',
@@ -1385,7 +1387,7 @@ elif mode=='finish':
         if subprocess.check_output(['git','branch','--show-current'],cwd=repo,text=True).strip()!=publication['branch'] or subprocess.check_output(['git','remote','get-url','origin'],cwd=repo,text=True).strip()!=publication['remote']:
             raise ValueError('publication branch or remote changed; retained results were not published')
         public=repo/'docs/results';public.mkdir(parents=True,exist_ok=True)
-        records.write_json(public/'native_optimization.json',result,overwrite=True)
+        records.write_json(public/'native_optimization.json',records.public_summary(result),overwrite=True)
         plotted=[{'name':material+': '+method,'value':data['mean_value'],
                   'standard_error':float(np.std([r['value'] for r in data['by_seed']],ddof=1)/math.sqrt(len(data['by_seed'])))}
                  for material,comparison in comparisons.items() for method,data in comparison['methods'].items()]

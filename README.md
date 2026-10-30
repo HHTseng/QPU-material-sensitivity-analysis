@@ -159,128 +159,51 @@ Finished 2026-10-27. Eight unused 1,024-position layouts compare 0° with 45° a
 <!-- focused-end -->
 
 <!-- native-start -->
-## Native-material orientation study: October 28
+## Native-material orientation optimization
 
-The [new study](studies/native/queue.yaml) applies the measured sampling results
-before further optimization. Its three parts use a single evaluator and stay
-within **1,024 source positions**:
+Finished 2026-10-30. Density, elasticity and phonon rates remained coupled to each native material.
 
-1. Compare native Si, Ge and GaAs with Nb/Cu at 0° and 45° on eight new layouts.
-2. For each substrate and three search seeds, give BO and Sobol the same twelve
-   measured starts and sixteen additional responses per method. Vary only crystal
-   orientation; native density, elasticity, phonon rates and film inputs stay fixed.
-3. Confirm the starting winners, optimizer leaders and fixed 0°/45° controls on
-   four unused layouts. Confirmation observations stay out of search and selection.
+| Material | Method | Confirmed J | Mean added reduction |
+|---|---|---:|---:|
+| Si | bo | 0.002373211 | 1.03% |
+| Si | sobol | 0.002395953 | 0.08% |
+| Ge | bo | 0.002582101 | 0.11% |
+| Ge | sobol | 0.002594012 | -0.35% |
+| GaAs | bo | 0.002348169 | -1.59% |
+| GaAs | sobol | 0.002337082 | -1.12% |
 
-The orientation variables are $c\in[-1,1]$, $a\in[0,1]$ and
-$\phi\in[0,359]$ degrees. The surface normal in crystal coordinates is
 
-$$
-n(c,a)=\left(\sqrt{1-c^2}\cos(2\pi a),\sqrt{1-c^2}\sin(2\pi a),c\right).
-$$
+![Confirmed orientation search](figures/native_optimization.png)
 
-Here $\phi$ is rotation about that normal. The upper limit avoids repeating the
-360° endpoint and approximates the full in-plane range to one degree.
-The GP uses a spherical distance for the normal. The twelve starts comprise
-(001), (110) and (111) normals at 0°/45°, plus six seeded Sobol orientations.
-Three optimizer seeds support an exploratory comparison, not a global-minimum claim.
+BO did not establish an added improvement over Sobol or the shared starting designs. The fixed native 0°/45° pairs agree within 5%; the earlier 30.22% rotation benefit applies to the specified property target. At 0°, Ge gives **8.79% higher response than Si** (adjusted interval **5.66-11.92%**), while GaAs and Si agree within 5%. These conclusions apply to this Nb/Cu stack and source model.
 
-The region area fractions remain unchanged. Counts change as follows:
-
-| Source region | Previous 1,024 | New 1,024 | Search 512 |
-|---|---:|---:|---:|
-| Junction rectangles | 136 | 34 | 17 |
-| Within 0.05 mm | 128 | 512 | 256 |
-| 0.05–0.20 mm | 256 | 102 | 51 |
-| 0.20–0.50 mm | 256 | 170 | 85 |
-| Remaining source area | 248 | 206 | 103 |
-
-The allocation was fixed from the previous eight layouts. A regional variance
-approximation predicts approximately half the position error for Ge/GaAs.
-New orientations can change that estimate. Each position uses four realizations, with
-31,250 primaries per task: fewer primaries increase conditional transport
-error, which remains measured separately. A balanced half-layout comparison
-uses the first half of positions within each region, chosen before examining
-new responses. It diagnoses 512/1,024 agreement without extra transport and does
-not establish convergence throughout the orientation domain.
-
-| Resource | Allocation or estimate |
-|---|---|
-| Studies | 39 sequential stages |
-| Complete primary counts | At most **48.384 billion**, before confirmation deduplication and failed attempts |
-| Workers | **86**, inside the 96-CPU total limit; eight CPUs remain reserved for the model service |
-| GPUs | **0** |
-| Host memory | **64 GiB** combined limit, 2 GiB per task, 16 GiB host reserve |
-| Additional working storage | Approximately **35–55 GiB**, plus a 20 GiB free-disk reserve |
-| Elapsed time | **36–60 h after launch**, depending on orientation-dependent transport and archive checks |
-
-The run is `native_orientation_20261028_full`, launched on **October 28**.
-Expected completion is **October 30–31 EDT**, conditional on uninterrupted execution.
-[Launch verification](verification/native_orientation_launch_20261028.json) records
-source hashes, fresh layouts, physical identities, tests and execution checks.
-Expected outcomes include a native
-rotation response, measured precision after reallocation, and BO's added gain
-against the same starting data and Sobol. A 30% gain in the calibrated target
-does not predict the gain in Si, Ge or GaAs. BO may add little beyond the starting
-orientations; all outcomes and incomplete searches remain visible.
-
-```bash
-bash run_all.sh status material_scan_data/native_orientation_20261028_full
-tmux -L material-scan attach -t native_orientation_20261028_full
-```
+[Measured results and scientific limits](docs/results/native_optimization.md).
 <!-- native-end -->
 
 <!-- spatial-start -->
 ## Limited 2,048-site verification
 
-The owner authorized this limited extension on October 28. The
-[verification inputs](studies/native/verification_2048.yaml) fix the first four
-native benchmark layouts and all six Si/Ge/GaAs–Nb–Cu cases at 0°/45°.
-Each new layout retains all 1,024 reference positions, appends 1,024 positions,
-and preserves the area fractions and source streams. Region counts become
-$[68,1024,204,340,412]$. The main optimizer study retains its 1,024-site limit.
+Finished 2026-10-30. Four nested layouts verified six native material/rotation cases at equal total primary count.
 
-The new runs use four realizations and 15,625 primaries per task, giving
-**3.072 billion additional primaries in 196,608 tasks**. Each design/layout has
-the same total primaries as its retained 1,024-site reference at 31,250 primaries
-per task. None of the earlier measurements is replaced.
+| Candidate | Spatial response change | Simultaneous interval | Equivalent within 5% |
+|---|---:|---:|---|
+| Si-45deg | -0.54% | [-5.46%, +4.38%] | False |
+| Si-0deg | -0.37% | [-9.31%, +8.57%] | False |
+| Ge-45deg | -1.03% | [-7.37%, +5.31%] | False |
+| Ge-0deg | -0.82% | [-4.69%, +3.05%] | True |
+| GaAs-45deg | -0.37% | [-5.25%, +4.50%] | False |
+| GaAs-0deg | -0.90% | [-9.49%, +7.69%] | False |
 
-The analysis separates three questions:
+![Spatial resolution contrasts](figures/spatial_2048.png)
 
-1. **Spatial resolution:** compare all 2,048 positions with the balanced
-   1,024-position subset of the new outputs. Both use 15,625 primaries per task.
-   Six paired layout-ratio intervals have Bonferroni family error 0.05.
-   Agreement within 5% requires the entire interval inside ±5%.
-2. **Equal total primaries:** compare the full 2,048-site response with the
-   retained 1,024-site response, which used twice the primaries per position.
-3. **Primary count:** compare the new 1,024-position subset with the retained
-   response at those same positions. The latter two diagnostics have descriptive
-   paired 95% intervals and do not define the spatial agreement criterion.
+All six spatial intervals include zero. Only Ge at 0° establishes agreement within 5%; the remaining cases are unresolved with four layouts. Halving primaries at fixed positions changed means by less than 0.65%, with descriptive individual 95% intervals inside approximately ±2.4%. Keep the main studies at 1,024 sites and test more independent layouts at lower per-position primary count before increasing all site counts.
 
-Four layouts give limited precision. Failure to establish agreement can reflect
-wide intervals; it does not by itself establish a physical change. The checks
-cover these six fixed cases, rather than the entire orientation search domain.
-
-The queue is `spatial_2048_20261028`. The
-[verification record](verification/spatial_2048_launch_20261028.json) retains
-input checks, tests, source hashes and timing estimates. It waits for
-`native_orientation_20261028_full` to release its queue lock, then holds that
-lock throughout verification. This keeps the two transport pools sequential.
-The verification uses **86 workers**, **no GPUs**, the **64 GiB** combined memory
-limit, and approximately **12–20 GiB** additional working storage plus the 20 GiB
-free-disk reserve.
-
-Expected active runtime is **3–6 hours**, added after the native study's remaining
-work. The estimated combined finish is **October 30–31 EDT**. This includes
-variable transport and archive checks; interruption or resource waits can extend it.
-The [allocation and timing analysis](verification/site_allocation_20261028.json)
-explains the expected precision and process overhead at fixed total primaries.
-
-```bash
-bash run_all.sh status material_scan_data/spatial_2048_20261028
-tmux -L material-scan attach -t spatial_2048_20261028
-```
+[Spatial and transport comparisons, uncertainty and archives](docs/results/spatial_2048.md).
 <!-- spatial-end -->
+
+## Next physical optimization
+
+Orientation alone has not produced a reliable new gain for these native materials. The next comparison should vary film or interface properties within measured physical bounds, retaining each substrate's coupled properties. Give BO and Sobol common starting data and equal new measurements; confirm selected designs on unused layouts. A useful sampling test is two independent 512-position layouts at 15,625 primaries instead of one at 31,250: both use 64 million primaries per response, with different task overhead. Earlier LLM searches showed no added gain; further GPU inference is not the current priority.
 
 ## Calculation and execution
 

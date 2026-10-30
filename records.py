@@ -52,6 +52,15 @@ def content_hash(value):
     return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
 
 
+def public_summary(value):
+    """Keep estimates and archive identities; per-site blocks stay in archives."""
+    if isinstance(value, dict):
+        return {key: public_summary(item) for key, item in value.items() if key != 'blocks'}
+    if isinstance(value, list):
+        return [public_summary(item) for item in value]
+    return value
+
+
 def sha256_file(path):
     digest = hashlib.sha256()
     with open(path, "rb") as handle:
