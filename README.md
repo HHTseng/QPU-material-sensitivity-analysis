@@ -204,7 +204,10 @@ All six spatial intervals include zero. Only Ge at 0° establishes agreement wit
 <!-- film-start -->
 ## Native film design and matched optimization
 
-The new study is running in tmux, started **2026-10-30 at 16:35 EDT**. It varies Nb thickness
+The study resumed in tmux on **2026-11-02 at 10:58 EST**, using a new frozen
+source after correcting the BO candidate-set spacing. All **17 completed
+studies and 8.960 billion primaries** from the first run are retained; the
+original source and measurements remain unchanged. It varies Nb thickness
 from **75 to 100 nm** and Cu thickness from **1 to 10 micrometres**, keeping
 Cu volume fixed while its island coverage changes. Native Si/GaAs and Nb/Cu
 material properties remain coupled.
@@ -217,12 +220,14 @@ requires an adjusted interval entirely beyond **5% reduction**, accounting for
 both search-seed and position-layout variation.
 
 The upper count is **76.8 billion primaries** before combining identical selected
-designs. Expected elapsed time is **72-120 hours**, approximately **November 2-4 EST**, using 86 workers and no GPUs.
+designs. At restart, at most **67.840 billion primaries remained**. Measured throughput gives
+approximately **4-5 days from the restart**, or **November 6-7 EST**, using
+86 workers and no GPUs. The original November 2-4 estimate no longer applies.
 Raw work is on the data disk; each archive has a second verified copy on the
 independent home filesystem. Completed historical measurements remain unchanged.
 
 [Physical inputs, equations, comparisons and limitations](docs/film_study.md);
-[validated launch and completion estimate](verification/film_design_launch_20261030.json).
+[restart checks and completion estimate](verification/film_resume_20261102.json).
 <!-- film-end -->
 
 ## Calculation and execution

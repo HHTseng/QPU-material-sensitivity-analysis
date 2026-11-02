@@ -522,19 +522,32 @@ if mode=='reuse':
     for name in ('scan.py','physics.py','analysis.py','records.py','parameters.yaml'):
         if old_source['source_sha256'][name]!=new_source['source_sha256'][name]:
             raise ValueError('physical evaluation changed; cannot reuse measurements: '+name)
-    immutable=lambda name: name.startswith(('bin/','lib/','CrystalMaps/','geant4-data/','legacy/')) or name in ('studies/reference.yaml',cfg['calibration_file'])
+    immutable=lambda name: name.startswith(('bin/','lib/','CrystalMaps/','geant4-data/','legacy/')) or name in ('studies/reference.yaml',cfg.get('calibration_file'))
     old_inputs={name:digest for name,digest in old_source['files_sha256'].items() if immutable(name)}
     new_inputs={name:digest for name,digest in new_source['files_sha256'].items() if immutable(name)}
     if old_inputs!=new_inputs: raise ValueError('transport executable, libraries, maps or physical input records changed')
+    optimizer_options_changed=False
+    if (previous/'queue-config.json').is_file():
+        old_config=records.load_document(previous/'queue-config.json')['relative_path']
+        old_config=records.load_document(previous/'source'/old_config)
+        mutable={'id','description','expected_work','execution','optimizer_options'}
+        if {k:v for k,v in old_config.items() if k not in mutable}!={k:v for k,v in cfg.items() if k not in mutable}:
+            raise ValueError('scientific study settings changed; cannot reuse measurements')
+        optimizer_options_changed=old_config.get('optimizer_options')!=cfg.get('optimizer_options')
     for n in defaults['design_counts']:
         if records.sha256_file(previous/'designs'/f'stratified_{n}.json')!=records.sha256_file(run/'designs'/f'stratified_{n}.json'):
             raise ValueError('source positions or weights changed')
+    old_designs={str(p.relative_to(previous/'designs')):records.sha256_file(p) for p in (previous/'designs').rglob('*.json')}
+    new_designs={str(p.relative_to(run/'designs')):records.sha256_file(p) for p in (run/'designs').rglob('*.json')}
+    if old_designs!=new_designs: raise ValueError('source positions or weights changed in a recorded layout')
+    optimizer_changed=optimizer_options_changed or old_source['source_sha256'].get('search.py')!=new_source['source_sha256'].get('search.py')
     old_queue={step['id']:step for step in json.loads((previous/'queue.json').read_text())}
     copied=[]; omitted=[]
     for step in queue:
         identifier=step['id']; path=previous/'studies'/identifier/'summary.json'
         ai=step.get('method','').startswith('llm_') or identifier.startswith('drift-llm_')
-        if ai or old_queue.get(identifier)!=step or not path.is_file():
+        changed_search=optimizer_changed and step['kind'] in ('search','optimization_search','native_search')
+        if ai or changed_search or old_queue.get(identifier)!=step or not path.is_file():
             omitted.append(identifier); continue
         report=records.load_document(path)
         if not report.get('complete') or not report.get('archive',{}).get('verified'):
@@ -560,6 +573,7 @@ if mode=='reuse':
         elif original.is_file(): shutil.copy2(original,run/name)
     records.write_json(run/'reuse.json',{'previous_run':str(previous),'retained':copied,'not_reused':omitted,
         'ai_protocol':'All AI stages repeat from their shared starts under protocol 4; earlier partial and complete AI records remain untouched.',
+        'optimizer_source_changed':optimizer_changed,'changed_optimizer_searches_repeated':True,
         'physical_code_unchanged':True,'position_files_unchanged':True,'created':time.time()},overwrite=True)
     raise SystemExit(0)
 if mode in ('check','prepare'):

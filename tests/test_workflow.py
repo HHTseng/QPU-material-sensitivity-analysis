@@ -2128,6 +2128,79 @@ class QueueTests(unittest.TestCase):
                 self.assertEqual(records.content_hash(selected),before)
                 self.assertNotEqual(study['design']['design_hash'],first_hash)
 
+    def test_film_gp_uses_dense_trial_points_and_resumes_pending_proposals(self):
+        from unittest.mock import patch
+        import search
+        cfg,limits=self.film_inputs()
+        step=next(s for s in cfg['studies'] if s['id']=='native-initial-Si-101')
+        ns=self.queue_python('base_study',scope='stage',
+            branch="native_search and step['kind'] in ('native_initial', 'native_search')",
+            cfg=cfg,defaults=cfg['defaults'],source=ROOT,run=self.root,limits=limits,
+            native_search=True,film_search=True,step=step,identifier=step['id'])
+        study=scan.load_study(ns['raw']);space=study['space']
+        # Recorded Si seed-101 starts: t_Nb [um], t_Cu [um], J [QPs/eV], transport SE.
+        measured=np.array([
+            (.075,1.,.0024039433143647963,3.222548057781199e-5),
+            (.075,10.,.009234855259270508,8.144638831202302e-5),
+            (.1,1.,.0024431897811009753,3.267047725411473e-5),
+            (.1,10.,.009092330828140578,5.623736383503845e-5),
+            (.09505250646232813,4.485991594508265,.004872170002888185,.00012186943340714787),
+            (.08272528533245399,1.353843047903578,.0026485929734772966,2.8136127157711708e-5),
+            (.07888179147906607,9.216467277179769,.008657889786232345,3.248573228396355e-5),
+            (.0906871198406234,2.7791253660720394,.003717650887775717,6.726555853795496e-5),
+            (.08787820652081862,5.684502298709844,.005994992812348085,3.510575616429131e-5),
+            (.07575384295256864,1.8851956245412367,.0030849779229789247,3.860997918084397e-6),
+            (.08536921167564372,3.6927736397233892,.004501640111575887,6.541762018446063e-5),
+            (.09897677277640858,1.2236309483920498,.0026529122684202347,5.374890595102268e-5)])
+        observations=[]
+        for point,(top,bottom,value,error) in zip(ns['raw']['candidates'],measured):
+            prepared=physics.prepare_values(study,point)
+            np.testing.assert_allclose([prepared['values']['topfilm_thickness'],prepared['values']['bot_thickness']],
+                                       [top,bottom],rtol=1e-13)
+            observations.append({'values':prepared['values'],'value':value,'transport_standard_error':error})
+        state=search.new_state('bo_gp',seed=101,options=cfg['optimizer_options'])
+        search.import_observations(state,space,observations)
+        starts=np.array(state['U']);points=search.propose('bo_gp',state,space,2)
+        self.assertEqual(state['last_pool']['total'],4104)
+        self.assertEqual(state['last_pool']['ordinary'],4096)
+        self.assertEqual(state['pending_ids'],[12,13])
+        search.update('bo_gp',state,points[0],.0024,1e-5,proposal_id=12)
+        restored=search.load_state(json.loads(json.dumps(search.save_state(state))))
+        with patch.object(search.GaussianProcess,'fit',side_effect=AssertionError('unneeded GP refit')):
+            continued=search.propose('bo_gp',state,space,2)
+            self.assertEqual(continued,search.propose('bo_gp',restored,space,2))
+        self.assertEqual(search.save_state(state),search.save_state(restored))
+        self.assertEqual(state['pending_ids'],[13,14,15])
+        older=search.save_state(state);older['state']['algorithm_version']=3
+        with self.assertRaisesRegex(ValueError,'older GP/LLM checkpoints'):
+            search.propose('bo_gp',search.load_state(older),space)
+        selected=[]
+        for point in [*points,*continued]:
+            u=search.to_unit(point,space)
+            self.assertGreaterEqual(np.max(np.abs(starts-u),axis=1).min(),.03)
+            if selected:self.assertGreaterEqual(np.max(np.abs(np.array(selected)-u),axis=1).min(),.03)
+            physics.prepare_values(study,{'values':point});selected.append(u)
+
+    def test_llm_gp_additions_can_be_near_unmeasured_trial_points(self):
+        from unittest.mock import patch
+        import search
+        cfg=records.load_document(ROOT/'studies/films/queue.yaml')
+        table=records.load_document(ROOT/'parameters.yaml')['parameters']
+        space=physics.search_space({name:{'mode':'search','bounds':bounds}
+            for name,bounds in cfg['design_bounds'].items()},kind='fixed',table=table)
+        state=search.new_state('llm_bo',seed=101,options=cfg['optimizer_options'])
+        initial=search.propose('llm_bo',state,space,12)
+        for point in initial:
+            u=search.to_unit(point,space)
+            search.update('llm_bo',state,point,.002+float(np.sum((u-.4)**2))*.001,1e-5)
+        offered=search.from_unit(np.array([.5,.5]),space)
+        self.assertFalse(search._duplicate(offered,state,space))
+        with patch.object(search,'ollama_proposals',return_value=[offered]):
+            search.propose('llm_bo',state,space)
+        self.assertEqual(state['last_pool']['llm'],1)
+        self.assertEqual(state['last_pool']['total'],4104)
+        self.assertEqual(state['last_pool']['ordinary'],4096)
+
     def test_film_final_report_keeps_seed_layout_errors_zeros_and_partial_arms(self):
         from unittest.mock import patch
         cfg,limits=self.film_inputs();steps=cfg['studies']
@@ -2753,6 +2826,71 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(set(retained['not_reused']),{'llm_proposals-101','bo-202'})
         self.assertEqual(records.load_document(restarted/'studies/bo-101/summary.json')['archive']['path'],receipt['path'])
         self.assertFalse((restarted/'studies/llm_proposals-101').exists())
+        self.assertEqual(records.inventory(previous),before)
+
+    def test_film_restart_preserves_inputs_and_repeats_changed_optimizer_searches(self):
+        from unittest.mock import patch
+        previous=self.root/'previous-film';restarted=self.root/'restarted-film'
+        queue=[{'id':'sampling-01-single','kind':'film_sampling'},
+               {'id':'native-initial-Si-101','kind':'native_initial'},
+               {'id':'bo-Si-101','kind':'native_search','method':'bo'}]
+        cfg={'schema':'material-scan-film-optimization-1','id':'film-fixture',
+             'defaults':{'temperature_K':.02,'design_counts':[2]},
+             'optimizer_options':{'n_candidates':4096},'execution':{'workers':2}}
+        snapshot={'source_sha256':{name:'same-code' for name in
+            ('scan.py','physics.py','analysis.py','records.py','parameters.yaml','search.py')},
+            'files_sha256':{'bin/Main':'same-transport','lib/libG4CMP.so':'same-library',
+                            'CrystalMaps/Si/config.txt':'same-lattice','studies/reference.yaml':'same-reference'}}
+        relative='studies/films/queue.yaml'
+        for run in (previous,restarted):
+            records.write_json(run/'source-ready.json',snapshot)
+            records.write_json(run/'queue-config.json',{'relative_path':relative})
+            records.write_json(run/'source'/relative,cfg)
+            for name in ('stratified_2.json','screen-101-paired.json'):
+                records.write_json(run/'designs'/name,{'sites_mm':[[0,0,0],[1,1,0]]})
+        records.write_json(previous/'queue.json',queue)
+        for step in queue:
+            output=previous/'studies'/step['id']
+            report={'complete':True,'results':[{'status':'complete','value':.002,'candidate_id':step['id']}]}
+            records.write_json(output/'summary.json',report)
+            receipt=records.create_archive(output,None,previous/'archives'/(step['id']+'.tar.gz'),include_manifest=False)
+            independent=previous/'second'/(step['id']+'.tar.gz');independent.parent.mkdir(exist_ok=True)
+            shutil.copy2(receipt['path'],independent)
+            receipt.update(independent_copy=str(independent),independent_copy_verified=True,
+                summary_content_hash=records.content_hash(report))
+            records.write_json(output/'summary.json',{**report,'archive':receipt},overwrite=True)
+        records.write_json(previous/'initial-observations/native-initial-Si-101.json',{'observations':[{'value':.002}]})
+        changed=copy.deepcopy(snapshot);changed['source_sha256']['search.py']='corrected-pool'
+        records.write_json(restarted/'source-ready.json',changed,overwrite=True)
+        before=records.inventory(previous)
+        def reuse(current):
+            return self.queue_python('verify_saved_archive',scope='reuse',start='previous =',
+                run=restarted,source=restarted/'source',queue=queue,defaults=cfg['defaults'],cfg=current)
+        with patch.object(sys,'argv',['-',str(previous)]):
+            modified=copy.deepcopy(cfg);modified['defaults']['temperature_K']=.03
+            with self.assertRaisesRegex(ValueError,'scientific study settings'):
+                reuse(modified)
+            custom=restarted/'designs/screen-101-paired.json'
+            records.write_json(custom,{'sites_mm':[[0,0,0],[2,1,0]]},overwrite=True)
+            with self.assertRaisesRegex(ValueError,'source positions or weights'):
+                reuse(cfg)
+            custom.unlink()
+            with self.assertRaisesRegex(ValueError,'source positions or weights'):
+                reuse(cfg)
+            shutil.copy2(previous/'designs/screen-101-paired.json',custom)
+            with self.assertRaises(SystemExit) as stopped:reuse(cfg)
+            self.assertEqual(stopped.exception.code,0)
+            records.write_json(restarted/'source-ready.json',snapshot,overwrite=True)
+            changed_options=copy.deepcopy(cfg);changed_options['optimizer_options']['n_candidates']=2048
+            with self.assertRaises(SystemExit) as stopped:reuse(changed_options)
+            self.assertEqual(stopped.exception.code,0)
+        receipt=records.load_document(restarted/'reuse.json')
+        self.assertEqual([r['id'] for r in receipt['retained']],['sampling-01-single','native-initial-Si-101'])
+        self.assertEqual(receipt['not_reused'],['bo-Si-101'])
+        self.assertTrue(receipt['optimizer_source_changed'])
+        self.assertFalse((restarted/'studies/bo-Si-101').exists())
+        self.assertEqual(records.load_document(restarted/'initial-observations/native-initial-Si-101.json'),
+                         {'observations':[{'value':.002}]})
         self.assertEqual(records.inventory(previous),before)
 
     def test_queue_memory_guard_includes_only_the_identified_llm_service(self):

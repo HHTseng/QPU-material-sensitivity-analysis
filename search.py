@@ -300,7 +300,7 @@ def new_state(method, seed=0, options=None):
             'SIG': [], 'points': [], 'values': [], 'se': [], 'pending': [],
             'pending_ids': [], 'observation_ids': [], 'proposal_units': [], 'next_proposal_id': 0,
             'rejected': [], 'proposals': {}, 'used': {}, 'sobol_draws': 0,
-            'design_cursor': 0, 'gp_fits': 0, 'algorithm_version': 3,
+            'design_cursor': 0, 'gp_fits': 0, 'algorithm_version': 4,
             'attempts': [], 'initial_count': 0, 'gp_pool_round': 0,
             'llm_protocol_version': 4}
 
@@ -427,15 +427,18 @@ def _tag(state, space, point, source, **details):
     return point
 
 
-def _feasible_pool(U, space, excluded, minimum_distance=1e-6):
-    """Remove invalid and repeated normalized vectors with bounded array work."""
+def _feasible_pool(U, space, excluded, minimum_distance=1e-6, *, pool=()):
+    """Separate proposals from measured/pending u; only deduplicate trial u."""
     U = np.asarray([u for u in U if _feasible(from_unit(u, space), space)])
     if not U.size:
         return np.empty((0, len(space['names'])))
     if len(excluded):
         distance, _ = cKDTree(np.asarray(excluded)).query(U, p=np.inf)
         U = U[distance >= minimum_distance]
-    repeated = {j for _, j in cKDTree(U).query_pairs(minimum_distance, p=np.inf)}
+    if len(pool):
+        distance, _ = cKDTree(np.asarray(pool)).query(U, p=np.inf)
+        U = U[distance >= 1e-6]
+    repeated = {j for _, j in cKDTree(U).query_pairs(1e-6, p=np.inf)}
     return U[[i for i in range(len(U)) if i not in repeated]]
 
 
@@ -537,21 +540,21 @@ def _gp_points(state, space, count, pool=None):
             if attempts > 1000:
                 raise RuntimeError('could not fill the feasible GP pool')
             fill = _feasible_pool(local_rng.random((2 * (n - len(U)), d)), space,
-                                  np.vstack([observed, U]), minimum_distance)
+                                  observed, minimum_distance, pool=U)
             U = np.vstack([U, fill[:n - len(U)]])
         sources = ['ordinary'] * n
         n_model = 0
         for point in additional:
             u = to_unit(point, space)
             if (n_model < extra and _feasible(point, space) and not _duplicate(point, state, space, out)
-                    and not np.any(np.max(np.abs(U - u), axis=1) < minimum_distance)):
+                    and not np.any(np.max(np.abs(U - u), axis=1) < 1e-6)):
                 U = np.vstack([U, u]); sources.append('llm'); n_model += 1
         while len(U) < n + extra:
             attempts += 1
             if attempts > 1000:
                 raise RuntimeError('could not fill the additional GP pool')
             fill = _feasible_pool(engine.random(2 * (n + extra - len(U))), space,
-                                  np.vstack([observed, U]), minimum_distance)
+                                  observed, minimum_distance, pool=U)
             fill = fill[:n + extra - len(U)]
             U = np.vstack([U, fill]); sources.extend(['sobol_extra'] * len(fill))
         state['gp_pool_round'] += 1
@@ -1028,7 +1031,7 @@ def propose(method, state, space, count=1, options=None):
         raise ValueError('proposal count must be a positive integer')
     if options:
         state['options'].update(options)
-    if state.get('algorithm_version', 2) < 3 and method in ('bo_gp', 'llm_bo', 'llm_agent'):
+    if state.get('algorithm_version', 2) < 4 and method in ('bo_gp', 'llm_bo', 'llm_agent'):
         raise ValueError('older GP/LLM checkpoints use a different proposal pool; start a new comparison')
     if method in ('llm_bo', 'llm_agent') and state.get('llm_protocol_version', 1) < 4:
         raise ValueError('older AI checkpoints use different final-output settings; start a new AI comparison')

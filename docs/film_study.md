@@ -113,13 +113,29 @@ The maintained project still has ten scripts. One sequential queue uses at most
 inference is included. Raw work is on `/data`; each archive also has a verified
 copy on the independent home filesystem before raw work is removed.
 
-The initial elapsed-time estimate is 72-120 hours, based on the previous native
-run and allowance for more tasks. Film coverage can change transport time.
-The launch record and completed sampling comparisons support later estimates.
+The first run stopped before its first BO measurement because the numerical
+candidate set incorrectly imposed proposal spacing between all temporary trial
+points. The corrected optimizer retains
+$\lVert u-u_i\rVert_\infty\geq0.03$ from measured and pending designs, while
+removing only near-identical temporary points at $10^{-6}$. The dense set still
+contains 4,096 ordinary and eight additional points. Optimizer version 4 rejects
+earlier GP checkpoints.
+
+The November 2 continuation retains all 17 completed studies (8.960 billion
+primaries) in their original verified archives. Physical code, settings and
+every recorded position layout are unchanged; only the optimizer and reuse
+checks differ. A new frozen source and two verified source archive copies
+record the change. Completed optimizer arms from a different optimizer version
+cannot be counted as new results.
+
+Measured throughput implies 87-106 simulation hours for the maximum remaining
+67.840 billion primaries. Allow approximately 4-5 days from the restart for
+preservation and numerical work. Combining identical confirmation designs may
+shorten this. The earlier November 2-4 completion estimate no longer applies.
 
 ```bash
-bash run_all.sh status material_scan_data/film_design_20261030_bounded
-tmux -L material-scan attach -t film_design_20261030_bounded
+bash run_all.sh status material_scan_data/film_design_20261102_resumed
+tmux -L material-scan attach -t film_design_20261102_resumed
 ```
 
 [Exact inputs and order](../studies/films/queue.yaml).
