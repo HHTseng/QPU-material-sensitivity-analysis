@@ -204,30 +204,20 @@ All six spatial intervals include zero. Only Ge at 0° establishes agreement wit
 <!-- film-start -->
 ## Native film design and matched optimization
 
-The study resumed in tmux on **2026-11-02 at 10:58 EST**, using a new frozen
-source after correcting the BO candidate-set spacing. All **17 completed
-studies and 8.960 billion primaries** from the first run are retained; the
-original source and measurements remain unchanged. It varies Nb thickness
-from **75 to 100 nm** and Cu thickness from **1 to 10 micrometres**, keeping
-Cu volume fixed while its island coverage changes. Native Si/GaAs and Nb/Cu
-material properties remain coupled.
+Finished 2026-11-05. Completed matched seeds: Si: 6/6, GaAs: 6/6. Eight unused confirmation layouts; fixed Cu volume.
 
-The sequence contains **60 measured studies**: eight paired sampling comparisons,
-six search seeds per substrate with common starts for BO/Sobol, and eight unused
-confirmation layouts. Each search has 12 shared starts, including all four
-thickness corners, and 24 new responses per method. A meaningful added gain
-requires an adjusted interval entirely beyond **5% reduction**, accounting for
-both search-seed and position-layout variation.
+| Substrate | Comparison | Mean response change | Simultaneous interval | At least 5% reduction established |
+|---|---|---:|---:|---|
+| Si | bo_vs_initial | +0.06% | [-2.05%, +2.17%] | No |
+| Si | sobol_vs_initial | +0.15% | [-1.00%, +1.30%] | No |
+| Si | bo_vs_sobol | -0.08% | [-1.52%, +1.35%] | No |
+| GaAs | bo_vs_initial | +0.56% | [-1.86%, +2.99%] | No |
+| GaAs | sobol_vs_initial | +0.00% | [+0.00%, +0.00%] | No |
+| GaAs | bo_vs_sobol | +0.56% | [-1.86%, +2.99%] | No |
 
-The upper count is **76.8 billion primaries** before combining identical selected
-designs. At restart, at most **67.840 billion primaries remained**. Measured throughput gives
-approximately **4-5 days from the restart**, or **November 6-7 EST**, using
-86 workers and no GPUs. The original November 2-4 estimate no longer applies.
-Raw work is on the data disk; each archive has a second verified copy on the
-independent home filesystem. Completed historical measurements remain unchanged.
+![Confirmed native film design](figures/film_optimization.png)
 
-[Physical inputs, equations, comparisons and limitations](docs/film_study.md);
-[restart checks and completion estimate](verification/film_resume_20261102.json).
+[Measured results, uncertainty and limitations](docs/results/film_optimization.md).
 <!-- film-end -->
 
 ## Calculation and execution
